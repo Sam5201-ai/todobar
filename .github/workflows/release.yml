@@ -23,11 +23,11 @@ jobs:
             targets: ""
           - name: macOS Apple Silicon
             platform: macos-latest
-            args: "--target aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin --config src-tauri/tauri.macos.conf.json"
             targets: "aarch64-apple-darwin"
           - name: macOS Intel
             platform: macos-latest
-            args: "--target x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin --config src-tauri/tauri.macos.conf.json"
             targets: "x86_64-apple-darwin"
 
     steps:

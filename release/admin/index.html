@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TickTask 后台管理</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d7ef0'/%3E%3Cpath d='M9 16.5l5 5 9-11' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --primary: #1d7ef0;
+      --primary-dark: #1565c8;
+      --primary-light: #e8f2fe;
+      --accent: #f59e0b;
+      --bg: #f4f6fa;
+      --card: #ffffff;
+      --line: #e5e9f0;
+      --text: #1e293b;
+      --text-2: #64748b;
+      --text-3: #94a3b8;
+      --green: #16a34a;
+      --green-bg: #e8f7ee;
+      --red: #dc2626;
+      --red-bg: #fdecec;
+      --amber: #d97706;
+      --amber-bg: #fdf3e3;
+      --slate-bg: #eef2f7;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px -4px rgba(15, 23, 42, 0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    button { font-family: inherit; }
+    input, select, textarea {
+      font-family: inherit; font-size: 14px; color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+      background: #fff; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px rgba(29, 126, 240, 0.12);
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); background: #fff; color: var(--text);
+      border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+    .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+    .btn-danger { color: var(--red); border-color: #f3c8c8; background: #fff; }
+    .btn-danger:hover { background: var(--red-bg); border-color: #efb9b9; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ---- 布局 ---- */
+    .shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 208px; flex-shrink: 0; background: #0f1b2d; color: #cbd5e1;
+      display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 18px 16px; font-size: 15px; font-weight: 700; color: #fff;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .brand svg { flex-shrink: 0; }
+    .nav { padding: 10px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px; color: #a8b4c5; font-size: 13.5px;
+      transition: all .15s;
+    }
+    .nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav a.active { background: var(--primary); color: #fff; font-weight: 500; }
+    .nav a svg { flex-shrink: 0; opacity: .9; }
+    .sidebar .foot { padding: 12px 16px; font-size: 11.5px; color: #5b6b82; border-top: 1px solid rgba(255,255,255,.08); line-height: 1.6; }
+    .main { flex: 1; min-width: 0; padding: 22px 26px 40px; }
+    .page-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+    .page-head h1 { font-size: 19px; font-weight: 700; }
+    .page-head .sub { font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
+
+    /* ---- 卡片 / KPI ---- */
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .card-pad { padding: 18px; }
+    .card-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .card-title .hint { font-size: 12px; color: var(--text-3); font-weight: 400; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .ov-section-title { margin: 26px 0 4px; font-size: 15px; font-weight: 700; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .kpi { padding: 14px 16px; }
+    .kpi .label { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+    .kpi .value { font-size: 24px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .kpi .extra { font-size: 11.5px; color: var(--text-3); margin-top: 4px; }
+    .kpi .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-charts { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 14px; }
+
+    /* ---- 徽章 ---- */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap;
+    }
+    .badge-green { background: var(--green-bg); color: var(--green); }
+    .badge-blue { background: var(--primary-light); color: var(--primary-dark); }
+    .badge-amber { background: var(--amber-bg); color: var(--amber); }
+    .badge-red { background: var(--red-bg); color: var(--red); }
+    .badge-slate { background: var(--slate-bg); color: var(--text-2); }
+
+    /* ---- 表格 ---- */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; font-size: 12px; font-weight: 600; color: var(--text-2);
+      padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+      background: #fafbfd;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f4f8; vertical-align: middle; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; }
+    .cell-user { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .avatar {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 12px; font-weight: 600; overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .cell-user .meta { min-width: 0; }
+    .cell-user .meta .n { font-weight: 500; }
+    .cell-user .meta .e { font-size: 11.5px; color: var(--text-3); }
+    .row-actions { display: flex; gap: 6px; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* ---- 工具栏 / 分页 ---- */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar input[type="search"], .toolbar input[type="text"] { min-width: 200px; }
+    .pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding: 12px 4px 0; font-size: 12.5px; color: var(--text-2); }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+    .seg button { border: none; background: #fff; padding: 7px 13px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+    .seg button.active { background: var(--primary); color: #fff; font-weight: 500; }
+    .seg button + button { border-left: 1px solid var(--line); }
+
+    /* ---- 弹窗 ---- */
+    .modal-mask {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      background: #fff; border-radius: 14px; width: 100%; max-width: 520px;
+      max-height: 88vh; overflow: auto; box-shadow: 0 24px 60px -12px rgba(15,23,42,.3);
+    }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .modal-head h3 { font-size: 15px; }
+    .modal-body { padding: 20px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); }
+    .modal .x { border: none; background: none; font-size: 18px; cursor: pointer; color: var(--text-3); padding: 4px; line-height: 1; }
+    .modal .x:hover { color: var(--text); }
+
+    /* 用户反馈:联系方式 / 平台回复 列与回复弹窗 */
+    .fb-contact-cell { font-weight: 600; color: var(--text); word-break: break-all; }
+    .fb-copy { margin-top: 4px; padding: 2px 8px; font-size: 11px; }
+    .fb-replies-cell { max-width: 260px; }
+    .fb-reply-line { padding: 5px 0; border-top: 1px dashed var(--line); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .fb-reply-line:first-child { border-top: none; }
+    .fb-reply-time { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 2px; }
+    .fb-reply-origin { background: #f6f8fb; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; margin-bottom: 14px; }
+    .fb-reply-list { max-height: 240px; overflow-y: auto; margin-bottom: 14px; }
+    .fb-reply-input { width: 100%; min-height: 96px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.6; resize: vertical; box-sizing: border-box; font-family: inherit; }
+    .fb-reply-input:focus { outline: none; border-color: var(--primary); }
+    .btn-disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ---- 表单 ---- */
+    .form-row { margin-bottom: 14px; }
+    .form-row label { display: block; font-size: 12.5px; font-weight: 500; color: var(--text-2); margin-bottom: 5px; }
+    .form-row input, .form-row select, .form-row textarea { width: 100%; }
+    .form-row textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-tip { font-size: 11.5px; color: var(--text-3); margin-top: 4px; }
+
+    /* ---- Toast ---- */
+    #toast-wrap { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      padding: 9px 18px; border-radius: 10px; font-size: 13px; color: #fff;
+      box-shadow: 0 8px 24px -6px rgba(15,23,42,.3); animation: toast-in .2s ease;
+      max-width: 72vw;
+    }
+    .toast-ok { background: #15803d; }
+    .toast-err { background: #b91c1c; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+    /* ---- 登录页 ---- */
+    .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+      background: linear-gradient(160deg, #eef4fc 0%, #f4f6fa 55%, #fdf6ea 100%); }
+    .login-card { width: 100%; max-width: 380px; padding: 32px 30px 26px; }
+    .login-card .logo { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .login-card h1 { font-size: 18px; }
+    .login-card .tip { font-size: 12px; color: var(--text-3); text-align: center; margin-top: 14px; line-height: 1.7; }
+
+    .empty { padding: 42px 20px; text-align: center; color: var(--text-3); font-size: 13px; }
+    .loading { padding: 42px 20px; text-align: center; color: var(--text-3); font-size: 13px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; color: var(--text-2); padding: 4px 2px 0; }
+    .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+    .legend .sw { width: 10px; height: 10px; border-radius: 3px; }
+    .funnel-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+    .funnel-row .f-label { width: 86px; font-size: 12.5px; color: var(--text-2); text-align: right; flex-shrink: 0; }
+    .funnel-row .f-track { flex: 1; background: var(--slate-bg); border-radius: 6px; height: 26px; position: relative; overflow: hidden; }
+    .funnel-row .f-bar { height: 100%; border-radius: 6px; min-width: 2px; transition: width .5s ease; }
+    .funnel-row .f-val { width: 108px; font-size: 12.5px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .funnel-row .f-val .rate { color: var(--text-3); font-size: 11.5px; margin-left: 6px; }
+    .code-out { background: #0f1b2d; color: #dbeafe; border-radius: 10px; padding: 14px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.9; max-height: 260px; overflow: auto; user-select: all; }
+
+    /* 图表悬浮浮窗 */
+    .chart-tip { position: fixed; z-index: 100; display: none; pointer-events: none; background: rgba(15, 23, 42, .93); color: #fff; border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.8; box-shadow: 0 8px 24px rgba(15, 23, 42, .3); white-space: nowrap; }
+    .chart-tip b { font-size: 12.5px; }
+    .chart-tip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+    .chart-hit { transition: fill .12s; }
+    .chart-hit:hover { fill: rgba(29, 126, 240, .07); }
+    /* 环形图悬浮/选中动画 */
+    .donut-seg { transition: stroke-width .18s ease, filter .18s ease; cursor: pointer; }
+    .donut-seg:hover { stroke-width: 33; filter: brightness(1.07) saturate(1.15); }
+    /* 缓存同步状态角标 */
+    .sync-chip { position: fixed; top: 16px; right: 18px; z-index: 80; display: none; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 12px; color: var(--text-2); box-shadow: var(--shadow); }
+    .sync-chip .spin { width: 11px; height: 11px; border: 2px solid var(--primary-light); border-top-color: var(--primary); border-radius: 50%; animation: chipspin .8s linear infinite; flex-shrink: 0; }
+    .sync-chip.err { color: var(--red); border-color: #f3c8c8; }
+    @keyframes chipspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 960px) {
+      .grid-2, .grid-charts { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .shell { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; align-items: center; }
+      .brand { border-bottom: none; padding: 12px 14px; }
+      .nav { flex-direction: row; flex-wrap: wrap; padding: 8px 10px; }
+      .sidebar .foot { display: none; }
+      .main { padding: 16px 14px 32px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toast-wrap"></div>
+  <div id="app"><div class="loading">加载中…</div></div>
+
+  <script>
+    "use strict"
+    // =====================================================================
+    // 基础工具
+    // =====================================================================
+    const TOKEN_KEY = 'ticktask-admin-token'
+    // 工具同款 LOGO(取自应用图标,内联 base64 保持零 CDN 依赖)
+    const LOGO_URI = 'data:image/png;base64,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'
+    ;(() => { const fav = document.querySelector('link[rel="icon"]'); if (fav) fav.href = LOGO_URI })()
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]))
+    }
+    function fmt(n) {
+      n = Number(n) || 0
+      return n.toLocaleString('zh-CN')
+    }
+    function fmtTime(iso) {
+      if (!iso) return '—'
+      const d = new Date(iso)
+      if (isNaN(d.getTime())) return String(iso)
+      const p = (x) => String(x).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+    }
+    function fmtDay(day) {
+      // 'YYYY-MM-DD' -> 'MM-DD'
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(day || ''))
+      return m ? `${m[2]}-${m[3]}` : String(day || '')
+    }
+    function fmtAgo(iso) {
+      if (!iso) return '从未'
+      const t = new Date(iso).getTime()
+      if (isNaN(t)) return '—'
+      const diff = Date.now() - t
+      if (diff < 60_000) return '刚刚'
+      if (diff < 3_600_000) return Math.floor(diff / 60_000) + ' 分钟前'
+      if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + ' 小时前'
+      if (diff < 30 * 86_400_000) return Math.floor(diff / 86_400_000) + ' 天前'
+      return fmtTime(iso).slice(0, 10)
+    }
+
+    function toast(text, kind = 'ok') {
+      const wrap = document.getElementById('toast-wrap')
+      const el = document.createElement('div')
+      el.className = 'toast toast-' + kind
+      el.textContent = text
+      wrap.appendChild(el)
+      setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s' }, 2600)
+      setTimeout(() => el.remove(), 3000)
+    }
+
+    let modalMask = null
+    function openModal(inner, opts = {}) {
+      closeModal()
+      modalMask = document.createElement('div')
+      modalMask.className = 'modal-mask'
+      modalMask.innerHTML = `<div class="modal" style="${opts.wide ? 'max-width:720px' : ''}">${inner}</div>`
+      modalMask.addEventListener('click', (e) => { if (e.target === modalMask && opts.maskClose !== false) closeModal() })
+      document.body.appendChild(modalMask)
+      return modalMask
+    }
+    function closeModal() {
+      if (modalMask) { modalMask.remove(); modalMask = null }
+    }
+
+    // =====================================================================
+    // API
+    // =====================================================================
+    async function api(path, opts = {}) {
+      const headers = Object.assign({ 'content-type': 'application/json' }, opts.headers || {})
+      const token = localStorage.getItem(TOKEN_KEY)
+      if (token) headers['X-Admin-Token'] = token
+      let res
+      try {
+        res = await fetch(path, Object.assign({}, opts, { headers }))
+      } catch (e) {
+        throw new Error('网络请求失败,请检查连接')
+      }
+      if (res.status === 401 && path.indexOf('/api/admin/login') < 0) {
+        localStorage.removeItem(TOKEN_KEY)
+        location.hash = '#/login'
+        toast('登录已过期,请重新登录', 'err')
+        throw new Error('未授权')
+      }
+      let data = {}
+      try { data = await res.json() } catch { /* 非 JSON */ }
+      if (!res.ok) throw new Error(data.error || ('请求失败 HTTP ' + res.status))
+      return data
+    }
+
+    // =====================================================================
+    // 本地缓存(缓存优先渲染 + 云端静默更新)与同步角标
+    // =====================================================================
+    const CACHE_PREFIX = 'admin_cache_v1:'
+    function cacheGet(key) {
+      try {
+        const v = JSON.parse(localStorage.getItem(CACHE_PREFIX + key))
+        return v && typeof v === 'object' && 'data' in v && 'ts' in v ? v : null
+      } catch { return null }
+    }
+    function cacheSet(key, data) {
+      try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data })) } catch { /* 容量满则忽略 */ }
+    }
+    function cacheClearAll() {
+      try {
+        Object.keys(localStorage).filter((k) => k.indexOf(CACHE_PREFIX) === 0).forEach((k) => localStorage.removeItem(k))
+      } catch { /* ignore */ }
+    }
+    /** 顶部悬浮角标:使用缓存时提示"同步中",完成或失败后切换/隐藏 */
+    function chipShow(text, err) {
+      const el = document.getElementById('sync-chip')
+      if (!el) return
+      el.className = 'sync-chip' + (err ? ' err' : '')
+      el.innerHTML = (err ? '' : '<span class="spin"></span>') + esc(text)
+      el.style.display = 'flex'
+    }
+    function chipHide() {
+      const el = document.getElementById('sync-chip')
+      if (el) el.style.display = 'none'
+    }
+
+    // =====================================================================
+    // 图表悬浮浮窗(全局事件委托,适配一切带 data-tip 的元素)
+    // =====================================================================
+    const tipEl = document.createElement('div')
+    tipEl.className = 'chart-tip'
+    document.body.appendChild(tipEl)
+    let hoverSeg = null
+    /** 悬浮环形图扇区时,中心文字切换为该扇区数据;移开还原 */
+    function donutSwap(seg) {
+      const svg = seg.closest('svg')
+      const v = svg.querySelector('.donut-cv'), l = svg.querySelector('.donut-cl')
+      if (!v || !l || svg.dataset.origV != null) return
+      svg.dataset.origV = v.textContent
+      svg.dataset.origL = l.textContent
+      v.textContent = seg.dataset.val
+      l.textContent = seg.dataset.label + ' ' + seg.dataset.pct + '%'
+    }
+    function donutRestore(seg) {
+      const svg = seg.closest('svg')
+      if (!svg || svg.dataset.origV == null) return
+      const v = svg.querySelector('.donut-cv'), l = svg.querySelector('.donut-cl')
+      if (v) v.textContent = svg.dataset.origV
+      if (l) l.textContent = svg.dataset.origL
+      delete svg.dataset.origV
+    }
+    document.addEventListener('mousemove', (e) => {
+      const t = e.target instanceof Element ? e.target.closest('[data-tip]') : null
+      if (t) {
+        tipEl.innerHTML = t.getAttribute('data-tip')
+        tipEl.style.display = 'block'
+        const pad = 14
+        const r = tipEl.getBoundingClientRect()
+        let tx = e.clientX + pad, ty = e.clientY + pad
+        if (tx + r.width > window.innerWidth - 8) tx = e.clientX - r.width - pad
+        if (ty + r.height > window.innerHeight - 8) ty = e.clientY - r.height - pad
+        tipEl.style.left = Math.max(4, tx) + 'px'
+        tipEl.style.top = Math.max(4, ty) + 'px'
+      } else {
+        tipEl.style.display = 'none'
+      }
+      const seg = t && t.classList.contains('donut-seg') ? t : null
+      if (seg !== hoverSeg) {
+        if (hoverSeg) donutRestore(hoverSeg)
+        if (seg) donutSwap(seg)
+        hoverSeg = seg
+      }
+    }, true)
+
+    // =====================================================================
+    // SVG 图表(零依赖手绘)
+    // =====================================================================
+    const CHART_COLORS = ['#1d7ef0', '#f59e0b', '#16a34a', '#8b5cf6', '#ef4444', '#06b6d4']
+
+    function niceTicks(max, count = 4) {
+      if (max <= 0) return [0, 1]
+      const raw = max / count
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+      const norm = raw / mag
+      const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag
+      const ticks = []
+      for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(Math.round(v * 100) / 100)
+      if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + step)
+      return ticks
+    }
+
+    /**
+     * 折线图(可多序列 + 可选面积 + 可选右轴柱序列)。
+     * labels:['MM-DD',...];series:[{name,color,data,area}]
+     * opts:{ w:视图宽度(默认680,建议传容器近似像素宽以保证字号 1:1), height, bars:{name,color,data} 右轴柱 }
+     */
+    function lineChartSvg(labels, series, opts = {}) {
+      const W = opts.w || 680
+      const H = opts.height || 240
+      const hasBars = opts.bars && Array.isArray(opts.bars.data)
+      const padL = 44
+      const padR = hasBars ? 44 : 14
+      const padT = 14, padB = 26
+      const iw = W - padL - padR, ih = H - padT - padB
+      const n = labels.length
+      const maxV = Math.max(1, ...series.flatMap((s) => s.data))
+      const ticks = niceTicks(maxV)
+      const top = ticks[ticks.length - 1]
+      const x = (i) => padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw)
+      const y = (v) => padT + ih - (v / top) * ih
+      // 右轴柱序列独立标尺
+      let barTop = 1, yBar = (v) => y(v)
+      let barTicks = []
+      if (hasBars) {
+        barTop = niceTicks(Math.max(1, ...opts.bars.data))[niceTicks(Math.max(1, ...opts.bars.data)).length - 1]
+        yBar = (v) => padT + ih - (v / barTop) * ih
+        barTicks = niceTicks(barTop)
+      }
+      let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img">`
+      // 柱序列(先画,置于折线下层)
+      if (hasBars) {
+        const bw = n > 0 ? Math.max(2, Math.min(18, (iw / Math.max(n, 1)) * 0.5)) : 2
+        opts.bars.data.forEach((v, i) => {
+          if (!(v > 0)) return
+          const bh = Math.max(1.5, padT + ih - yBar(v))
+          out += `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${yBar(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${opts.bars.color}" opacity="0.55"/>`
+        })
+      }
+      // 网格 + 左轴
+      for (const t of ticks) {
+        const yy = y(t)
+        out += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#eef1f6" stroke-width="1"/>`
+        out += `<text x="${padL - 7}" y="${yy + 4}" text-anchor="end" font-size="10.5" fill="#94a3b8">${t >= 1000 ? (t / 1000) + 'k' : t}</text>`
+      }
+      // 右轴刻度
+      if (hasBars) {
+        for (const t of barTicks) {
+          out += `<text x="${W - padR + 7}" y="${(yBar(t) + 4).toFixed(1)}" text-anchor="start" font-size="10.5" fill="#94a3b8">${t >= 1000 ? (t / 1000) + 'k' : t}</text>`
+        }
+      }
+      // X 轴标签(稀疏;末位单独右对齐绘制,与末位距离不足 46px 的步进标签跳过)
+      const stepX = Math.max(1, Math.ceil(n / 8))
+      const gapPx = n > 1 ? iw / (n - 1) : iw
+      for (let i = 0; i < n; i += stepX) {
+        if (i === n - 1 || (n - 1 - i) * gapPx < 46) continue
+        out += `<text x="${x(i)}" y="${H - 7}" text-anchor="middle" font-size="10.5" fill="#94a3b8">${esc(labels[i])}</text>`
+      }
+      if (n > 1) {
+        const last = x(n - 1)
+        out += `<text x="${last}" y="${H - 7}" text-anchor="end" font-size="10.5" fill="#94a3b8">${esc(labels[n - 1])}</text>`
+      }
+      // 折线序列
+      series.forEach((s) => {
+        const pts = s.data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+        if (s.area) {
+          out += `<polygon points="${padL},${padT + ih} ${pts.join(' ')} ${x(n - 1).toFixed(1)},${padT + ih}" fill="${s.color}" opacity="0.10"/>`
+        }
+        out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
+        s.data.forEach((v, i) => {
+          if (n <= 40) out += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.6" fill="#fff" stroke="${s.color}" stroke-width="1.6"/>`
+        })
+      })
+      // 每个索引进度列的透明命中区:悬浮浮窗显示该日全部序列(含右轴柱)数据
+      const hitW = Math.max(8, n > 1 ? iw / (n - 1) : iw)
+      for (let i = 0; i < n; i++) {
+        const x0 = n > 1 ? Math.max(padL, x(i) - hitW / 2) : padL
+        let tipHtml = `<b>${esc(labels[i])}</b>` + series.map((s) => `<br><span class="sw" style="background:${s.color}"></span>${esc(s.name)}:${fmt(s.data[i])}`).join('')
+        if (hasBars) tipHtml += `<br><span class="sw" style="background:${opts.bars.color}"></span>${esc(opts.bars.name)}:${fmt(opts.bars.data[i])}`
+        out += `<rect class="chart-hit" x="${x0.toFixed(1)}" y="${padT}" width="${hitW.toFixed(1)}" height="${ih}" fill="transparent" data-tip="${esc(tipHtml)}"/>`
+      }
+      out += '</svg>'
+      return out
+    }
+
+    /** 柱状图(单序列)。 */
+    function barChartSvg(labels, data, color, opts = {}) {
+      const W = 680, H = opts.height || 220
+      const padL = 44, padR = 14, padT = 14, padB = 26
+      const iw = W - padL - padR, ih = H - padT - padB
+      const n = labels.length
+      const maxV = Math.max(1, ...data)
+      const ticks = niceTicks(maxV)
+      const top = ticks[ticks.length - 1]
+      const y = (v) => padT + ih - (v / top) * ih
+      const bw = n > 0 ? Math.max(2, (iw / n) * 0.62) : 2
+      let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img">`
+      for (const t of ticks) {
+        const yy = y(t)
+        out += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#eef1f6"/>`
+        out += `<text x="${padL - 7}" y="${yy + 4}" text-anchor="end" font-size="10.5" fill="#94a3b8">${t >= 1000 ? (t / 1000) + 'k' : t}</text>`
+      }
+      const stepX = Math.max(1, Math.ceil(n / 8))
+      const gapPx = n > 1 ? iw / (n - 1) : iw
+      data.forEach((v, i) => {
+        const cx = padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw)
+        const bh = Math.max(v > 0 ? 2 : 0, padT + ih - y(v))
+        const tipHtml = `<b>${esc(labels[i])}</b><br>数量:${fmt(v)}`
+        out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${color}" style="cursor:pointer" data-tip="${esc(tipHtml)}"></rect>`
+        // 末位标签右对齐单独画;与末位距离不足 46px 的步进标签跳过,避免重叠
+        if (i % stepX === 0 && (n - 1 - i) * gapPx >= 46) {
+          out += `<text x="${cx.toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="10.5" fill="#94a3b8">${esc(labels[i])}</text>`
+        }
+      })
+      if (n > 1) {
+        const lastX = padL + iw
+        out += `<text x="${lastX.toFixed(1)}" y="${H - 7}" text-anchor="end" font-size="10.5" fill="#94a3b8">${esc(labels[n - 1])}</text>`
+      }
+      out += '</svg>'
+      return out
+    }
+
+    /** 环形图。items:[{label,value,color}] */
+    function donutChartSvg(items, opts = {}) {
+      const size = opts.size || 190
+      const r = 72, cx = size / 2, cy = size / 2, sw = 26
+      const total = items.reduce((s, it) => s + (Number(it.value) || 0), 0)
+      const C = 2 * Math.PI * r
+      let out = `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px;display:block" role="img">`
+      out += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#eef1f6" stroke-width="${sw}"/>`
+      let offset = 0
+      if (total > 0) {
+        for (const it of items) {
+          const v = Number(it.value) || 0
+          if (v <= 0) continue
+          const frac = v / total
+          const len = Math.max(0, frac * C - 2.5)
+          const tipHtml = `<b>${esc(it.label)}</b><br>数量:${fmt(v)} · 占比 ${(frac * 100).toFixed(1)}%`
+          out += `<circle class="donut-seg" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${it.color}" stroke-width="${sw}"
+            stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-offset * C).toFixed(2)}"
+            transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"
+            data-val="${fmt(v)}" data-label="${esc(it.label)}" data-pct="${(frac * 100).toFixed(1)}" data-tip="${esc(tipHtml)}"></circle>`
+          offset += frac
+        }
+      }
+      out += `<text class="donut-cv" x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="24" font-weight="700" fill="#1e293b">${fmt(total)}</text>`
+      out += `<text class="donut-cl" x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" fill="#94a3b8">${esc(opts.centerLabel || '总用户')}</text>`
+      out += '</svg>'
+      return out
+    }
+
+    // =====================================================================
+    // 会话与路由
+    // =====================================================================
+    const NAV = [
+      { hash: '#/overview', label: '数据概览', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>' },
+      { hash: '#/users', label: '用户管理', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
+      { hash: '#/codes', label: '激活码管理', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
+      { hash: '#/releases', label: '版本记录', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' },
+      { hash: '#/feedback', label: '用户反馈', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>' },
+    ]
+
+    function shell(contentHtml) {
+      const token = localStorage.getItem(TOKEN_KEY)
+      const cur = location.hash || '#/overview'
+      const navHtml = NAV.map((n) => `<a href="${n.hash}" class="${cur === n.hash ? 'active' : ''}">${n.icon}<span>${n.label}</span></a>`).join('')
+      document.getElementById('app').innerHTML = `
+        <div class="shell">
+          <aside class="sidebar">
+            <div class="brand">
+              <img src="${LOGO_URI}" alt="TickTask" style="width:27px;height:27px;border-radius:7px;box-shadow:0 1px 5px rgba(15,23,42,.22)" />
+              <span>TickTask 后台</span>
+            </div>
+            <nav class="nav">${navHtml}</nav>
+            <div class="foot">
+              管理员:${esc((token && '已登录') || '未登录')}<br/>
+              <a href="javascript:void 0" id="logout-link" style="color:#7d94b0">退出登录</a>
+            </div>
+          </aside>
+          <main class="main"><div id="sync-chip" class="sync-chip"></div>${contentHtml}</main>
+        </div>`
+      document.getElementById('logout-link').onclick = logout
+    }
+
+    function logout() {
+      const token = localStorage.getItem(TOKEN_KEY)
+      localStorage.removeItem(TOKEN_KEY)
+      cacheClearAll() // 管理数据不入痕,防止共用机器残留
+      if (token) fetch('/api/admin/logout', { method: 'POST', headers: { 'X-Admin-Token': token } }).catch(() => {})
+      location.hash = '#/login'
+      render()
+    }
+
+    function renderLogin(err) {
+      document.getElementById('app').innerHTML = `
+        <div class="login-page">
+          <div class="card login-card">
+            <div class="logo">
+              <img src="${LOGO_URI}" alt="TickTask" style="width:46px;height:46px;border-radius:11px;box-shadow:0 3px 12px rgba(15,23,42,.18)" />
+              <h1>TickTask 后台管理</h1>
+            </div>
+            ${err ? `<div class="badge badge-red" style="width:100%;justify-content:center;padding:7px;margin-bottom:14px">${esc(err)}</div>` : ''}
+            <form id="login-form">
+              <div class="form-row">
+                <label>管理员账号</label>
+                <input id="login-email" type="email" placeholder="邮箱" autocomplete="username" required />
+              </div>
+              <div class="form-row">
+                <label>密码</label>
+                <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" required />
+              </div>
+              <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:10px">登 录</button>
+            </form>
+            <p class="tip">仅限管理员使用 · 无注册入口<br/>数据经国内节点直连,无需 VPN</p>
+          </div>
+        </div>`
+      document.getElementById('login-form').onsubmit = async (e) => {
+        e.preventDefault()
+        const email = document.getElementById('login-email').value.trim()
+        const password = document.getElementById('login-password').value
+        try {
+          const data = await api('/api/admin/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+          })
+          localStorage.setItem(TOKEN_KEY, data.token)
+          toast('登录成功')
+          location.hash = '#/overview'
+          render()
+        } catch (err) {
+          renderLogin(err.message || '登录失败')
+        }
+      }
+    }
+
+    // =====================================================================
+    // 视图:数据概览
+    // =====================================================================
+    const ovState = { days: 30, loading: false }
+
+    async function renderOverview() {
+      shell(`<div class="page-head"><div><h1>数据概览</h1><div class="sub">关键指标、趋势与功能页面统计(按北京时间统计)</div></div>
+        <div class="seg" id="ov-days">
+          ${[7, 30, 90].map((d) => `<button data-d="${d}" class="${ovState.days === d ? 'active' : ''}">近 ${d} 天</button>`).join('')}
+        </div></div>
+        <div id="ov-body"><div class="loading">加载中…</div></div>`)
+      document.querySelectorAll('#ov-days button').forEach((b) => {
+        b.onclick = () => { ovState.days = Number(b.dataset.d); renderOverview() }
+      })
+      loadOverview()
+      // 立即用本地缓存渲染「功能页面统计」,不等概览网络(缓存未命中时容器尚不存在,自然跳过)
+      loadAppStats()
+    }
+
+    async function loadOverview() {
+      const body = document.getElementById('ov-body')
+      if (!body) return
+      const key = 'overview:' + ovState.days
+      const cached = cacheGet(key)
+      if (cached) {
+        body.innerHTML = buildOverviewBody(cached.data)
+        chipShow('缓存数据 · 同步中…')
+      } else {
+        body.innerHTML = '<div class="loading">加载中…</div>'
+      }
+      let d
+      try {
+        d = await api('/api/admin/overview?days=' + ovState.days)
+      } catch (e) {
+        chipHide()
+        if (!cached) body.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        else chipShow('同步失败,当前显示缓存数据', true)
+        return
+      }
+      cacheSet(key, d)
+      if (document.getElementById('ov-body')) body.innerHTML = buildOverviewBody(d)
+      chipHide()
+      // 概览渲染完成后,再加载合并进来的「功能页面统计」区块(原数据统计页,去重后)
+      loadAppStats()
+    }
+
+    function buildOverviewBody(d) {
+      const u = d.users, t = d.trends
+      const labels = t.days.map(fmtDay)
+      const conv = u.conversionRate
+
+      const kpi = `
+        <div class="kpi-grid">
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#1d7ef0"></span>累计用户</div><div class="value">${fmt(u.total)}</div><div class="extra">近 ${d.range} 天新增 ${fmt(u.newInRange)}</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>今日新增</div><div class="value">${fmt(u.newToday)}</div><div class="extra">注册用户(今日)</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>今日活跃</div><div class="value">${fmt(d.active.today)}</div><div class="extra">近 7 天 ${fmt(d.active.d7)} · 近 30 天 ${fmt(d.active.d30)}</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#8b5cf6"></span>会员转化率</div><div class="value">${conv}%</div><div class="extra">会员 ${fmt(u.member)} / 总 ${fmt(u.total)}</div></div>
+        </div>`
+
+      const trendCard = `
+        <div class="card card-pad">
+          <div class="card-title">用户增长趋势 <span class="hint">累计用户(左轴) + 每日新增(右轴)</span></div>
+          ${lineChartSvg(labels, [
+            { name: '累计用户', color: CHART_COLORS[0], data: t.cumulativeUsers, area: true },
+          ], { w: 570, height: 250, bars: { name: '每日新增', color: '#93c5fd', data: t.newUsers } })}
+          <div class="legend"><span class="item"><span class="sw" style="background:#1d7ef0"></span>累计用户(左轴)</span><span class="item"><span class="sw" style="background:#93c5fd"></span>每日新增(右轴)</span></div>
+        </div>`
+
+      const activeCard = `
+        <div class="card card-pad">
+          <div class="card-title">活跃用户趋势 <span class="hint">每日启动 App 的去重用户</span></div>
+          ${lineChartSvg(labels, [{ name: '活跃用户', color: CHART_COLORS[2], data: t.activeUsers, area: true }], { w: 370, height: 250 })}
+        </div>`
+
+      const donutCard = `
+        <div class="card card-pad">
+          <div class="card-title">用户状态占比</div>
+          <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:8px">
+            ${donutChartSvg([
+              { label: '会员用户', value: u.member, color: CHART_COLORS[2] },
+              { label: '试用用户', value: u.trial, color: CHART_COLORS[1] },
+              { label: '流失用户', value: u.churned, color: CHART_COLORS[4] },
+              { label: '黑名单', value: u.blacklist, color: '#475569' },
+            ])}
+            <div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:9px">
+              ${[
+          { l: '会员用户', v: u.member, c: CHART_COLORS[2] },
+          { l: '试用用户', v: u.trial, c: CHART_COLORS[1] },
+          { l: '流失用户', v: u.churned, c: CHART_COLORS[4] },
+          { l: '黑名单', v: u.blacklist, c: '#475569' },
+        ].map((x) => `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px"><span class="dot" style="width:10px;height:10px;border-radius:3px;background:${x.c}"></span><span style="color:var(--text-2)">${x.l}</span><b style="margin-left:auto" class="num">${fmt(x.v)}</b></div>`).join('')}
+              <div style="border-top:1px dashed var(--line);padding-top:9px;display:flex;font-size:12.5px"><span style="color:var(--text-2)">转化比率</span><b style="margin-left:auto;color:var(--primary-dark)">${conv}%</b></div>
+            </div>
+          </div>
+        </div>`
+
+      const f = d.funnel
+      const funnelMax = Math.max(1, f.visitors, f.clicks, f.installs, f.registrations)
+      const rate = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—')
+      const funnelCard = `
+        <div class="card card-pad">
+          <div class="card-title">下载站转化漏斗 <span class="hint">近 ${d.range} 天</span></div>
+          <div style="margin-top:10px">
+            ${[
+          { l: '访客数', v: f.visitors, c: '#1d7ef0' },
+          { l: '点击数', v: f.clicks, c: '#3d97f5' },
+          { l: '安装数', v: f.installs, c: '#f59e0b' },
+          { l: '注册数', v: f.registrations, c: '#16a34a' },
+        ].map((x, i, arr) => {
+          const prev = i === 0 ? null : arr[i - 1].v
+          const r = prev ? `<span class="rate">↓${rate(x.v, prev)}</span>` : ''
+          return `<div class="funnel-row"><span class="f-label">${x.l}</span><div class="f-track"><div class="f-bar" style="width:${Math.max(1.5, (x.v / funnelMax) * 100)}%;background:${x.c}"></div></div><span class="f-val"><b>${fmt(x.v)}</b>${r}</span></div>`
+        }).join('')}
+          </div>
+          <div class="legend" style="margin-top:8px"><span class="item" style="color:var(--text-3)">点击率 ${rate(f.clicks, f.visitors)} · 安装率 ${rate(f.installs, f.clicks)} · 注册率 ${rate(f.registrations, f.installs)}</span></div>
+        </div>`
+
+      const siteCard = `
+        <div class="card card-pad">
+          <div class="card-title">下载站流量趋势 <span class="hint">页面访问 + 下载点击</span></div>
+          ${lineChartSvg(labels, [
+        { name: '页面访问', color: CHART_COLORS[0], data: t.pageviews, area: true },
+        { name: '下载点击', color: CHART_COLORS[1], data: t.downloadClicks },
+      ], { w: 980, height: 240 })}
+          <div class="legend"><span class="item"><span class="sw" style="background:#1d7ef0"></span>页面访问</span><span class="item"><span class="sw" style="background:#f59e0b"></span>下载点击</span></div>
+        </div>`
+
+      return `
+        ${kpi}
+        <div class="grid-charts">${trendCard}${activeCard}</div>
+        <div class="grid-2">${donutCard}${funnelCard}</div>
+        <div style="margin-top:14px">${siteCard}</div>
+        <div class="ov-section-title">功能页面统计</div>
+        <div id="ov-app-stats"><div class="loading">加载中…</div></div>`
+    }
+
+    // =====================================================================
+    // 视图:用户管理
+    // =====================================================================
+    const usersState = { q: '', status: '', page: 1, pageSize: 20, total: 0, loading: false }
+
+    function userStatusTag(u) {
+      if (u.disabled) return '<span class="badge badge-red">黑名单</span>'
+      if (u.activated) return '<span class="badge badge-green">会员</span>'
+      if (u.trial_ends_at && new Date(u.trial_ends_at) > new Date()) return '<span class="badge badge-blue">试用中</span>'
+      return '<span class="badge badge-slate">试用结束未激活</span>'
+    }
+    function avatarHtml(u) {
+      const initial = esc((u.nickname || u.email || '?').trim().charAt(0).toUpperCase())
+      const bg = 'hsl(' + (Array.from(u.email || 'x').reduce((a, c) => a + c.charCodeAt(0), 0) % 360) + ',62%,52%)'
+      if (u.avatar) return `<div class="avatar" style="background:${bg}"><img src="${esc(u.avatar)}" alt="" onerror="this.remove()"/></div>`
+      return `<div class="avatar" style="background:${bg}">${initial}</div>`
+    }
+
+    async function renderUsers() {
+      shell(`<div class="page-head"><div><h1>用户管理</h1><div class="sub">共 <b id="u-total">—</b> 位注册用户</div></div></div>
+        <div class="toolbar">
+          <input type="search" id="u-q" placeholder="搜索邮箱 / 昵称" value="${esc(usersState.q)}" />
+          <select id="u-status">
+            <option value="">全部状态</option>
+            <option value="member" ${usersState.status === 'member' ? 'selected' : ''}>会员</option>
+            <option value="trial" ${usersState.status === 'trial' ? 'selected' : ''}>试用中</option>
+            <option value="churned" ${usersState.status === 'churned' ? 'selected' : ''}>试用结束未激活</option>
+            <option value="blacklist" ${usersState.status === 'blacklist' ? 'selected' : ''}>黑名单</option>
+          </select>
+          <div class="spacer"></div>
+          <select id="u-size">
+            ${[20, 50, 100].map((n) => `<option ${usersState.pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </div>
+        <div class="card table-wrap" id="u-table"><div class="loading">加载中…</div></div>
+        <div class="pager" id="u-pager"></div>`)
+
+      let debounce = null
+      document.getElementById('u-q').addEventListener('input', (e) => {
+        clearTimeout(debounce)
+        debounce = setTimeout(() => { usersState.q = e.target.value.trim(); usersState.page = 1; loadUsers() }, 350)
+      })
+      document.getElementById('u-status').onchange = (e) => { usersState.status = e.target.value; usersState.page = 1; loadUsers() }
+      document.getElementById('u-size').onchange = (e) => { usersState.pageSize = Number(e.target.value); usersState.page = 1; loadUsers() }
+      loadUsers()
+    }
+
+    async function loadUsers() {
+      const box = document.getElementById('u-table')
+      if (!box) return
+      const qs = new URLSearchParams({ q: usersState.q, status: usersState.status, page: usersState.page, pageSize: usersState.pageSize })
+      const key = 'users:' + qs.toString()
+      const cached = cacheGet(key)
+      if (cached) {
+        renderUsersData(cached.data)
+        chipShow('缓存数据 · 同步中…')
+      } else {
+        box.innerHTML = '<div class="loading">加载中…</div>'
+      }
+      let data
+      try {
+        data = await api('/api/admin/users?' + qs.toString())
+      } catch (e) {
+        chipHide()
+        if (!cached) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        else chipShow('同步失败,当前显示缓存数据', true)
+        return
+      }
+      cacheSet(key, data)
+      renderUsersData(data)
+      chipHide()
+    }
+
+    function renderUsersData(data) {
+      const box = document.getElementById('u-table')
+      if (!box) return
+      usersState.total = data.total
+      const totalEl = document.getElementById('u-total')
+      if (totalEl) totalEl.textContent = fmt(data.total)
+      if (!data.rows.length) {
+        box.innerHTML = '<div class="empty">没有符合条件的用户</div>'
+      } else {
+        box.innerHTML = `<table>
+          <thead><tr>
+            <th>用户</th><th>状态</th><th>设备</th><th>待办</th><th>节日</th><th>注册时间</th><th>最近活跃</th><th>操作</th>
+          </tr></thead>
+          <tbody>${data.rows.map((u) => `
+            <tr>
+              <td><div class="cell-user">${avatarHtml(u)}<div class="meta"><div class="n">${esc(u.nickname || '未设置昵称')}</div><div class="e">${esc(u.email)}</div></div></div></td>
+              <td>${userStatusTag(u)}</td>
+              <td class="num">${fmt(u.devices)}</td>
+              <td class="num">${fmt(u.tasks)}</td>
+              <td class="num">${fmt(u.birthdays)}</td>
+              <td title="${esc(u.created_at)}">${fmtTime(u.created_at)}</td>
+              <td>${u.last_seen_at ? fmtAgo(u.last_seen_at) : '—'}</td>
+              <td><div class="row-actions">
+                <button class="btn btn-sm" data-act="blacklist" data-id="${esc(u.id)}" data-v="${u.disabled ? 0 : 1}">${u.disabled ? '解除拉黑' : '拉黑'}</button>
+                <button class="btn btn-sm" data-act="activate" data-id="${esc(u.id)}" data-v="${u.activated ? 0 : 1}">${u.activated ? '取消激活' : '激活'}</button>
+                <button class="btn btn-sm" data-act="trial" data-id="${esc(u.id)}" data-v="${u.activated || (u.trial_ends_at && new Date(u.trial_ends_at) > new Date()) ? 1 : 0}" title="把用户置为「试用已结束且未激活」状态,便于在工具端验证试用到期流程">${u.activated || (u.trial_ends_at && new Date(u.trial_ends_at) > new Date()) ? '设为试用过期' : '恢复试用'}</button>
+              </div></td>
+            </tr>`).join('')}
+          </tbody></table>`
+        box.querySelectorAll('button[data-act]').forEach((btn) => {
+          btn.onclick = async () => {
+            const id = btn.dataset.id, act = btn.dataset.act, v = btn.dataset.v === '1'
+            const label = act === 'blacklist' ? (v ? '拉黑' : '解除拉黑')
+              : act === 'trial' ? (v ? '已设为试用过期' : '已恢复试用')
+              : (v ? '激活' : '取消激活')
+            if (v && act === 'blacklist' && !confirm('拉黑后该用户全部会话立即失效,确定拉黑?')) return
+            if (v && act === 'trial' && !confirm('将把该用户置为「试用已结束且未激活」状态,确定?')) return
+            try {
+              const bodyKey = act === 'blacklist' ? 'disabled' : act === 'trial' ? 'expired' : 'activated'
+              await api('/api/admin/users/' + act, { method: 'POST', body: JSON.stringify({ id, [bodyKey]: v }) })
+              toast(label + '成功')
+              loadUsers()
+            } catch (e) { toast(e.message, 'err') }
+          }
+        })
+      }
+      // 分页
+      const pages = Math.max(1, Math.ceil(data.total / usersState.pageSize))
+      const pager = document.getElementById('u-pager')
+      if (pager) {
+        pager.innerHTML = `
+          <span>第 ${usersState.page} / ${pages} 页 · 共 ${fmt(data.total)} 条</span>
+          <button class="btn btn-sm" ${usersState.page <= 1 ? 'disabled' : ''} id="u-prev">上一页</button>
+          <button class="btn btn-sm" ${usersState.page >= pages ? 'disabled' : ''} id="u-next">下一页</button>`
+        const prev = document.getElementById('u-prev'), next = document.getElementById('u-next')
+        if (prev) prev.onclick = () => { if (usersState.page > 1) { usersState.page--; loadUsers() } }
+        if (next) next.onclick = () => { if (usersState.page < pages) { usersState.page++; loadUsers() } }
+      }
+    }
+
+    // =====================================================================
+    // 视图:激活码管理
+    // =====================================================================
+    const codesState = { q: '', status: '', page: 1, pageSize: 20, total: 0, selected: new Set() }
+
+    function codeStatusTag(c) {
+      if (c.status === 'used') return '<span class="badge badge-green">已使用</span>'
+      if (c.status === 'issued') return '<span class="badge badge-amber">已发放</span>'
+      return '<span class="badge badge-slate">未发放</span>'
+    }
+
+    async function renderCodes() {
+      shell(`<div class="page-head"><div><h1>激活码管理</h1><div class="sub">批量生成、发放与删除(已使用的激活码不可删除)</div></div>
+        <button class="btn btn-primary" id="c-gen">+ 批量生成激活码</button></div>
+        <div class="kpi-grid" id="c-counts">
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#94a3b8"></span>未发放</div><div class="value" id="c-unissued">—</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>已发放</div><div class="value" id="c-issued">—</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>已使用</div><div class="value" id="c-used">—</div></div>
+        </div>
+        <div class="toolbar">
+          <input type="search" id="c-q" placeholder="搜索激活码 / 批次 / 备注" value="${esc(codesState.q)}" />
+          <select id="c-status">
+            <option value="">全部状态</option>
+            <option value="unissued" ${codesState.status === 'unissued' ? 'selected' : ''}>未发放</option>
+            <option value="issued" ${codesState.status === 'issued' ? 'selected' : ''}>已发放</option>
+            <option value="used" ${codesState.status === 'used' ? 'selected' : ''}>已使用</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn btn-sm" id="c-bulk-issue">发放选中</button>
+          <button class="btn btn-sm btn-danger" id="c-bulk-del">删除选中</button>
+        </div>
+        <div class="card table-wrap" id="c-table"><div class="loading">加载中…</div></div>
+        <div class="pager" id="c-pager"></div>`)
+
+      document.getElementById('c-gen').onclick = showGenModal
+      let debounce = null
+      document.getElementById('c-q').addEventListener('input', (e) => {
+        clearTimeout(debounce)
+        debounce = setTimeout(() => { codesState.q = e.target.value.trim(); codesState.page = 1; loadCodes() }, 350)
+      })
+      document.getElementById('c-status').onchange = (e) => { codesState.status = e.target.value; codesState.page = 1; loadCodes() }
+      document.getElementById('c-bulk-issue').onclick = () => bulkCodes('issue')
+      document.getElementById('c-bulk-del').onclick = () => bulkCodes('delete')
+      loadCodes()
+    }
+
+    async function loadCodes() {
+      const box = document.getElementById('c-table')
+      if (!box) return
+      const qs = new URLSearchParams({ q: codesState.q, status: codesState.status, page: codesState.page, pageSize: codesState.pageSize })
+      const key = 'codes:' + qs.toString()
+      const cached = cacheGet(key)
+      if (cached) {
+        renderCodesData(cached.data)
+        chipShow('缓存数据 · 同步中…')
+      } else {
+        box.innerHTML = '<div class="loading">加载中…</div>'
+      }
+      let data
+      try {
+        data = await api('/api/admin/codes?' + qs.toString())
+      } catch (e) {
+        chipHide()
+        if (!cached) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        else chipShow('同步失败,当前显示缓存数据', true)
+        return
+      }
+      cacheSet(key, data)
+      renderCodesData(data)
+      chipHide()
+    }
+
+    function renderCodesData(data) {
+      const box = document.getElementById('c-table')
+      if (!box) return
+      codesState.total = data.total
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v) }
+      set('c-unissued', data.counts.unissued)
+      set('c-issued', data.counts.issued)
+      set('c-used', data.counts.used)
+      if (!data.rows.length) {
+        box.innerHTML = '<div class="empty">没有符合条件的激活码</div>'
+      } else {
+        box.innerHTML = `<table>
+          <thead><tr>
+            <th style="width:34px"><input type="checkbox" id="c-all" /></th>
+            <th>激活码</th><th>批次</th><th>备注</th><th>状态</th><th>使用者</th><th>发放时间</th><th>使用时间</th><th>创建时间</th><th>操作</th>
+          </tr></thead>
+          <tbody>${data.rows.map((c) => `
+            <tr>
+              <td><input type="checkbox" class="c-row" value="${esc(c.code)}" ${codesState.selected.has(c.code) ? 'checked' : ''} ${c.status === 'used' ? 'disabled' : ''} /></td>
+              <td class="mono">${esc(c.code)}</td>
+              <td>${esc(c.batch || '—')}</td>
+              <td title="${esc(c.note)}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(c.note || '—')}</td>
+              <td>${codeStatusTag(c)}</td>
+              <td>${c.user_email ? esc(c.user_email) : '—'}</td>
+              <td>${c.issued_at ? fmtTime(c.issued_at) : '—'}</td>
+              <td>${c.used_at ? fmtTime(c.used_at) : '—'}</td>
+              <td>${fmtTime(c.created_at)}</td>
+              <td><div class="row-actions">
+                ${c.status === 'unissued' ? `<button class="btn btn-sm" data-code="${esc(c.code)}" data-op="issue">发放</button>` : ''}
+                ${c.status !== 'used' ? `<button class="btn btn-sm btn-danger" data-code="${esc(c.code)}" data-op="delete">删除</button>` : ''}
+              </div></td>
+            </tr>`).join('')}
+          </tbody></table>`
+        const all = document.getElementById('c-all')
+        if (all) all.onchange = () => {
+          box.querySelectorAll('.c-row').forEach((cb) => {
+            cb.checked = all.checked
+            if (all.checked) codesState.selected.add(cb.value); else codesState.selected.delete(cb.value)
+          })
+        }
+        box.querySelectorAll('.c-row').forEach((cb) => {
+          cb.onchange = () => { cb.checked ? codesState.selected.add(cb.value) : codesState.selected.delete(cb.value) }
+        })
+        box.querySelectorAll('button[data-op]').forEach((btn) => {
+          btn.onclick = async () => {
+            const code = btn.dataset.code, op = btn.dataset.op
+            if (op === 'delete' && !confirm(`确定删除激活码 ${code}?`)) return
+            try {
+              const data2 = await api('/api/admin/codes/' + op, { method: 'POST', body: JSON.stringify({ codes: [code] }) })
+              toast((op === 'issue' ? '已发放' : '已删除') + ` ${data2.issued || data2.deleted || 0} 个`)
+              loadCodes()
+            } catch (e) { toast(e.message, 'err') }
+          }
+        })
+      }
+      const pages = Math.max(1, Math.ceil(data.total / codesState.pageSize))
+      const pager = document.getElementById('c-pager')
+      if (pager) {
+        pager.innerHTML = `
+          <span>第 ${codesState.page} / ${pages} 页 · 共 ${fmt(data.total)} 条</span>
+          <button class="btn btn-sm" ${codesState.page <= 1 ? 'disabled' : ''} id="c-prev">上一页</button>
+          <button class="btn btn-sm" ${codesState.page >= pages ? 'disabled' : ''} id="c-next">下一页</button>`
+        const prev = document.getElementById('c-prev'), next = document.getElementById('c-next')
+        if (prev) prev.onclick = () => { if (codesState.page > 1) { codesState.page--; loadCodes() } }
+        if (next) next.onclick = () => { if (codesState.page < pages) { codesState.page++; loadCodes() } }
+      }
+    }
+
+    async function bulkCodes(op) {
+      const codes = Array.from(codesState.selected).filter((c) => c)
+      if (!codes.length) { toast('请先勾选激活码', 'err'); return }
+      if (op === 'delete' && !confirm(`确定删除选中的 ${codes.length} 个激活码?`)) return
+      try {
+        // 分批,单次最多 500
+        let done = 0
+        for (let i = 0; i < codes.length; i += 500) {
+          const part = codes.slice(i, i + 500)
+          const d = await api('/api/admin/codes/' + op, { method: 'POST', body: JSON.stringify({ codes: part }) })
+          done += Number(d.issued || d.deleted || 0)
+        }
+        toast((op === 'issue' ? '已发放' : '已删除') + ` ${done} 个`)
+        codesState.selected.clear()
+        loadCodes()
+      } catch (e) { toast(e.message, 'err') }
+    }
+
+    function showGenModal() {
+      const mask = openModal(`
+        <div class="modal-head"><h3>批量生成激活码</h3><button class="x" id="gm-x">✕</button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-row"><label>数量(1-200)</label><input id="gm-count" type="number" min="1" max="200" value="10" /></div>
+            <div class="form-row"><label>前缀(最多 8 位)</label><input id="gm-prefix" type="text" value="TK" maxlength="8" /></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-row"><label>码长度(4-24)</label><input id="gm-length" type="number" min="4" max="24" value="10" /></div>
+            <div class="form-row"><label>批次(可选,留空自动)</label><input id="gm-batch" type="text" placeholder="如 B202610" maxlength="40" /></div>
+          </div>
+          <div class="form-row"><label>备注(可选,如发放对象)</label><input id="gm-note" type="text" maxlength="200" placeholder="如:小红书活动首批" /></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="gm-cancel">取消</button>
+          <button class="btn btn-primary" id="gm-ok">生成</button>
+        </div>`)
+      mask.querySelector('#gm-x').onclick = closeModal
+      mask.querySelector('#gm-cancel').onclick = closeModal
+      mask.querySelector('#gm-ok').onclick = async () => {
+        const count = Number(mask.querySelector('#gm-count').value) || 10
+        const prefix = mask.querySelector('#gm-prefix').value.trim()
+        const length = Number(mask.querySelector('#gm-length').value) || 10
+        const batch = mask.querySelector('#gm-batch').value.trim()
+        const note = mask.querySelector('#gm-note').value.trim()
+        try {
+          const d = await api('/api/admin/codes', {
+            method: 'POST',
+            body: JSON.stringify({ count, prefix, length, batch, note }),
+          })
+          closeModal()
+          showGenerated(d.codes || [], d.created || 0)
+          loadCodes()
+        } catch (e) { toast(e.message, 'err') }
+      }
+    }
+
+    function showGenerated(codes, created) {
+      const mask = openModal(`
+        <div class="modal-head"><h3>已生成 ${created} 个激活码</h3><button class="x" id="sg-x">✕</button></div>
+        <div class="modal-body">
+          <div class="code-out">${codes.map(esc).join('\n')}</div>
+          <div class="form-tip" style="margin-top:8px">激活码仅此一次完整展示,请及时复制分发。「发放」后用户方可在 App 内兑换。</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="sg-copy">复制全部</button>
+          <button class="btn btn-primary" id="sg-issue">立即发放本批</button>
+          <button class="btn" id="sg-close">关闭</button>
+        </div>`, { wide: true })
+      mask.querySelector('#sg-x').onclick = closeModal
+      mask.querySelector('#sg-close').onclick = closeModal
+      mask.querySelector('#sg-copy').onclick = async () => {
+        try { await navigator.clipboard.writeText(codes.join('\n')); toast('已复制到剪贴板') }
+        catch { toast('复制失败,请手动选择复制', 'err') }
+      }
+      mask.querySelector('#sg-issue').onclick = async () => {
+        try {
+          const d = await api('/api/admin/codes/issue', { method: 'POST', body: JSON.stringify({ codes }) })
+          toast('已发放 ' + (d.issued || 0) + ' 个')
+          closeModal()
+          loadCodes()
+        } catch (e) { toast(e.message, 'err') }
+      }
+    }
+
+    // =====================================================================
+    // 功能页面统计(原「数据统计」页,已合并进数据概览)
+    // 去重说明:站点访客/下载点击与概览的「下载站转化漏斗」「下载站流量趋势」
+    // 重复,不再展示;仅保留工具内页面访问、功能点击及页面明细。
+    // =====================================================================
+    // 页面/功能标识 → 中文名(与 App 埋点 trackPage/trackFeature 的取值一一对应;
+    // 未收录的新代号回退显示原代号,避免信息丢失)
+    const PAGE_NAMES = {
+      day: '日待办',
+      week: '周待办',
+      month: '月待办',
+      birthday: '记节日',
+      settings: '设置',
+      huangli: '黄历',
+      calculator: '计算器',
+      salary: '计薪器',
+      screenshot: '截图',
+      // 以下为功能点击入口(feature_click 的 name 会落在 page 字段)
+      sync: '手动同步',
+      'add-task': '添加任务',
+      'check-update': '检查更新',
+      account: '账号页',
+      app: '应用',
+    }
+    function pageLabel(p) { return PAGE_NAMES[p] || p }
+
+    async function loadAppStats() {
+      const box = document.getElementById('ov-app-stats')
+      if (!box) return
+      const key = 'stats:' + ovState.days
+      const cached = cacheGet(key)
+      if (cached) {
+        try {
+          box.innerHTML = buildAppStatsSection(cached.data)
+        } catch {
+          /* 缓存渲染失败则等新数据 */
+        }
+      }
+      let data
+      try {
+        data = await api('/api/admin/stats?days=' + ovState.days)
+      } catch (e) {
+        if (!cached) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        return
+      }
+      cacheSet(key, data)
+      if (!document.getElementById('ov-app-stats')) return
+      try {
+        box.innerHTML = buildAppStatsSection(data)
+      } catch (err) {
+        box.innerHTML = `<div class="empty">渲染出错:${esc(String((err && err.message) || err))}</div>`
+      }
+    }
+
+    function buildAppStatsSection(data) {
+      // Worker 返回:{ days:number, app:{pages,trend,days:[]}, site:{trend,days:[],totals} }
+      const dayList = (data.app && data.app.days) || []
+      const labels = dayList.map(fmtDay)
+
+      // 工具内页面 Top:取访客数前 6 的页面画多序列折线
+      const topPages = data.app.pages.slice(0, 6)
+      const dayPage = new Map()
+      for (const p of data.app.trend) {
+        if (!dayPage.has(p.page)) dayPage.set(p.page, new Map())
+        dayPage.get(p.page).set(p.day, p.visitors)
+      }
+      const pageSeries = topPages.map((p, i) => ({
+        name: pageLabel(p.page),
+        color: CHART_COLORS[i % CHART_COLORS.length],
+        data: dayList.map((d) => dayPage.get(p.page)?.get(d) ?? 0),
+      }))
+
+      const totalAppVisitors = data.app.pages.reduce((s, p) => s + p.visitors, 0)
+      const totalAppClicks = data.app.pages.reduce((s, p) => s + p.clicks, 0)
+
+      return `
+        <div class="kpi-grid">
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>工具内页面访问</div><div class="value">${fmt(totalAppVisitors)}</div><div class="extra">各页面去重访客合计(近${data.days}天)</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>功能点击</div><div class="value">${fmt(totalAppClicks)}</div><div class="extra">App 内 feature_click 合计</div></div>
+        </div>
+        <div class="card card-pad" style="margin-bottom:14px">
+          <div class="card-title">工具内页面访客趋势 <span class="hint">Top ${topPages.length} 页面</span></div>
+          ${pageSeries.length ? lineChartSvg(labels, pageSeries, { w: 980, height: 240 }) : '<div class="empty">暂无数据</div>'}
+          <div class="legend">${pageSeries.map((s) => `<span class="item"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('')}</div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>页面</th><th>访客数</th><th>功能点击</th></tr></thead>
+            <tbody>${data.app.pages.map((p) => `
+              <tr>
+                <td>${esc(pageLabel(p.page))}</td>
+                <td class="num">${fmt(p.visitors)}</td>
+                <td class="num">${fmt(p.clicks)}</td>
+              </tr>`).join('') || '<tr><td colspan="3" class="empty">暂无数据</td></tr>'}
+            </tbody>
+          </table>
+        </div>`
+    }
+
+    // =====================================================================
+    // 视图:版本记录
+    // =====================================================================
+    async function renderReleases() {
+      shell(`<div class="page-head"><div><h1>版本记录</h1><div class="sub">下载网页中的版本更新记录由此处驱动</div></div>
+        <button class="btn btn-primary" id="r-add">+ 添加版本记录</button></div>
+        <div class="card table-wrap" id="r-table"><div class="loading">加载中…</div></div>`)
+      document.getElementById('r-add').onclick = () => showReleaseModal(null)
+      const box = document.getElementById('r-table')
+      if (!box) return
+      const cached = cacheGet('releases')
+      if (cached) {
+        renderReleasesData(cached.data)
+        chipShow('缓存数据 · 同步中…')
+      } else {
+        box.innerHTML = '<div class="loading">加载中…</div>'
+      }
+      let data
+      try {
+        data = await api('/api/admin/releases')
+      } catch (e) {
+        chipHide()
+        if (!cached) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        else chipShow('同步失败,当前显示缓存数据', true)
+        return
+      }
+      cacheSet('releases', data)
+      renderReleasesData(data)
+      chipHide()
+    }
+
+    function renderReleasesData(data) {
+      const box = document.getElementById('r-table')
+      if (!box) return
+      if (!data.releases.length) {
+        box.innerHTML = '<div class="empty">暂无版本记录</div>'
+        return
+      }
+      box.innerHTML = `<table>
+        <thead><tr><th>版本</th><th>标题</th><th>发布日期</th><th>更新条目</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody>${data.releases.map((r) => `
+          <tr>
+            <td class="mono"><b>v${esc(r.version)}</b></td>
+            <td title="${esc(r.title)}" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${esc(r.title)}</td>
+            <td>${esc(r.release_date)}</td>
+            <td class="num">${(r.items || []).length}</td>
+            <td>${fmtTime(r.created_at)}</td>
+            <td><div class="row-actions">
+              <button class="btn btn-sm" data-v="${esc(r.version)}" data-op="edit">编辑</button>
+              <button class="btn btn-sm btn-danger" data-v="${esc(r.version)}" data-op="del">删除</button>
+            </div></td>
+          </tr>`).join('')}
+        </tbody></table>`
+      box.querySelectorAll('button[data-op]').forEach((btn) => {
+        btn.onclick = async () => {
+          const version = btn.dataset.v, op = btn.dataset.op
+          if (op === 'del') {
+            if (!confirm(`确定删除版本记录 v${version}?下载页将不再展示该版本。`)) return
+            try {
+              await api('/api/admin/releases?version=' + encodeURIComponent(version), { method: 'DELETE' })
+              toast('已删除 v' + version)
+              renderReleases()
+            } catch (e) { toast(e.message, 'err') }
+          } else {
+            const r = data.releases.find((x) => x.version === version)
+            showReleaseModal(r)
+          }
+        }
+      })
+    }
+
+    function showReleaseModal(rel) {
+      const isEdit = !!rel
+      const mask = openModal(`
+        <div class="modal-head"><h3>${isEdit ? '编辑版本记录 v' + esc(rel.version) : '添加版本记录'}</h3><button class="x" id="rm-x">✕</button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-row"><label>版本号 *</label><input id="rm-version" type="text" value="${isEdit ? esc(rel.version) : ''}" placeholder="如 0.2.4" maxlength="20" ${isEdit ? 'readonly' : ''} /></div>
+            <div class="form-row"><label>发布日期 *</label><input id="rm-date" type="date" value="${isEdit ? esc(rel.release_date) : new Date().toISOString().slice(0, 10)}" /></div>
+          </div>
+          <div class="form-row"><label>标题 *</label><input id="rm-title" type="text" value="${isEdit ? esc(rel.title) : ''}" placeholder="如:性能优化与问题修复" maxlength="80" /></div>
+          <div class="form-row"><label>更新条目(每行一条)</label><textarea id="rm-items" placeholder="待办支持批量完成&#10;修复同步偶发失败">${isEdit ? esc((rel.items || []).join('\n')) : ''}</textarea></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="rm-cancel">取消</button>
+          <button class="btn btn-primary" id="rm-ok">${isEdit ? '保存' : '添加'}</button>
+        </div>`)
+      mask.querySelector('#rm-x').onclick = closeModal
+      mask.querySelector('#rm-cancel').onclick = closeModal
+      mask.querySelector('#rm-ok').onclick = async () => {
+        const version = mask.querySelector('#rm-version').value.trim()
+        const release_date = mask.querySelector('#rm-date').value
+        const title = mask.querySelector('#rm-title').value.trim()
+        const items = mask.querySelector('#rm-items').value.split('\n').map((s) => s.trim()).filter(Boolean)
+        if (!version || !release_date || !title) { toast('版本号、发布日期、标题为必填', 'err'); return }
+        try {
+          await api('/api/admin/releases', {
+            method: isEdit ? 'PUT' : 'POST',
+            body: JSON.stringify({ version, release_date, title, items }),
+          })
+          toast(isEdit ? '已保存' : '已添加 v' + version)
+          closeModal()
+          renderReleases()
+        } catch (e) { toast(e.message, 'err') }
+      }
+    }
+
+    // =====================================================================
+    // 视图:用户反馈(联系客服提交的问题与需求)
+    // =====================================================================
+    const fbState = { kind: '', status: '' }
+
+    function fbCacheKey() {
+      return 'feedback:' + fbState.kind + ':' + fbState.status
+    }
+
+    /** 复制文本到剪贴板(兼容无 navigator.clipboard 的环境)。 */
+    function copyText(text) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+        } else {
+          fallbackCopy(text)
+        }
+      } catch {
+        fallbackCopy(text)
+      }
+    }
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch { /* 忽略 */ }
+      ta.remove()
+    }
+
+    async function renderFeedback() {
+      shell(`<div class="page-head"><div><h1>用户反馈</h1><div class="sub">用户通过「联系客服」提交的问题反馈与需求提报,可回复、标记状态</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="seg" id="fb-kind">
+            ${[['', '全部'], ['issue', '问题反馈'], ['demand', '需求提报']].map(([v, l]) => `<button data-v="${v}" class="${fbState.kind === v ? 'active' : ''}">${l}</button>`).join('')}
+          </div>
+          <div class="seg" id="fb-status">
+            ${[['', '全部状态'], ['open', '待反馈'], ['replied', '已回复'], ['done', '已处理']].map(([v, l]) => `<button data-v="${v}" class="${fbState.status === v ? 'active' : ''}">${l}</button>`).join('')}
+          </div>
+        </div></div>
+      <div class="card card-pad" id="fb-body"><div class="loading">加载中…</div></div>`)
+      document.querySelectorAll('#fb-kind button').forEach((b) => {
+        b.onclick = () => { fbState.kind = b.dataset.v; renderFeedback() }
+      })
+      document.querySelectorAll('#fb-status button').forEach((b) => {
+        b.onclick = () => { fbState.status = b.dataset.v; renderFeedback() }
+      })
+      // 缓存优先:先渲染本地缓存(若已访问过则该状态即时呈现),再后台静默刷新,
+      // 避免每次进入菜单都白屏「加载中」。
+      const key = fbCacheKey()
+      const cached = cacheGet(key)
+      const box = document.getElementById('fb-body')
+      if (cached) renderFeedbackData(cached.data)
+      loadFeedback()
+    }
+
+    async function loadFeedback() {
+      const key = fbCacheKey()
+      if (!cacheGet(key)) chipShow('同步反馈…')
+      const qs = new URLSearchParams()
+      if (fbState.kind) qs.set('kind', fbState.kind)
+      if (fbState.status) qs.set('status', fbState.status)
+      let data
+      try {
+        data = await api('/api/admin/feedback?' + qs.toString())
+      } catch (e) {
+        chipHide()
+        const box = document.getElementById('fb-body')
+        if (box && !cacheGet(key)) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
+        return
+      }
+      cacheSet(key, data)
+      chipHide()
+      renderFeedbackData(data)
+    }
+
+    function renderFeedbackData(data) {
+      const box = document.getElementById('fb-body')
+      if (!box) return
+      if (!data.items.length) {
+        box.innerHTML = '<div class="empty">暂无反馈</div>'
+        return
+      }
+      box.innerHTML = `<table>
+        <thead><tr><th>时间</th><th>类型</th><th>内容</th><th>用户</th><th>联系方式</th><th>平台回复</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody>${data.items.map((f) => `
+          <tr>
+            <td class="mono" style="white-space:nowrap">${fmtTime(f.created_at)}</td>
+            <td><span class="badge ${f.kind === 'demand' ? 'badge-blue' : 'badge-amber'}">${f.kind === 'demand' ? '需求提报' : '问题反馈'}</span></td>
+            <td style="max-width:300px;white-space:pre-wrap;word-break:break-word">${esc(f.content)}</td>
+            <td>${f.email ? esc(f.email) : '<span style="color:#94a3b8">匿名</span>'}${f.app_version ? `<br/><span style="color:#94a3b8;font-size:11px">v${esc(f.app_version)}</span>` : ''}</td>
+            <td>${f.contact_method ? `<span class="fb-contact-cell">${esc(f.contact_method)}</span><br/><button class="btn btn-sm fb-copy" data-copy="${esc(f.contact_method)}">复制</button>` : '<span style="color:#94a3b8">—</span>'}</td>
+            <td class="fb-replies-cell">${f.replies && f.replies.length ? f.replies.map((r) => `<div class="fb-reply-line"><span class="fb-reply-time">${fmtTime(r.created_at)}</span>${esc(r.body)}</div>`).join('') : '<span style="color:#94a3b8">—</span>'}</td>
+            <td><span class="badge ${f.status === 'done' ? 'badge-green' : f.status === 'replied' ? 'badge-blue' : 'badge-red'}">${f.status === 'done' ? '已处理' : f.status === 'replied' ? '已回复' : '待反馈'}</span></td>
+            <td><div class="row-actions">
+              <button class="btn btn-sm" data-id="${f.id}" data-op="toggle">${f.status === 'done' ? '标记待处理' : '标记已处理'}</button>
+              <button class="btn btn-sm ${f.status === 'done' ? 'btn-disabled' : ''}" data-id="${f.id}" data-op="reply" ${f.status === 'done' ? 'disabled' : ''}>回复</button>
+              <button class="btn btn-sm btn-danger" data-id="${f.id}" data-op="del">删除</button>
+            </div></td>
+          </tr>`).join('')}
+        </tbody></table>`
+      box.querySelectorAll('button[data-copy]').forEach((btn) => {
+        btn.onclick = () => {
+          copyText(btn.dataset.copy || '')
+          toast('已复制联系方式')
+        }
+      })
+      box.querySelectorAll('button[data-op]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id, op = btn.dataset.op
+          try {
+            if (op === 'del') {
+              if (!confirm('确定删除这条反馈?')) return
+              await api('/api/admin/feedback?id=' + encodeURIComponent(id), { method: 'DELETE' })
+              toast('已删除')
+            } else if (op === 'reply') {
+              openFeedbackReply(Number(id), data.items.find((x) => String(x.id) === id))
+              return
+            } else {
+              const item = data.items.find((x) => String(x.id) === id)
+              await api('/api/admin/feedback/update', {
+                method: 'POST',
+                body: JSON.stringify({ id: Number(id), status: item && item.status === 'done' ? 'open' : 'done' }),
+              })
+              toast('已更新状态')
+            }
+            loadFeedback()
+          } catch (e) { toast(e.message, 'err') }
+        }
+      })
+    }
+
+    /** 回复弹窗:展示用户原始反馈与已有平台回复,并支持继续追加回复(已处理不可回复)。 */
+    function openFeedbackReply(id, item) {
+      const repliesHtml = item && item.replies && item.replies.length
+        ? item.replies.map((r) => `<div class="fb-reply-line"><span class="fb-reply-time">${fmtTime(r.created_at)}</span><div>${esc(r.body)}</div></div>`).join('')
+        : '<div class="empty" style="padding:8px 0">暂无平台回复</div>'
+      const inner = `<div class="modal-head"><h3>回复反馈 #${id}</h3><button class="x" id="fr-x">✕</button></div>
+        <div class="modal-body">
+          <div class="fb-reply-origin"><b>用户${item && item.kind === 'demand' ? '需求提报' : '问题反馈'}：</b>${esc(item ? item.content : '')}</div>
+          <div class="fb-reply-list">${repliesHtml}</div>
+          <textarea class="fb-reply-input" id="fr-input" placeholder="输入回复内容,用户将在「历史记录」中看到(可多次回复)…"></textarea>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="fr-cancel">取消</button>
+          <button class="btn btn-primary" id="fr-send">发送回复</button>
+        </div>`
+      const mask = openModal(inner)
+      const close = () => closeModal()
+      mask.querySelector('#fr-x').onclick = close
+      mask.querySelector('#fr-cancel').onclick = close
+      const send = mask.querySelector('#fr-send')
+      send.onclick = async () => {
+        const body = mask.querySelector('#fr-input').value.trim()
+        if (!body) { toast('请输入回复内容', 'err'); return }
+        send.disabled = true
+        try {
+          await api('/api/admin/feedback/reply', { method: 'POST', body: JSON.stringify({ id, body }) })
+          toast('已回复,用户可于「历史记录」查看')
+          close()
+          loadFeedback()
+        } catch (e) { toast(e.message, 'err'); send.disabled = false }
+      }
+    }
+
+    // =====================================================================
+    // 路由入口
+    // =====================================================================
+    function render() {
+      const hash = location.hash || '#/overview'
+      const token = localStorage.getItem(TOKEN_KEY)
+      if (!token || hash === '#/login') {
+        renderLogin()
+        return
+      }
+      switch (hash) {
+        case '#/overview': renderOverview(); break
+        case '#/users': renderUsers(); break
+        case '#/codes': renderCodes(); break
+        case '#/releases': renderReleases(); break
+        case '#/feedback': renderFeedback(); break
+        default: location.hash = '#/overview'
+      }
+    }
+
+    window.addEventListener('hashchange', render)
+    // 启动:有令牌先校验(失败自动跳登录)
+    ;(async function init() {
+      if (localStorage.getItem(TOKEN_KEY)) {
+        try {
+          await api('/api/admin/overview?days=1')
+        } catch {
+          localStorage.removeItem(TOKEN_KEY)
+        }
+      }
+      render()
+    })()
+  </script>
+</body>
+</html>

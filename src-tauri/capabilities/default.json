@@ -7,12 +7,20 @@
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-set-webview-zoom",
     "core:window:allow-set-position",
     "core:window:allow-set-size",
     "core:window:allow-set-focus",
     "core:window:allow-outer-position",
     "core:window:allow-current-monitor",
     "core:window:allow-cursor-position",
-    "core:window:allow-set-ignore-cursor-events"
+    "core:window:allow-set-ignore-cursor-events",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-close",
+    "notification:default",
+    "dialog:allow-open"
   ]
 }

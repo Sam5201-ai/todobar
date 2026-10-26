@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "clipboard-capability",
+  "description": "剪贴板浮窗(clipboard 窗口)所需权限:显示/隐藏/拖动/定位/关闭、事件监听,以及调用自定义剪贴板命令。",
+  "windows": [
+    "clipboard"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-position",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-monitor-from-point",
+    "core:window:allow-cursor-position",
+    "core:window:allow-scale-factor",
+    "core:event:default",
+    "core:app:default",
+    "core:webview:allow-set-webview-zoom"
+  ]
+}

@@ -1,0 +1,893 @@
+/* 截图 / 贴图模块样式。
+   透明窗口模式:覆盖层与贴图窗口需完全透明,桌面透出。 */
+html.screenshot-mode,
+html.screenshot-mode body,
+html.screenshot-mode #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.shot-loading,
+.pin-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c9d4e0;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------- 截图覆盖层 ---------------- */
+.capture-overlay-root {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.capture-base,
+.capture-mosaic,
+.capture-anno,
+.capture-ui {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 层级:底图(0) → 马赛克层(1) → 标注层(2) → 暗罩/选区层(3)。 */
+.capture-base {
+  z-index: 0;
+}
+
+.capture-mosaic {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.capture-anno {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.capture-ui {
+  z-index: 3;
+  /* 框选阶段十字光标;确认后由 JS 按工具/位置动态覆盖(指针工具选区内为 move)。 */
+  cursor: crosshair;
+}
+
+.capture-magnifier {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  line-height: 0;
+}
+
+.capture-toolbar {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(28, 32, 38, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+.ctb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e7edf3;
+  font-size: 13px;
+}
+
+.ctb-group button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7edf3;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ctb-group button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ctb-group button.is-active {
+  background: #2f80ff;
+  border-color: #2f80ff;
+  color: #fff;
+}
+
+.ctb-group select {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e7edf3;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.ctb-group select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 下拉选项:显式白字深底,避免系统默认灰字被误认为置灰不可选(问题4)。 */
+.ctb-group select option {
+  background: #2b2f36;
+  color: #ffffff;
+}
+
+.ctb-hint {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+/* ---------------- 标注编辑器 ---------------- */
+.editor-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e2228;
+  color: #e7edf3;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 12px;
+  background: #262b33;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.etb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #c9d4e0;
+}
+
+.etb-group button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7edf3;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.etb-group button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.etb-group button.is-active {
+  background: #2f80ff;
+  border-color: #2f80ff;
+  color: #fff;
+}
+
+.etb-group input[type='color'] {
+  width: 28px;
+  height: 26px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.etb-actions {
+  margin-left: auto;
+}
+
+.etb-actions button.primary {
+  background: #2f80ff;
+  border-color: #2f80ff;
+  color: #fff;
+}
+
+.editor-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+  background: #14171b;
+}
+
+.editor-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  cursor: crosshair;
+}
+
+.editor-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(28, 32, 38, 0.95);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  z-index: 10;
+}
+
+/* ---------------- 悬浮贴图窗口 ---------------- */
+.pin-root {
+  position: fixed;
+  inset: 0;
+  user-select: none;
+  /* 注意:边框不能画在 .pin-root 自身(outline/border 都会被 inset:0 的
+    .pin-image 盖住 —— Chromium 中 positioned 子元素绘制在根元素 outline
+    之上,这就是此前「边框反复改都看不见」的真因)。边框统一由下方
+    .pin-root::after 独立层绘制,z-index 高于图片。 */
+}
+
+/* 贴图边框层(PixPin 式):默认灰框指示贴图位置;聚焦/悬停变蓝表示选中。
+   z-index:8 高于图片(auto)低于缩放把手(9)/工具栏(10),保证始终可见。
+   内侧 box-shadow 让边框向内晕开一层柔光,观感更自然(PixPin 同款观感)。 */
+.pin-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid rgba(150, 150, 150, 0.8);
+  box-shadow:
+    inset 0 0 10px rgba(90, 90, 90, 0.28),
+    inset 0 0 3px rgba(90, 90, 90, 0.35);
+  z-index: 8;
+}
+
+.pin-root.is-focused::after {
+  border-color: #2f80ff;
+  box-shadow:
+    inset 0 0 10px rgba(47, 128, 255, 0.3),
+    inset 0 0 3px rgba(47, 128, 255, 0.45);
+}
+
+.pin-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  cursor: move;
+}
+
+.pin-root.is-penetrated .pin-image {
+  cursor: default;
+}
+
+.pin-toolbar {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: rgba(28, 32, 38, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e7edf3;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.pin-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.pin-btn.pin-danger:hover {
+  background: rgba(255, 77, 79, 0.85);
+  color: #fff;
+}
+
+.pin-opacity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #e7edf3;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.pin-opacity em {
+  font-style: normal;
+  min-width: 34px;
+  text-align: center;
+}
+
+.pin-resize-handle {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  z-index: 9;
+  cursor: nwse-resize;
+  /* 默认隐藏:右下角常驻蓝色三角曾被用户误认为「边框只画了右下角」。
+    悬停贴图时才显现,既保留缩放入口又不干扰视觉。 */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    transparent 50%,
+    rgba(47, 128, 255, 0.9) 50%,
+    rgba(47, 128, 255, 0.9) 100%
+  );
+  border-bottom-right-radius: 6px;
+}
+
+.pin-root:hover .pin-resize-handle {
+  opacity: 1;
+}
+
+.pin-toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(28, 32, 38, 0.95);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  z-index: 12;
+}
+
+/* ---------------- 截图设置面板 ---------------- */
+.shot-settings-group {
+  min-width: 0;
+  max-width: 100%;
+  /* 釜底抽薪:grid 轨道锁死为容器宽,任何行(快捷键输入框/编辑按钮组)的
+     min-content 都撑不破轨道 → 侧栏窗口实际宽度小于面板设置值时,
+     开关/输入框也不会被右缘截断(用户反馈:开关右边框被截断)。 */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-hint {
+  margin: 4px 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.shot-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 33px;
+  padding: 4px 0;
+  min-width: 0;
+}
+
+.shot-shortcut-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+  flex: none;
+}
+
+.shot-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.shot-shortcut-text {
+  width: 150px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+/* 非编辑态:置灰只读,双击进入编辑(2026-10-22 用户拍板的交互)。 */
+.shot-shortcut-text.is-stored {
+  color: var(--muted);
+  background: var(--surface-2, rgba(127, 127, 127, 0.07));
+  cursor: default;
+}
+
+.shot-shortcut-text.is-conflict {
+  border-color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.08);
+}
+
+.workspace.theme-dark .shot-shortcut-text.is-conflict {
+  background: rgba(255, 77, 79, 0.18);
+}
+
+/* 编辑态:文本框 + ✓ 保存 / ✕ 取消 */
+.shot-shortcut-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 编辑态文本框可收缩,保证窄面板下 ✓/✕ 按钮不被挤出可视区。 */
+.shot-shortcut-edit .shot-shortcut-text {
+  flex: 0 1 150px;
+  min-width: 80px;
+}
+
+.shot-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.shot-edit-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.workspace.theme-dark .shot-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shot-edit-btn.is-save {
+  background: #2f80ff;
+  border-color: #2f80ff;
+  color: #fff;
+}
+
+.shot-edit-btn.is-save:hover {
+  background: #1f6fe0;
+}
+
+.shot-shortcut-err {
+  font-style: normal;
+  font-size: 10px;
+  color: #ff4d4f;
+  text-align: right;
+}
+
+/* ---------------- B 路线新增:确认选区后的操作条(复制/贴图/保存/取消) ---------------- */
+.capture-actionbar {
+  position: fixed;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: rgba(28, 32, 38, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+.cab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #dfe6ee;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.cab-btn:hover:not(:disabled) {
+  background: rgba(47, 128, 255, 0.9);
+  color: #fff;
+}
+
+.cab-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.cab-btn.cab-cancel:hover:not(:disabled) {
+  background: rgba(224, 82, 82, 0.9);
+}
+
+.capture-toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  background: rgba(28, 32, 38, 0.95);
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* ---------------- 标注工具栏(确认选区后显示,仿 PixPin) ---------------- */
+.capture-annotbar {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: rgba(28, 32, 38, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  /* 单行显示(用户要求):禁止换行,撤销/清空经 margin-left:auto 推到最右侧。 */
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.cab-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cab-tools button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7edf3;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 文字类工具按钮(指针):字号小于符号图标,视觉更协调。 */
+.cab-tools button.cab-tool-label {
+  font-size: 12px;
+}
+
+.cab-tools button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.cab-tools button.is-active {
+  background: #2f80ff;
+  border-color: #2f80ff;
+  color: #fff;
+}
+
+.cab-colors {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cab-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
+}
+
+.cab-color.is-active {
+  border-color: #fff;
+  transform: scale(1.12);
+}
+
+.cab-widths {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cab-width {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cab-width i {
+  display: block;
+  width: 14px;
+  background: #e7edf3;
+  border-radius: 2px;
+}
+
+.cab-width.is-active {
+  border-color: #2f80ff;
+  background: rgba(47, 128, 255, 0.2);
+}
+
+.cab-actions2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  /* 推到工具栏最右侧(用户要求:单行 + 撤销/清空靠右)。 */
+  margin-left: auto;
+}
+
+.cab-actions2 button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7edf3;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.cab-actions2 button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* 文字输入(标注文字工具)。 */
+.capture-text-input {
+  position: fixed;
+  z-index: 7;
+  width: 220px;
+  padding: 4px 8px;
+  border: 2px solid #2f80ff;
+  border-radius: 6px;
+  background: rgba(28, 32, 38, 0.9);
+  color: #fff;
+  font-size: 18px;
+  outline: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* 预热待命态(窗口隐藏或数据未就绪):完全透明,不渲染可见内容。 */
+.capture-idle,
+.pin-idle {
+  background: transparent;
+}
+
+.pin-root.pin-idle::after {
+  content: none;
+}
+
+/* ---- 选区调整手柄(问题8):四角 + 四边中点,拖拽微调圈选范围 ---- */
+.capture-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.capture-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 1px solid #2f80ff;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.handle-nw,
+.handle-se {
+  cursor: nwse-resize;
+}
+
+.handle-ne,
+.handle-sw {
+  cursor: nesw-resize;
+}
+
+.handle-n,
+.handle-s {
+  cursor: ns-resize;
+}
+
+.handle-e,
+.handle-w {
+  cursor: ew-resize;
+}
+
+/* ---------------- 贴图穿透控制条窗口(pinctl-*,独立不穿透小窗,参考 PixPin) ---------------- */
+.pinctl-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-bottom: 2px;
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  user-select: none;
+}
+
+/* 拖拽把手 + 不透明度滑条 + 关闭按钮 */
+.pinctl-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+}
+
+.pinctl-drag {
+  display: flex;
+  padding: 4px;
+  color: #333;
+  cursor: grab;
+  border-radius: 6px;
+}
+
+.pinctl-drag:active {
+  cursor: grabbing;
+  background: #f0f0f0;
+}
+
+.pinctl-sep {
+  width: 1px;
+  height: 20px;
+  background: #e2e2e2;
+}
+
+.pinctl-label {
+  font-size: 13px;
+  color: #333;
+  white-space: nowrap;
+}
+
+.pinctl-slider {
+  width: 110px;
+  accent-color: #2f80ff;
+  cursor: pointer;
+}
+
+.pinctl-btn {
+  display: flex;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: #444;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.pinctl-btn:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+/* 把手说明气泡(箭头指向拖拽把手) */
+.pinctl-bubble {
+  position: relative;
+  width: 280px;
+  padding: 10px 30px 10px 12px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+}
+
+.pinctl-bubble h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #111;
+}
+
+.pinctl-bubble p {
+  margin: 0 0 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.pinctl-bubble .pinctl-bubble-hl {
+  color: #111;
+  font-weight: 600;
+}
+
+.pinctl-bubble-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.pinctl-bubble-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.pinctl-bubble-arrow {
+  position: absolute;
+  bottom: -5px;
+  left: 22px;
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  transform: rotate(45deg);
+}

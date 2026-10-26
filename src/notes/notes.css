@@ -1,0 +1,357 @@
+/*
+ * 便利签窗口样式。全部 ns- 命名空间,避免污染主界面(App.css 是全站作用域)。
+ *
+ * 与贴图(PinWindow)的关键差异:
+ *   贴图层主体是图片 → 可整体窗口透明;
+ *   **便利签主体是文字 → 只能背景 rgba 透明,文字必须保持全不透明**。
+ * 因此本文件不给 ns-root 设 opacity,透明度只体现在 inline style 的 background。
+ * 这是低透明度下依然好读的根本保证。
+ */
+
+.ns-root {
+  /* 窗口 transparent(true),这里不能再加不透明底色,否则失去贴桌效果 */
+  position: relative; /* 样式面板(ns-popover)的定位基准 */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  user-select: none;
+  /* 卡片式投影:DPI 无关,让便利签有"浮在桌面上"的实感 */
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.18),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* ——— 标题栏:唯一可拖动区域 ——— */
+.ns-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px 4px;
+  cursor: move; /* 明确传达"此处可拖" */
+  flex: none;
+}
+
+.ns-grip {
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.28;
+}
+
+.ns-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ns-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.ns-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.ns-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ns-btn.is-on {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.ns-close:hover {
+  background: rgba(220, 38, 38, 0.22);
+}
+
+/* ——— 颜色与透明度面板(点调色板图标弹出) ——— */
+.ns-popover {
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  /* 面板本身必须不透明:滑条与色块不能被「背景透明度」波及,否则自己调自己 */
+  background: rgba(255, 255, 255, 0.97);
+  color: #3a3325;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.ns-swatches {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ns-swatch {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.ns-swatch:hover {
+  transform: scale(1.12);
+}
+
+.ns-swatch.is-on {
+  border-color: #3a3325;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(58, 51, 37, 0.55);
+}
+
+.ns-alpha-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.ns-alpha-label,
+.ns-alpha-val {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.ns-alpha-val {
+  text-align: right;
+}
+
+/* 滑条:用 currentColor 描边,随色板文字色联动,视觉不突兀 */
+.ns-alpha {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  width: 96px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  outline: none;
+  cursor: pointer;
+}
+
+.ns-alpha::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #3a3325;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.ns-del:hover {
+  background: rgba(220, 38, 38, 0.18);
+}
+
+/* ——— 条目列表 ——— */
+.ns-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px;
+}
+
+/* 细滚动条,避免抢视觉焦点 */
+.ns-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ns-body::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.ns-placeholder {
+  padding: 14px 2px;
+  font-size: 12px;
+  opacity: 0.55;
+  text-align: center;
+}
+
+.ns-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ns-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 3px 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-radius: 5px;
+}
+
+.ns-item:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.ns-num {
+  flex: none;
+  min-width: 15px;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-text {
+  flex: 1 1 auto;
+  word-break: break-word;
+  cursor: text;
+  /* 允许选中文本(标题栏已限制拖动,这里不会冲突) */
+  user-select: text;
+}
+
+.ns-text.is-done {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.ns-item.is-converted {
+  opacity: 0.5;
+}
+
+.ns-item-ops {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  /* 默认隐藏 hover 才显形,保持便签整洁 */
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.ns-item:hover .ns-item-ops,
+.ns-item:focus-within .ns-item-ops {
+  opacity: 1;
+}
+
+.ns-to-todo {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.ns-check.is-on {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ns-edit-input,
+.ns-input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.ns-edit-input {
+  flex: 1 1 auto;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.6);
+  user-select: text;
+}
+
+/* ——— 底部连续快记 ——— */
+.ns-composer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 7px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ns-input::placeholder {
+  color: currentColor;
+  opacity: 0.45;
+}
+
+.ns-cleanup {
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: rgba(255, 255, 255, 0.45);
+  color: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.ns-cleanup:hover {
+  opacity: 1;
+}
+
+/* ——— 提示条 ——— */
+.ns-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  max-width: 88%;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ——— 数据已被删除时的兜底态 ——— */
+.ns-root.ns-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff;
+  color: #333;
+}
+
+.ns-empty-text {
+  font-size: 12px;
+  opacity: 0.7;
+}

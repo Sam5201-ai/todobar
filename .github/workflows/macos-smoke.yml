@@ -1,0 +1,54 @@
+name: macos-smoke
+
+# 仅在手动触发时运行（workflow_dispatch）。用途：在没有真机 Mac 的情况下，
+# 借用 GitHub macOS runner 验证 Mac 版能否正常构建、启动、生成窗口并截图回传。
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Build & launch on macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build macOS app (app bundle only)
+        run: npm run tauri build -- --target aarch64-apple-darwin --config src-tauri/tauri.macos.conf.json --bundles app
+
+      - name: Install & launch app
+        run: |
+          APP=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -name "*.app" -maxdepth 1 | head -n1)
+          echo "App path: $APP"
+          cp -R "$APP" /Applications/
+          open -a "TickTask"
+
+      - name: Wait for window & screenshot
+        run: |
+          sleep 8
+          # 进程存活
+          pgrep -f "TickTask" && echo "PROCESS_ALIVE" || echo "PROCESS_MISSING"
+          # 窗口数量（应 >=1）
+          osascript -e 'tell application "System Events" to get count of windows of process "TickTask"' || true
+          screencapture -x /tmp/ticktask-smoke.png
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-smoke-screenshot
+          path: /tmp/ticktask-smoke.png

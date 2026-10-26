@@ -1,0 +1,811 @@
+/**
+ * 录音机页面样式(全部收在 rec-* 命名空间,不触碰其他页面)。
+ * 主题:浅色/深色跟随工作区变量(--ink/--muted/--line/--control-bg/--accent),
+ * 深色差异走 .theme-dark 后代选择器。
+ * 顶栏入口图标的红点(.rec-entry .rec-dot)也定义在这里,避免改 App.css。
+ */
+
+/* ===== 录音区 ===== */
+.rec-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 22px;
+  min-height: 100%;
+}
+
+.rec-studio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 24px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--control-bg);
+}
+
+.rec-orb {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--bg, #fff);
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 2px 10px rgba(15, 17, 21, 0.06);
+}
+
+.rec-orb:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.rec-orb:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.rec-orb:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 录音中:红底白字 + 呼吸光环 */
+.rec-studio.is-recording .rec-orb {
+  background: #e5484d;
+  border-color: #e5484d;
+  color: #fff;
+  animation: rec-pulse 1.6s ease-out infinite;
+}
+
+/* 暂停:红底描边、静止 */
+.rec-studio.is-paused .rec-orb {
+  background: #e5484d;
+  border-color: #e5484d;
+  color: #fff;
+  opacity: 0.85;
+  animation: none;
+}
+
+/* 启动/保存中:中性色 */
+.rec-studio.is-starting .rec-orb,
+.rec-studio.is-saving .rec-orb {
+  background: var(--control-bg);
+  color: var(--muted);
+  animation: none;
+}
+
+@keyframes rec-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(229, 72, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+}
+
+.rec-timer {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.rec-studio.is-recording .rec-timer {
+  color: #e5484d;
+}
+
+.rec-hint {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 声波条(高度由 rAF 直改 style,transition 做平滑) */
+.rec-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 34px;
+  margin-top: 4px;
+}
+
+.rec-wave span {
+  width: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: #e5484d;
+  opacity: 0.85;
+  transition: height 90ms linear;
+}
+
+.rec-studio.is-paused .rec-wave span {
+  opacity: 0.3;
+  background: var(--muted);
+}
+
+.rec-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rec-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.rec-btn:active {
+  transform: scale(0.96);
+}
+
+.rec-btn.is-done {
+  background: var(--accent);
+  color: #fff;
+}
+
+.rec-btn.is-done:hover {
+  opacity: 0.88;
+}
+
+.rec-btn.is-cancel {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.rec-btn.is-cancel:hover {
+  color: var(--ink);
+}
+
+/* ===== 启动失败引导 ===== */
+.rec-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: #fdf1e7;
+  border: 1px solid rgba(229, 122, 41, 0.28);
+  color: #a05a1c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rec-error span {
+  flex: 1;
+  min-width: 0;
+}
+
+.rec-error-action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(229, 122, 41, 0.4);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rec-error-action:hover {
+  background: rgba(229, 122, 41, 0.12);
+}
+
+/* ===== 统计 + 工具 ===== */
+.rec-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rec-stats {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-toolbar-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rec-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rec-tool-btn:hover {
+  color: var(--ink);
+  background: var(--control-bg);
+}
+
+.rec-tool-btn.is-warn {
+  color: #e5484d;
+  border-color: rgba(229, 72, 77, 0.35);
+}
+
+.rec-tool-btn.is-warn:hover {
+  background: rgba(229, 72, 77, 0.08);
+}
+
+/* ===== 搜索 ===== */
+.rec-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--muted);
+}
+
+.rec-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.rec-search input::placeholder {
+  color: var(--muted);
+}
+
+.rec-search button {
+  display: flex;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.rec-search button:hover {
+  color: var(--ink);
+}
+
+/* ===== 记录列表 ===== */
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rec-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rec-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 4px 4px;
+}
+
+.rec-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg, #fff);
+  box-shadow: 0 1px 4px rgba(15, 17, 21, 0.04);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.rec-item:hover {
+  border-color: var(--accent, var(--line));
+  box-shadow: 0 3px 10px rgba(15, 17, 21, 0.08);
+}
+
+.rec-item.is-missing {
+  opacity: 0.72;
+}
+
+.rec-play {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  margin-top: 1px;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.rec-play:hover {
+  transform: scale(1.08);
+}
+
+.rec-play:active {
+  transform: scale(0.94);
+}
+
+.rec-item.is-missing .rec-play {
+  color: var(--muted);
+}
+
+.rec-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rec-item-title {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rec-missing-tag {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: #e5484d;
+  background: rgba(229, 72, 77, 0.1);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.rec-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-rename-input {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+  background: var(--bg, #fff);
+  border: 1px solid var(--accent, var(--ink));
+  border-radius: 7px;
+  padding: 3px 8px;
+  outline: none;
+}
+
+/* 备注:完整显示(上限 20 字),单行放不下自然换行,不截断省略 */
+.rec-note-view {
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: text;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.rec-note-view:hover {
+  color: var(--ink);
+}
+
+.rec-note-input {
+  width: 100%;
+  font-size: 11.5px;
+  color: var(--ink);
+  background: var(--bg, #fff);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.rec-note-input:focus {
+  border-color: var(--accent);
+}
+
+/* 行内操作:默认隐藏,hover 或删除确认时可见 */
+.rec-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.rec-item:hover .rec-item-actions,
+.rec-item-actions:has(.rec-act.is-danger) {
+  opacity: 1;
+}
+
+.rec-item-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rec-item-actions button:hover {
+  color: var(--ink);
+  background: var(--control-bg);
+}
+
+.rec-item-actions .rec-act.is-danger {
+  color: #e5484d;
+}
+
+.rec-item-actions .rec-act.is-danger:hover {
+  background: rgba(229, 72, 77, 0.1);
+}
+
+.rec-list-foot {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 10px 0;
+  line-height: 1.6;
+}
+
+/* ===== 空状态 ===== */
+.rec-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 44px 16px 36px;
+  color: var(--muted);
+}
+
+.rec-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.rec-empty strong {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.rec-empty span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ===== 页内 toast ===== */
+.rec-toast {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  max-width: calc(100% - 24px);
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(15, 17, 21, 0.18);
+  animation: rec-toast-in 0.22s ease;
+  pointer-events: none;
+}
+
+.rec-toast.is-ok {
+  background: #2f9e63;
+}
+
+.rec-toast.is-err {
+  background: #e5484d;
+}
+
+.rec-toast.is-warn {
+  background: #d97a29;
+}
+
+@keyframes rec-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ===== 底部弹窗(备注/保存位置):向上展开、向下收起 ===== */
+/* .page-panel 静止态无 transform,fixed 锚定视口(=侧栏窗口),不被滚动容器裁剪。 */
+.rec-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 17, 21, 0.32);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
+}
+
+.rec-mask.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rec-mask.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rec-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #fff);
+  border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  padding: 0 16px 16px;
+  box-shadow: 0 -8px 30px rgba(15, 17, 21, 0.16);
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+.rec-panel.is-open {
+  transform: translateY(0);
+}
+
+.rec-panel.is-closing {
+  transform: translateY(100%);
+}
+
+.rec-panel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 6px;
+}
+
+.rec-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rec-panel-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rec-panel-bar button:hover {
+  color: var(--ink);
+  background: var(--control-bg);
+}
+
+/* 弹窗内的操作按钮排(取消/保存、恢复默认/选择文件夹) */
+.rec-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* 备注编辑:多行文本框 + 右下角字数计数 */
+.rec-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rec-note-editor .rec-note-input {
+  box-sizing: border-box;
+  min-height: 74px;
+  font-size: 12.5px;
+}
+
+.rec-note-count {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding-right: 2px;
+}
+
+/* 保存位置弹窗 */
+.rec-dir-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.rec-dir-current {
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  word-break: break-all;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dir-tip {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ===== 顶栏入口红点(样式收在本文件,不动 App.css) ===== */
+.icon-cluster button.rec-entry {
+  position: relative;
+}
+
+.icon-cluster button.rec-entry .rec-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e5484d;
+  border: 1.5px solid var(--bg, #fff);
+  animation: rec-dot-blink 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes rec-dot-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ===== 深色主题 ===== */
+.theme-dark .rec-studio.is-starting .rec-orb,
+.theme-dark .rec-studio.is-saving .rec-orb {
+  background: var(--control-bg);
+}
+
+.theme-dark .rec-orb {
+  background: #232326;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* 记录卡片深色:卡片底色、播放钮与悬停投影 */
+.theme-dark .rec-item {
+  background: #1c1c1f;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.theme-dark .rec-item:hover {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.theme-dark .rec-play {
+  background: #232326;
+}
+
+.theme-dark .rec-item:hover .rec-play {
+  background: #2a2a2e;
+}
+
+.theme-dark .rec-btn.is-done {
+  color: #17181c;
+}
+
+.theme-dark .rec-rename-input,
+.theme-dark .rec-note-input {
+  background: #1c1c1f;
+}
+
+.theme-dark .rec-item-actions button:hover {
+  background: #232326;
+}
+
+.theme-dark .rec-error {
+  background: #38281a;
+  border-color: rgba(229, 122, 41, 0.35);
+  color: #e8b581;
+}
+
+.theme-dark .icon-cluster button.rec-entry .rec-dot {
+  border-color: #1c1c1f;
+}
+
+/* 弹窗深色:面板底色与悬停态 */
+.theme-dark .rec-panel {
+  background: #1c1c1f;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.theme-dark .rec-panel-bar button:hover {
+  background: #232326;
+}
+
+.theme-dark .rec-dir-current {
+  background: #232326;
+}

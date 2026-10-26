@@ -1,0 +1,555 @@
+/* 牛马计薪器:仅本页面使用,颜色全部取自工作区主题变量,浅色/深色自适应。 */
+
+.sal-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 14px 10px;
+}
+
+/* ---- 主卡片:今日已赚 ---- */
+
+.sal-hero {
+  padding: 18px 16px 16px;
+  border-radius: 14px;
+  background: var(--control-bg);
+  text-align: center;
+}
+
+.sal-hero-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.sal-hero-amount {
+  margin-top: 6px;
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+  line-height: 1.15;
+}
+
+.sal-hero-amount em {
+  font-style: normal;
+  font-size: 19px;
+  font-weight: 600;
+  margin-right: 6px;
+  color: var(--muted);
+}
+
+.sal-hero-sub {
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ---- 工时 / 倒计时 ---- */
+
+.sal-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sal-stat {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sal-stat span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sal-stat strong {
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ---- 进度条 ---- */
+
+.sal-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+
+.sal-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.4s linear;
+}
+
+.sal-progress-meta {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 参考单价 ---- */
+
+.sal-rates {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 设置区 ---- */
+
+.sal-settings {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.sal-settings-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control-bg);
+  color: var(--ink);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.sal-settings-toggle:hover {
+  background: var(--surface-hover);
+}
+
+/* ---- 本月累计已赚 ---- */
+
+.sal-month {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sal-month strong {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+}
+
+/* ---- 发薪日:复用 sal-month 卡片样式,右侧显示倒计时 ---- */
+
+.sal-payday .sal-payday-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sal-payday .sal-payday-left em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.sal-payday strong {
+  white-space: nowrap;
+}
+
+/* ---- 今日寄语 ---- */
+
+.sal-quote {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 0.5px solid #e6e4de;
+  /* 水墨宣纸:右上角一抹淡墨晕开在米白纸底上 */
+  background: radial-gradient(120% 90% at 88% 8%, #e4edf9 0%, #f7f5f0 46%, #fbfaf7 100%);
+}
+
+/* 右上角淡淡的衬线引号水印 */
+.sal-quote-watermark {
+  position: absolute;
+  right: 4px;
+  top: -22px;
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: 86px;
+  line-height: 1;
+  color: #4a6fa5;
+  opacity: 0.13;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sal-quote-head {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #3a4e6b;
+}
+
+/* 标题后的一小截墨线 */
+.sal-quote-rule {
+  display: inline-block;
+  width: 22px;
+  height: 1.5px;
+  background: #4a6fa5;
+  opacity: 0.45;
+}
+
+.sal-quote p {
+  position: relative;
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: #3b4550;
+}
+
+/* 深色主题:同一套「宣纸」思路改用深墨底 + 冷调淡墨 */
+.theme-dark .sal-quote {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: radial-gradient(120% 90% at 88% 8%, rgba(122, 160, 214, 0.2) 0%, #23262b 48%, #1d2024 100%);
+}
+
+.theme-dark .sal-quote-watermark {
+  color: #9dbde8;
+  opacity: 0.16;
+}
+
+.theme-dark .sal-quote-head {
+  color: #d7e2f2;
+}
+
+.theme-dark .sal-quote-rule {
+  background: #9dbde8;
+  opacity: 0.5;
+}
+
+.theme-dark .sal-quote p {
+  color: #d3d8de;
+}
+
+/* ---- 字段提示 ---- */
+
+.sal-field-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* ---- 底部两个入口按钮 ---- */
+
+.sal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sal-action-btn {
+  padding: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control-bg);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.sal-action-btn:hover {
+  background: var(--surface-hover);
+}
+
+/* 多选分段控件(悬浮窗金额选项) */
+.sal-seg-multi {
+  margin-bottom: 2px;
+}
+
+.sal-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 12px 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--settings-row);
+}
+
+.sal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sal-field label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sal-field input {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  outline: none;
+}
+
+.sal-field input:focus {
+  border-color: var(--accent);
+}
+
+.sal-field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.sal-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--control-bg);
+}
+
+.sal-seg button,
+.sal-week button {
+  padding: 6px 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sal-seg button.is-selected,
+.sal-week button.is-selected {
+  background: var(--accent);
+  color: var(--sidebar-solid-bg);
+  font-weight: 600;
+}
+
+.sal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.sal-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sal-hint-err {
+  color: #dc2626;
+}
+
+.sal-save {
+  padding: 9px 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--sidebar-solid-bg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sal-save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- 保存结果 toast(样式与全局 .sidebar-toast 保持一致:顶部居中胶囊,成功绿/失败红) ---- */
+
+.sal-toast {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 8px 20px rgba(28, 39, 50, 0.28);
+  animation: sal-toast-in 180ms ease;
+  pointer-events: none;
+}
+
+.sal-toast.is-ok {
+  background: #2f9e63;
+}
+
+.sal-toast.is-err {
+  background: #e5484d;
+}
+
+@keyframes sal-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ---- 角落小字 ---- */
+
+.sal-note {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* ---- 桌面组件(透明悬浮窗)开关 + 风格选择 ---- */
+
+.sal-widget {
+  margin-top: 2px;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+}
+
+.sal-widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sal-widget-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.sal-switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: var(--line);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease;
+  flex: none;
+}
+.sal-switch.is-on {
+  background: var(--accent-strong, #2f9e63);
+}
+.sal-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease;
+}
+.sal-switch.is-on .sal-switch-knob {
+  transform: translateX(18px);
+}
+/* 会员受限:桌面组件开关置灰(点击会提示「桌面组件为会员功能」) */
+.sal-switch.is-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sal-widget-styles {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.sal-widget-styles.is-dim {
+  opacity: 0.5;
+}
+/* 0.4.24: 选项卡片 = 组件预览图 + 文字,所见即所得 */
+.sal-widget-styles button {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 6px 7px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+.sal-widget-styles button img {
+  width: 100%;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  pointer-events: none;
+}
+.sal-widget-styles button:hover {
+  border-color: var(--accent-strong, #2f9e63);
+  color: var(--ink);
+}
+.sal-widget-styles button.is-selected {
+  border-color: var(--accent-strong, #2f9e63);
+  background: color-mix(in srgb, var(--accent-strong, #2f9e63) 12%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sal-widget-hint {
+  margin-top: 10px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  opacity: 0.8;
+}

@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.1.5"
+version = "0.4.50"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"
@@ -21,10 +21,36 @@ tauri-build = { version = "2.6.1", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.1", features = ["tray-icon"] }
+tauri = { version = "2.11.1", features = ["tray-icon", "protocol-asset"] }
 tauri-plugin-log = "2"
+# 录音机:定位「文档」目录(录音仅存本地,不上云)
+dirs = "5"
+# base64 原本只在 windows 块;录音分片落盘在所有平台编译期都会用到,挪到通用依赖
+base64 = "0.22"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+
+# 截图/贴图功能(仅 Windows 实现;其他平台提供占位命令)
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_UI_Input_KeyboardAndMouse"
+] }
+# 自启动注册表自愈:删除 productName 改名前(Todobar)遗留的 Run 条目
+winreg = "0.55"
+arboard = "3"
+image = "0.25"

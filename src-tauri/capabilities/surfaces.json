@@ -1,0 +1,32 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "surfaces",
+  "description": "牛马计薪器 · 桌面组件窗口的权限:拖动、定位、隐藏/关闭、读取显示器与自身位置。salary_widget_r2..r5 是 0.4.38 ghost label 修复引入的动态候选 label(原 label 创建失败残留死句柄时换新 label 重建)。",
+  "windows": [
+    "salary_widget",
+    "salary_widget_r2",
+    "salary_widget_r3",
+    "salary_widget_r4",
+    "salary_widget_r5"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-position",
+    "core:window:allow-current-monitor",
+    "core:window:allow-monitor-from-point",
+    "core:window:allow-get-all-windows",
+    "core:window:allow-set-focus",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-set-size",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-available-monitors",
+    "core:window:allow-outer-size",
+    "core:event:allow-listen",
+    "core:webview:allow-set-webview-zoom"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "notes-capability",
+  "description": "便利签桌面贴纸窗口所需权限:拖动、位置/尺寸记忆、多显示器定位与自愈、置顶切换、显示/隐藏/关闭。通配所有窗口标签 —— 便利签是 N 个动态 label(note-<id>),无法逐个静态声明,故沿用 screenshot.json 的 \"*\" 写法。",
+  "windows": [
+    "*"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-position",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-monitor-from-point",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-scale-factor",
+    "core:event:default",
+    "core:webview:allow-set-webview-zoom"
+  ]
+}

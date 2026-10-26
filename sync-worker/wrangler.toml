@@ -1,0 +1,25 @@
+name = "todobar-sync"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+# 自定义域名(Worker Custom Domain)。必须列全,否则 wrangler deploy 对账时会删掉未在 toml 声明的域名。
+routes = [
+  { pattern = "sync.tuanzhang.site", custom_domain = true },
+  { pattern = "todobar.tuanzhang.site", custom_domain = true }
+]
+
+# 静态令牌（个人工具足够）。多设备用同一令牌；要按设备吊销再换 KV 方案。
+[vars]
+API_TOKENS = "a8a151bba6093d833e412e950fce6f17a62c68a9e122230e"
+
+# 邮件发送(Resend):生产环境请用 `wrangler secret put RESEND_API_KEY` 注入,
+# 不要把密钥明文写进仓库。RESEND_FROM 填已在 Resend 验证过的发信域名地址。
+# RESEND_API_KEY = "re_xxx"
+# RESEND_FROM = "TickTask <noreply@your-domain.com>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "todobar"
+database_id = "ea88c0a3-b0d9-4bb9-9dc3-083bec0b8ce2"
+migrations_dir = "migrations"

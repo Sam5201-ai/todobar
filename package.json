@@ -1,7 +1,7 @@
 {
-  "name": "todobar",
+  "name": "ticktask",
   "private": false,
-  "version": "0.1.5",
+  "version": "0.4.50",
   "description": "A right-edge todo sidebar for macOS and Windows.",
   "license": "Apache-2.0",
   "repository": {
@@ -22,10 +22,15 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0",
+    "@breezystack/lamejs": "^1.2.7",
+    "@tauri-apps/api": "~2.11.0",
     "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
+    "@tauri-apps/plugin-notification": "~2.4.0",
+    "@tauri-apps/plugin-sql": "~2.4.1",
     "lucide-react": "^1.14.0",
+    "lunar-javascript": "^1.7.7",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
