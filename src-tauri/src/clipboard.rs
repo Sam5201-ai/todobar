@@ -112,6 +112,9 @@ static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 pub struct ClipboardState {
     shortcut: Mutex<String>,
     prev_hwnd: Mutex<Option<usize>>,
+    /// 会员开关:仅已激活 / 试用期内为 true,后台监听才记录历史。
+    /// 非会员(未登录 / 试用过期)不记录,杜绝"升级后混入旧记录"。
+    allowed: Mutex<bool>,
 }
 
 impl Default for ClipboardState {
@@ -119,6 +122,7 @@ impl Default for ClipboardState {
         Self {
             shortcut: Mutex::new(String::new()),
             prev_hwnd: Mutex::new(None),
+            allowed: Mutex::new(false),
         }
     }
 }
@@ -547,7 +551,9 @@ pub fn start_monitor(app: tauri::AppHandle) {
             std::thread::sleep(Duration::from_millis(250));
             let cfg_enabled = config_cell().lock().unwrap().enabled;
             let cfg_paused = config_cell().lock().unwrap().paused;
-            if !cfg_enabled || cfg_paused {
+            // 会员开关:非会员不记录历史(仅已激活 / 试用期内 allowed 为 true)。
+            let allowed = app.state::<ClipboardState>().allowed.lock().unwrap().clone();
+            if !cfg_enabled || cfg_paused || !allowed {
                 #[cfg(windows)]
                 {
                     last_seq = unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() };
@@ -791,6 +797,17 @@ pub fn register_clipboard_shortcut(
     crate::append_app_log(&format!("[clipboard] 快捷键已注册: {sc}"));
     *state.shortcut.lock().unwrap() = sc;
     Ok(())
+}
+
+/// 设置会员开关:仅已激活 / 试用期内由前端置 true,后台监听才记录剪贴板历史。
+/// 非会员(未登录 / 试用过期)置 false,记录被跳过,避免升级后混入旧记录。
+#[tauri::command]
+pub fn clipboard_set_active(
+    state: tauri::State<'_, ClipboardState>,
+    allowed: bool,
+) {
+    *state.allowed.lock().unwrap() = allowed;
+    crate::append_app_log(&format!("[clipboard] 会员记录开关: {allowed}"));
 }
 
 // ——————————————————————————— 系统剪贴板写入 / 粘贴 ———————————————————————————

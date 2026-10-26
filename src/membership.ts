@@ -59,6 +59,9 @@ export interface MembershipState {
   trialActive: boolean
   /** 是否受限(未登录 / 试用过期且未激活)。 */
   restricted: boolean
+  /** VIP 角标是否显示:仅在「试用结束且未激活」(含未登录)的受限态显示;
+   *  试用期中或已是会员则不显示。用于设置页标记会员专属功能。 */
+  showVip: boolean
 }
 
 /** 订阅登录态与权限。受限功能入口统一用本 hook 判定。 */
@@ -71,5 +74,6 @@ export function useAccount(): MembershipState {
     fullAccess,
     trialActive,
     restricted: !fullAccess,
+    showVip: !fullAccess && !trialActive,
   }
 }

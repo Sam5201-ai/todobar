@@ -15,6 +15,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { loadDiskPref, saveDiskPref } from './prefs'
 import { useAccount } from './membership'
 import { memberOnly } from './account'
+import { VipBadge } from './VipBadge'
 import {
   loadSalaryWidgetConfig,
   saveSalaryWidgetConfigLocal,
@@ -478,7 +479,7 @@ export function SalaryView() {
   // 桌面组件(透明悬浮窗)的配置状态:启用开关 + 风格。
   const [widget, setWidget] = useState<SalaryWidgetConfig>(() => loadSalaryWidgetConfig())
   // 会员闸门:受限用户(未登录 / 试用过期未激活)不能启用桌面组件。
-  const { fullAccess } = useAccount()
+  const { fullAccess, showVip } = useAccount()
 
   // 启动时从磁盘偏好回灌(确保重装/清缓存后状态与上次一致)。
   useEffect(() => {
@@ -679,7 +680,10 @@ export function SalaryView() {
       {/* 桌面组件(透明悬浮窗):启用开关 + 三风格选择 */}
       <div className="sal-widget">
         <div className="sal-widget-head">
-          <span className="sal-widget-title">桌面组件</span>
+          <span className="sal-widget-title">
+            桌面组件
+            {showVip ? <VipBadge /> : null}
+          </span>
           <button
             type="button"
             className={`sal-switch ${widget.enabled ? 'is-on' : ''}${fullAccess ? '' : ' is-locked'}`}

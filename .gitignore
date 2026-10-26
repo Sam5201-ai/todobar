@@ -28,3 +28,12 @@ src-tauri/target
 *.njsproj
 *.sln
 *.sw?
+
+# Build outputs / installers (never commit binaries)
+*.exe
+*.dmg
+*.msi
+*.AppImage
+
+# Local project memory (workspace-only, not for the repo)
+.workbuddy/

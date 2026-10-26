@@ -39,7 +39,7 @@ import ScreenshotSettingsPanel from './screenshot/ScreenshotSettingsPanel'
 import { ShortcutField } from './ShortcutField'
 import { applyNoteShortcut } from './notes/shortcuts'
 import { useNotesBridge } from './notes/useNotesBridge'
-import { applyClipboardShortcut } from './clipboard'
+import { applyClipboardShortcut, clipboardSetActive } from './clipboard'
 import { getSettings as getScreenshotSettings } from './screenshot/store'
 import {
   submitFeedback,
@@ -50,6 +50,12 @@ import {
 } from './account'
 import type { FeedbackItem } from './account'
 import { useAccount } from './membership'
+import {
+  currentAppVersion,
+  fetchReleases,
+  readReleaseCache,
+} from './changelog'
+import type { ReleaseRecord } from './changelog'
 import { SqliteStore } from './db/repository'
 import {
   CN_DAYS,
@@ -406,12 +412,22 @@ function App() {
     setToast: (kind, text) => setToast({ kind, text }),
   })
 
-  // 剪贴板浮窗快捷键:设置变化时注册 / 重注册。失败静默降级(多为与系统快捷键冲突)。
+  // 剪贴板浮窗快捷键:设置变化时注册 / 重注册。非会员不注册(会员专属);
+  // 会员态变化(fullAccess)时也重注册 / 注销。失败静默降级(多为与系统快捷键冲突)。
   useEffect(() => {
-    void applyClipboardShortcut(settings.clipboardShortcut).then((r) => {
+    void applyClipboardShortcut(fullAccess ? settings.clipboardShortcut : '').then((r) => {
       if (!r.ok) console.warn('[clipboard] 快捷键注册失败:', r.error)
     })
-  }, [settings.clipboardShortcut])
+  }, [settings.clipboardShortcut, fullAccess])
+
+  // 会员态变化(登录 / 激活 / 试用过期)时,统一对齐各会员功能的后端状态:
+  // - 后台剪贴板监听按会员开关启停(非会员彻底不记录);
+  // - 截图 / 贴图快捷键按会员态重注册 / 注销(applyShortcuts 内部已自闸)。
+  // 首次挂载也会执行,据此设置初始开关。
+  useEffect(() => {
+    void clipboardSetActive(fullAccess)
+    void import('./screenshot/shortcuts').then((m) => m.applyShortcuts()).catch(() => {})
+  }, [fullAccess])
 
   const prevSyncStatus = useRef(store.syncState.status)
 
@@ -517,6 +533,8 @@ function App() {
   // 录音引擎独立于页面生命周期,录音中图标亮红点(useRecorderActive 仅订阅状态变化)。
   const [recorderOpen, setRecorderOpen] = useState(false)
   const toggleRecorder = () => {
+    // 录音为会员专属,但闸门设在页内的「开始录音」按钮(RecorderView.handleStart):
+    // 非会员仍可进页查看 / 回放 / 管理已有录音,点录音时才提示开通。
     setRecorderOpen((c) => {
       if (!c) trackPage('recorder')
       return !c
@@ -1544,6 +1562,7 @@ function App() {
             <ErrorBoundary label="截图与贴图">
               <ScreenshotSettingsPanel
                 onToast={(kind, text) => setToast({ kind, text })}
+                onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
               />
             </ErrorBoundary>
           </div>
@@ -2752,8 +2771,11 @@ function SidebarSettingsPanel({
           : syncState.status
   const [supportOpen, setSupportOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // 版本记录:列表弹窗 + 详情弹窗(点击卡片后挂载第二层)。
+  const [changelogOpen, setChangelogOpen] = useState(false)
+  const [changelogItem, setChangelogItem] = useState<ReleaseRecord | null>(null)
   // 会员闸门:受限用户不能上传云端 / 从云端恢复,同步区整体置灰。
-  const { fullAccess } = useAccount()
+  const { fullAccess, showVip } = useAccount()
   const syncLocked = !fullAccess
 
   return (
@@ -2829,38 +2851,44 @@ function SidebarSettingsPanel({
           onChange={(tabWidth) => onChange({ tabWidth })}
         />
         <ShortcutField
-          label="打开 / 关闭窗口快捷键"
+          label="打开窗口"
           value={settings.toggleWindowShortcut}
           conflictFor={(draft) => toggleWindowShortcutConflict(draft, settings.toggleWindowShortcut)}
           onCommit={(v) => void commitToggleWindowShortcut(v, onChange, onToast)}
         />
         <p className="settings-hint">
-          双击文本框即可重新录入快捷键,按下组合键后点击 ✓ 保存生效;Esc 取消。该快捷键用于从系统任意位置呼出 / 收起 TickTask 主窗口。
+          双击编辑框即可修改快捷键,按下快捷键即打开 / 关闭 TickTask 主窗口。
         </p>
 
         <ShortcutField
-          label="新建便利签快捷键"
+          label="新建便利签"
           value={settings.noteShortcut}
           conflictFor={(draft) => noteShortcutConflict(draft, settings.toggleWindowShortcut)}
           onCommit={(v) => void commitNoteShortcut(v, onChange, onToast)}
+          locked={!fullAccess}
+          onLocked={() => onLocked?.('便利签')}
+          vip={showVip}
         />
         <p className="settings-hint">
-          按下该组合键即在桌面贴一张新便利签。便利签为会员功能,未开通时按下会提示开通。
+          双击编辑框即可修改快捷键,按下快捷键即可新建一张便利签。
         </p>
       </div>
 
       <div className="settings-group">
         <div className="settings-group-title">剪贴板历史</div>
         <ShortcutField
-          label="唤出剪贴板浮窗快捷键"
+          label="打开剪贴板"
           value={settings.clipboardShortcut}
           conflictFor={(draft) =>
             clipboardShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut)
           }
           onCommit={(v) => void commitClipboardShortcut(v, onChange, onToast)}
+          locked={!fullAccess}
+          onLocked={() => onLocked?.('剪贴板')}
+          vip={showVip}
         />
         <p className="settings-hint">
-          按下快捷键(默认 Ctrl+Shift+V)弹出剪贴板历史浮窗,自动记录其他程序复制的纯文本,最多 50 条,可搜索、置顶、删除或一键复制回原处。
+          双击编辑框即可修改快捷键,按下快捷键即弹出剪贴板窗口,自动记录近 50 条复制内容。
         </p>
       </div>
 
@@ -3024,18 +3052,38 @@ function SidebarSettingsPanel({
         />
       </div>
 
-      {/* 悬浮客服入口:固定在设置页底部,滚动时始终可见 */}
-      <button
-        type="button"
-        className="fab-support"
-        onClick={() => setSupportOpen(true)}
-        aria-label="联系客服"
-      >
-        <MessageCircle size={14} />
-        联系客服
-      </button>
+      {/* 悬浮入口:固定在设置页底部,滚动时始终可见,两个按钮同一行 */}
+      <div className="fab-row">
+        <button
+          type="button"
+          className="fab-support fab-secondary"
+          onClick={() => setChangelogOpen(true)}
+          aria-label="版本记录"
+        >
+          <History size={14} />
+          版本记录
+        </button>
+        <button
+          type="button"
+          className="fab-support"
+          onClick={() => setSupportOpen(true)}
+          aria-label="联系客服"
+        >
+          <MessageCircle size={14} />
+          联系客服
+        </button>
+      </div>
 
       {/* 条件渲染:关即卸载,避免复用实例残留 is-closing 遮罩卡死整页 */}
+      {changelogOpen ? (
+        <ChangelogSheet
+          onClose={() => setChangelogOpen(false)}
+          onOpenDetail={(r) => setChangelogItem(r)}
+        />
+      ) : null}
+      {changelogItem ? (
+        <ChangelogDetailSheet item={changelogItem} onClose={() => setChangelogItem(null)} />
+      ) : null}
       {supportOpen ? (
         <SupportSheet
           onClose={() => setSupportOpen(false)}
@@ -4534,6 +4582,126 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
                 </div>
               )
             })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 版本记录列表弹窗:从下载站 `/api/releases` 拉取历史版本,每张卡片含
+ *  「版本号 + 发布日期 + 标题」,点击卡片再叠一层详情弹窗。
+ *  同 SupportHistorySheet:缓存优先避免加载闪烁,网络失败且无缓存才提示错误。 */
+function ChangelogSheet({
+  onClose,
+  onOpenDetail,
+}: {
+  onClose: () => void
+  onOpenDetail: (r: ReleaseRecord) => void
+}) {
+  const { closing, requestClose } = useSheetClose(onClose)
+  const [list, setList] = useState<ReleaseRecord[] | null>(() => readReleaseCache())
+  const [err, setErr] = useState<string | null>(null)
+  // 挂载时是否有缓存:有缓存则网络失败也静默,不打扰用户。
+  const hasCacheRef = useRef(list !== null)
+  const [current, setCurrent] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    void currentAppVersion().then((v) => {
+      if (alive) setCurrent(v)
+    })
+    void (async () => {
+      try {
+        const data = await fetchReleases()
+        if (alive) setList(data)
+      } catch (e) {
+        if (alive && !hasCacheRef.current) {
+          setErr(e instanceof Error ? e.message : '加载失败')
+        }
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const rows = list ?? []
+
+  return (
+    <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onClick={requestClose}>
+      <div
+        className={`sheet ${closing ? 'is-closing' : ''}`}
+        role="dialog"
+        aria-label="版本记录"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-title">版本记录</div>
+        <div className="cl-body">
+          {rows.length === 0 && !err ? (
+            <div className="cl-empty">加载中…</div>
+          ) : err ? (
+            <div className="cl-empty">{err}</div>
+          ) : rows.length === 0 ? (
+            <div className="cl-empty">暂无版本记录</div>
+          ) : (
+            rows.map((r) => {
+              const isCurrent = !!current && r.version === current
+              return (
+                <button
+                  type="button"
+                  className={`cl-card ${isCurrent ? 'is-current' : ''}`}
+                  key={r.version}
+                  onClick={() => onOpenDetail(r)}
+                >
+                  <div className="cl-card-head">
+                    <span className="cl-version">v{r.version}</span>
+                    {isCurrent ? <span className="cl-current-tag">当前版本</span> : null}
+                    <span className="cl-date">{r.release_date || '—'}</span>
+                  </div>
+                  <div className="cl-title">{r.title || '版本更新'}</div>
+                  {r.items.length > 0 ? (
+                    <div className="cl-count">{r.items.length} 项更新</div>
+                  ) : null}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 版本详情弹窗:单条版本记录的完整更新项列表。数据来自列表弹窗,不再二次请求。 */
+function ChangelogDetailSheet({ item, onClose }: { item: ReleaseRecord; onClose: () => void }) {
+  const { closing, requestClose } = useSheetClose(onClose)
+
+  return (
+    <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onClick={requestClose}>
+      <div
+        className={`sheet ${closing ? 'is-closing' : ''}`}
+        role="dialog"
+        aria-label={`版本 ${item.version} 详情`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-title">版本详情</div>
+        <div className="cl-body">
+          <div className="cl-detail-head">
+            <span className="cl-version is-lg">v{item.version}</span>
+            <span className="cl-date">{item.release_date || '—'}</span>
+          </div>
+          <div className="cl-detail-title">{item.title || '版本更新'}</div>
+          {item.items.length > 0 ? (
+            <ul className="cl-items">
+              {item.items.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="cl-empty">暂无更新说明</div>
           )}
         </div>
       </div>

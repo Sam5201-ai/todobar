@@ -873,6 +873,27 @@ kbd {
   letter-spacing: 0.08em;
 }
 
+/* 会员专属(VIP)角标:标记仅会员可用的功能字段。 */
+.vip-badge {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  color: #7a4f09;
+  background: linear-gradient(135deg, #ffe9a8, #ffce5c);
+  border-radius: 6px;
+  vertical-align: middle;
+  user-select: none;
+}
+.workspace.theme-dark .vip-badge,
+.theme-dark .vip-badge {
+  color: #2a1f06;
+  background: linear-gradient(135deg, #c9a24a, #e6c46b);
+}
+
 .settings-group {
   display: grid;
   gap: 9px;
@@ -2791,11 +2812,19 @@ kbd {
 
 /* ===== 层级间距(修复节点紧贴) ===== */
 
+/* 收起/展开是 0fr 网格动画:.tree-children 本身是被收起的网格项,
+   它自身的 margin 在收起后仍会保留占位(上 6px + 下 2px = 8px),
+   导致带下级且收起的卡片与相邻卡片间距不一致。
+   父↔子间距改由首个子节点承担,收起时即可完全归零,
+   与其它卡片的 --task-gap 间距保持一致。 */
 .tree-children {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 6px 0 2px 0;
+}
+
+.tree-children > .tree-node:first-child {
+  margin-top: 6px;
 }
 
 .tree-node .tree-child-add {
@@ -3208,12 +3237,19 @@ kbd {
 
 /* ===== 联系客服:设置页底部悬浮按钮 + 反馈弹窗 ===== */
 
-.fab-support {
+/* 设置页底部悬浮入口:「版本记录」与「联系客服」同一行,整体固定在右下角 */
+.fab-row {
   position: fixed;
   bottom: 17px;
   right: 15px;
   /* 低于 sheet-backdrop(z:10):弹窗打开时按钮一并被遮罩盖住,不悬在遮罩上 */
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fab-support {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3227,6 +3263,28 @@ kbd {
   cursor: pointer;
   box-shadow: 0 8px 20px rgba(28, 39, 50, 0.28);
   transition: filter 140ms ease, transform 140ms ease;
+}
+
+/* 次要入口(版本记录):描边弱化,让「联系客服」保持主色 */
+.fab-support.fab-secondary {
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--ink);
+  box-shadow: 0 6px 16px rgba(28, 39, 50, 0.14);
+}
+
+.fab-support.fab-secondary:hover {
+  background: var(--surface-hover);
+}
+
+/* 深色主题下 accent 是浅色,主按钮不能再用白字 */
+.workspace.theme-dark .fab-support {
+  color: #111318;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.workspace.theme-dark .fab-support.fab-secondary {
+  color: var(--ink);
 }
 
 .fab-support:hover {
@@ -3573,6 +3631,154 @@ kbd {
 .sync-restore-button:hover:not(:disabled) {
   background: rgba(29, 126, 240, 0.08);
   border-color: rgba(29, 126, 240, 0.75);
+}
+
+/* ===== 版本记录弹窗:列表卡片 + 详情 ===== */
+
+.cl-body {
+  max-height: 64vh;
+  overflow-y: auto;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cl-empty {
+  padding: 36px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* 列表卡片:整块可点,版本号 + 发布日期 + 标题 */
+.cl-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(31, 33, 38, 0.12);
+  border-radius: 12px;
+  padding: 11px 13px;
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.cl-card:hover {
+  background: var(--surface-hover);
+  border-color: rgba(31, 33, 38, 0.24);
+}
+
+.cl-card:active {
+  transform: scale(0.995);
+}
+
+.cl-card.is-current {
+  border-color: rgba(29, 126, 240, 0.55);
+  background: rgba(29, 126, 240, 0.07);
+}
+
+.cl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.cl-version {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-version.is-lg {
+  font-size: 13px;
+  padding: 3px 10px;
+}
+
+.cl-current-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(29, 126, 240, 0.16);
+  color: #1d7ef0;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.cl-date {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.cl-count {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* 详情弹窗 */
+.cl-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cl-detail-title {
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.cl-items {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cl-items li {
+  position: relative;
+  padding-left: 14px;
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.cl-items li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.workspace.theme-dark .cl-card {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.workspace.theme-dark .cl-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 /* ===== 长按拖拽排序视觉 ===== */

@@ -1353,10 +1353,6 @@ export default function CaptureOverlay() {
           )}
           {confirmed && (
             <div ref={barRef} className="capture-actionbar" style={actionBarStyle()}>
-              <button type="button" className="cab-btn" disabled={busy} onClick={onCopy} title="复制到剪贴板(Enter)">
-                <Copy size={15} />
-                复制
-              </button>
               <button type="button" className="cab-btn" disabled={busy} onClick={onPin} title="钉在桌面原位">
                 <Pin size={15} />
                 贴图
@@ -1368,6 +1364,10 @@ export default function CaptureOverlay() {
               <button type="button" className="cab-btn cab-cancel" disabled={busy} onClick={() => void finish()} title="取消(Esc)">
                 <X size={15} />
                 取消
+              </button>
+              <button type="button" className="cab-btn" disabled={busy} onClick={onCopy} title="复制到剪贴板(Enter)">
+                <Copy size={15} />
+                复制
               </button>
             </div>
           )}

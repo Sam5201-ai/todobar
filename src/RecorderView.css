@@ -543,21 +543,38 @@
   line-height: 1.5;
 }
 
-/* ===== 页内 toast ===== */
+/* ===== 页内 toast:与全局 .sidebar-toast 完全一致的视觉 ===== */
 .rec-toast {
   position: fixed;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   max-width: calc(100% - 24px);
   padding: 7px 14px;
-  border-radius: 10px;
-  font-size: 12.5px;
-  color: #fff;
-  box-shadow: 0 6px 20px rgba(15, 17, 21, 0.18);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 8px 20px rgba(28, 39, 50, 0.28);
   animation: rec-toast-in 0.22s ease;
   pointer-events: none;
+}
+
+/* 文本单行:超出省略,不在框内折行 */
+.rec-toast-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-toast svg {
+  flex: none;
 }
 
 .rec-toast.is-ok {

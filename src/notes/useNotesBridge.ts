@@ -62,15 +62,16 @@ export function useNotesBridge(params: {
     }
   }, [])
 
-  // ① 注册 / 重注册全局快捷键(设置变化时)。失败多为与系统快捷键冲突,静默降级。
+  // ① 注册 / 重注册全局快捷键。非会员不注册(释放热键,按下也不会创建);
+  //    运行时 createNoteWithWindow 仍有会员闸门作兜底。会员态变化时(登录/过期)重注册。
   useEffect(() => {
-    void applyNoteShortcut(noteShortcut).then((r) => {
+    void applyNoteShortcut(fullAccess ? noteShortcut : '').then((r) => {
       if (!r.ok) {
         // 不弹 toast:注册失败若每次启动都提示会打扰用户,这里只记录。
         console.warn('[notes] 便利签快捷键注册失败:', r.error)
       }
     })
-  }, [noteShortcut])
+  }, [noteShortcut, fullAccess])
 
   // ② 快捷键触发 → 新建便利签(含会员 / 总数 / 显示数三道闸门)。
   useEffect(() => {

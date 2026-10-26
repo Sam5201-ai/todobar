@@ -15,6 +15,8 @@ import { RESERVED_SHORTCUTS } from './types';
 import './screenshot.css';
 import { applyShortcuts } from './shortcuts';
 import { ShortcutField } from '../ShortcutField';
+import { useAccount } from '../membership';
+import { VipBadge } from '../VipBadge';
 
 // 与系统托盘冲突的快捷键(CommandOrControl+Shift+T / +Alt+T 已被窗口开关键占用)。
 const EXTRA_RESERVED = ['CommandOrControl+Shift+T', 'CommandOrControl+Shift+Alt+T'];
@@ -57,11 +59,16 @@ function conflictFor(
 
 export default function ScreenshotSettingsPanel({
   onToast,
+  onLocked,
 }: {
   /** 保存结果提示:复用设置页顶部 toast(样式 / 位置 / 自动关闭一致)。 */
   onToast?: (kind: 'ok' | 'err', text: string) => void;
+  /** 会员专属:非会员试图启用时回调(弹会员提示)。 */
+  onLocked?: (feature: string) => void;
 }) {
   const [settings, setSettingsState] = useState<ScreenshotSettings>(() => getSettings());
+  // 会员闸门:非会员不能启用截图 / 贴图。
+  const { fullAccess, showVip } = useAccount();
 
   /**
    * 启动后 hydrate 会把磁盘真实值写回 localStorage,此处订阅广播并重新同步显示值,
@@ -112,11 +119,19 @@ export default function ScreenshotSettingsPanel({
       <label className="toggle-setting">
         <span>
           <strong>启用截图 / 贴图</strong>
+          {showVip ? <VipBadge /> : null}
         </span>
         <input
           type="checkbox"
-          checked={settings.enabled}
-          onChange={(e) => void patch({ enabled: e.target.checked })}
+          checked={settings.enabled && fullAccess}
+          onChange={(e) => {
+            // 非会员试图启用 → 弹会员提示,不写入、保持停用。
+            if (e.target.checked && !fullAccess) {
+              onLocked?.('截图 / 贴图')
+              return
+            }
+            void patch({ enabled: e.target.checked })
+          }}
         />
         <em />
       </label>
@@ -126,7 +141,7 @@ export default function ScreenshotSettingsPanel({
         ✓ 保存后生效。
       </p>
 
-      {settings.enabled ? (
+      {settings.enabled && fullAccess ? (
         <>
           <ShortcutField
             label="截图快捷键"

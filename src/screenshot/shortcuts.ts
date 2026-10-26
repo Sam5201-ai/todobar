@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emitTo, listen } from '@tauri-apps/api/event';
 import { getSettings } from './store';
+import { isFullAccess, loadAccount } from '../account';
 import { OVERLAY_LABEL, shotLog, startCapture, pinFromClipboardOrLast } from './bridge';
 
 let lastApplied: { shot: string; pin: string } | null = null;
@@ -14,6 +15,20 @@ let initialized = false;
 export async function applyShortcuts(): Promise<{ ok: boolean; error?: string }> {
   const s = getSettings();
   const unregister = lastApplied ? [lastApplied.shot, lastApplied.pin] : [];
+  // 会员闸门:非会员强制注销快捷键,截图 / 贴图功能不可用。
+  if (!isFullAccess(loadAccount())) {
+    try {
+      await invoke('register_screenshot_shortcuts', {
+        unregister,
+        shot: '',
+        pin: '',
+      });
+    } catch {
+      /* 注销失败可忽略 */
+    }
+    lastApplied = { shot: '', pin: '' };
+    return { ok: true };
+  }
   if (!s.enabled) {
     try {
       await invoke('register_screenshot_shortcuts', {
@@ -48,6 +63,8 @@ export async function initScreenshotShortcuts(): Promise<void> {
     await listen<string>('screenshot-trigger', (event) => {
       const kind = event.payload;
       void shotLog(`shortcut triggered: ${kind}`);
+      // 会员闸门:非会员即便热键被意外注册,也不启动截图。
+      if (!isFullAccess(loadAccount())) return;
       if (kind === 'shot') {
         // 触发时固定以「区域」模式进入,CaptureOverlay 工具栏可现场切换窗口/全屏。
         void startCapture('region');

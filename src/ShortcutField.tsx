@@ -8,6 +8,7 @@
 // - 保存结果统一走 onToast(与设置页 toast 样式 / 位置 / 自动关闭一致)。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
+import { VipBadge } from './VipBadge'
 
 // 单独的修饰键(不作为组合主键)。
 const MODIFIER_KEYS = new Set([
@@ -58,6 +59,12 @@ export function ShortcutField({
   onCommit,
   conflictFor,
   onToast,
+  /** 会员专属锁定:非会员时文本框显示为空、双击触发 onLocked 而非进入编辑。 */
+  locked = false,
+  /** 锁定态双击回调(弹会员提示),由父组件传入。 */
+  onLocked,
+  /** 是否在标签右侧显示 VIP 角标。 */
+  vip = false,
 }: {
   label: string
   value: string
@@ -67,6 +74,12 @@ export function ShortcutField({
   conflictFor?: (draft: string) => string | null
   /** 保存结果提示(成功 / 失败)。 */
   onToast?: (kind: 'ok' | 'err', text: string) => void
+  /** 会员专属锁定:非会员时文本框显示为空、双击触发 onLocked 而非进入编辑。 */
+  locked?: boolean
+  /** 锁定态双击回调(弹会员提示),由父组件传入。 */
+  onLocked?: () => void
+  /** 是否在标签右侧显示 VIP 角标。 */
+  vip?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -137,14 +150,18 @@ export function ShortcutField({
   if (!editing) {
     return (
       <div className="shot-shortcut-row">
-        <span className="shot-shortcut-label">{label}</span>
+        <span className="shot-shortcut-label">
+          {label}
+          {vip ? <VipBadge /> : null}
+        </span>
         <input
           type="text"
           className="shot-shortcut-text is-stored"
-          value={displayShortcut(value)}
+          value={locked ? '' : displayShortcut(value)}
+          placeholder={locked ? '会员专属' : undefined}
           readOnly
-          title="双击修改快捷键"
-          onDoubleClick={startEdit}
+          title={locked ? '会员专属功能,开通会员后可用' : '双击修改快捷键'}
+          onDoubleClick={locked ? () => onLocked?.() : startEdit}
         />
       </div>
     )

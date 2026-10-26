@@ -104,6 +104,11 @@ export async function applyClipboardShortcut(
   }
 }
 
+/** 设置后台监听的会员开关:非会员不记录剪贴板历史。 */
+export async function clipboardSetActive(allowed: boolean): Promise<void> {
+  await invoke('clipboard_set_active', { allowed }).catch(() => {})
+}
+
 /** 监听历史变更(后台监听线程 emit 到本窗口)。 */
 export async function onClipboardChanged(cb: () => void): Promise<UnlistenFn> {
   try {

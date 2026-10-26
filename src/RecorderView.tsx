@@ -841,8 +841,19 @@ export function RecorderView(): ReactNode {
         </RecSheet>
       ) : null}
 
-      {/* ===== 页内 toast(仿 sal-toast,收在 rec-* 命名空间) ===== */}
-      {toast ? <div className={`rec-toast is-${toast.kind}`}>{toast.text}</div> : null}
+      {/* ===== 页内 toast:视觉与全局 .sidebar-toast 对齐(胶囊/12px 600/图标/单行) ===== */}
+      {toast ? (
+        <div className={`rec-toast is-${toast.kind}`} role="status" aria-live="polite">
+          {toast.kind === 'ok' ? (
+            <Check size={13} />
+          ) : toast.kind === 'warn' ? (
+            <AlertTriangle size={13} />
+          ) : (
+            <X size={13} />
+          )}
+          <span className="rec-toast-text">{toast.text}</span>
+        </div>
+      ) : null}
     </div>
   )
 }

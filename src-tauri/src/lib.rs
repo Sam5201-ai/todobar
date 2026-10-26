@@ -1625,6 +1625,7 @@ pub fn run() {
             clipboard::clipboard_copy_back,
             clipboard::clipboard_hide_window,
             clipboard::register_clipboard_shortcut,
+            clipboard::clipboard_set_active,
             app_log,
             get_screenshot_settings,
             save_screenshot_settings,
