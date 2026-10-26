@@ -842,6 +842,11 @@ mod imp {
     }
 
     #[tauri::command]
+    pub fn save_image_to(_png_base64: String, _path: String) -> Result<String, String> {
+        Err("截图功能仅支持 Windows".into())
+    }
+
+    #[tauri::command]
     pub fn window_at_point(_x: i32, _y: i32) -> Option<Rect> {
         None
     }

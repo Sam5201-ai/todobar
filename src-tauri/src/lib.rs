@@ -427,7 +427,7 @@ fn reveal_path(app: tauri::AppHandle, path: Option<String>) -> Result<(), String
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(&path)
+            .arg(&target)
             .spawn()
             .map_err(|e| format!("打开文件夹失败: {e}"))?;
     }
