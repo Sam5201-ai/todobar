@@ -31,6 +31,8 @@ function installBrowserEnv(): MemStorage {
       ;(listeners[type] ||= []).push(fn)
     },
   }
+  // account.ts 的 loadAccount 读裸 localStorage(浏览器里与 window.localStorage 同一对象)
+  ;(globalThis as any).localStorage = storage
   ;(globalThis as any).document = { visibilityState: 'visible' }
   return storage
 }
@@ -73,7 +75,25 @@ describe('analytics 埋点队列', () => {
     // visitor 复用账号模块的稳定设备 ID(UUID),同一台机器清数据后不变
     expect(typeof body.events[0].visitor).toBe('string')
     expect((body.events[0].visitor as string).length).toBeGreaterThan(0)
+    // 未登录:uid 为空串(服务端按设备指纹归并)
+    expect(body.events[0].uid).toBe('')
     expect(body.events[0].page).toBe('day')
+  })
+
+  it('已登录时事件携带账号 uid(统计按账号去重的依据)', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    storage.setItem(
+      'ticktask.account',
+      JSON.stringify({ email: 'me@example.com', token: 'tok', uid: 'u_abc', deviceId: 'dev' }),
+    )
+    analytics.trackPage('day')
+    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(body.events[0].uid).toBe('u_abc')
   })
 
   it('队列持久化:事件先落 localStorage,上报成功后清除', async () => {

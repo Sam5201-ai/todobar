@@ -62,7 +62,7 @@ function serveStatic(req, res, pathname) {
     }
     // 安装包/配置必须每次回源校验:URL 固定 + 长缓存会让浏览器/边缘节点
     // 在缓存有效期内继续发旧版本安装包(网页显示新版、下载到的却是旧版)。
-    const noCache = path.extname(filePath) === '.html' || path.extname(filePath) === '.json' || path.extname(filePath) === '.exe'
+    const noCache = path.extname(filePath) === '.html' || path.extname(filePath) === '.json' || path.extname(filePath) === '.exe' || path.extname(filePath) === '.dmg'
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
       'Content-Length': stat.size,
@@ -75,7 +75,12 @@ function serveStatic(req, res, pathname) {
 
 async function proxyApi(req, res, pathname, search) {
   const send = (upstream, payload) => {
-    const headers = { 'content-type': req.headers['content-type'] || 'application/json' }
+    // 透传真实客户端 IP 给 Worker(否则 Worker 只看到 server.js 出口 IP,
+    // 所有站点访客共享一个 IP,限流会被误伤、归因也无法做)
+    const headers = {
+      'content-type': req.headers['content-type'] || 'application/json',
+      'x-client-ip': clientIp(req),
+    }
     // 优先用客户端经自定义头送来的令牌(托管平台会剥离 Authorization),
     // 还原成标准 Authorization 头转发到 Cloudflare Worker。
     // 令牌来源:管理后台 X-Admin-Token / 客户端 X-Sync-Token / 标准 Authorization。
@@ -133,6 +138,40 @@ async function proxyApi(req, res, pathname, search) {
   })
 }
 
+// 真实客户端 IP(透传给 Worker,供限流键与下载→安装归因使用)
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for']
+  if (xff) return String(xff).split(',')[0].trim()
+  return req.socket.remoteAddress || ''
+}
+
+// 下载中转:记录"设备 + 真实下载 IP"后 302 到真实安装包。
+// 由 Worker 的 /api/track(site_download 事件)写入 site_downloads,供安装归因。
+function handleDownload(req, res, url) {
+  const file = decodeURIComponent(url.pathname.slice('/download/'.length))
+  // 仅放行命名规范的安装包,防目录穿越
+  if (!/^TickTask-[\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
+    res.writeHead(404)
+    return res.end('Not Found')
+  }
+  const device = url.searchParams.get('d') || ''
+  const realIp = clientIp(req)
+  const payload = JSON.stringify({
+    source: 'site',
+    events: [{ event: 'site_download', device, visitor: device, page: 'download' }],
+  })
+  // 异步上报 Worker,失败忽略,绝不阻塞下载
+  fetch(UPSTREAMS[0] + '/api/track', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-real-download-ip': realIp },
+    body: payload,
+  }).catch(() => {})
+  // 真实文件仍走静态托管(保留 ?v= 缓存击穿)
+  const target = '/' + file + (url.search || '')
+  res.writeHead(302, { Location: target })
+  res.end()
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
   if (req.method === 'OPTIONS') {
@@ -142,6 +181,9 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     })
     return res.end()
+  }
+  if (url.pathname.startsWith('/download/')) {
+    return handleDownload(req, res, url)
   }
   if (url.pathname.startsWith('/api/')) {
     return proxyApi(req, res, url.pathname, url.search)

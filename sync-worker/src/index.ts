@@ -1,6 +1,6 @@
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'
-import type { D1Database, KVNamespace } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement, KVNamespace } from '@cloudflare/workers-types'
 import {
   applySchema,
   getSettings,
@@ -25,8 +25,6 @@ import {
   deleteSession,
   listSessions,
   countSessions,
-  purgeExpiredSessions,
-  deleteSessionsByDeviceId,
   revokeSessionForUser,
   deleteOtherSessions,
   deleteAllSessions,
@@ -57,6 +55,8 @@ import {
   getAdminSession,
   insertEvents,
   issueActivationCodes,
+  linkIdentity,
+  recordSiteDownload,
   listActivationCodes,
   listUsers,
   overviewStats,
@@ -447,12 +447,14 @@ function currentToken(c: { req: { raw: Request } }): string | null {
 }
 /** 对外暴露的账号信息(绝不带密码哈希/盐)。 */
 function publicUser(u: {
+  id: string
   email: string
   activated: number
   trial_ends_at: string | null
   nickname?: string | null
   avatar?: string | null
 }): {
+  id: string
   email: string
   activated: boolean
   trialEndsAt: string | null
@@ -460,6 +462,7 @@ function publicUser(u: {
   avatar: string | null
 } {
   return {
+    id: u.id,
     email: u.email,
     activated: Boolean(u.activated),
     trialEndsAt: u.trial_ends_at,
@@ -512,6 +515,7 @@ app.post('/api/auth/register', async (c) => {
     code?: unknown
     deviceName?: unknown
     deviceId?: unknown
+    deviceFingerprint?: unknown
     nickname?: unknown
     avatar?: unknown
   }
@@ -522,6 +526,7 @@ app.post('/api/auth/register', async (c) => {
       code?: unknown
       deviceName?: unknown
       deviceId?: unknown
+      deviceFingerprint?: unknown
       nickname?: unknown
       avatar?: unknown
     }
@@ -533,6 +538,7 @@ app.post('/api/auth/register', async (c) => {
   const code = str(body.code)
   const deviceName = str(body.deviceName) || '此设备'
   const deviceId = str(body.deviceId) || null
+  const deviceFingerprint = str(body.deviceFingerprint) || null
   const nickname = str(body.nickname).trim().slice(0, 24) || email.split('@')[0].slice(0, 24)
   const avatar = typeof body.avatar === 'string' && body.avatar.startsWith('data:image/') ? body.avatar.slice(0, 300_000) : null
   if (!isEmail(email)) return c.json({ error: '邮箱格式不正确' }, 400)
@@ -572,9 +578,11 @@ app.post('/api/auth/register', async (c) => {
   const token = randomToken()
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 86_400_000).toISOString()
   await createSession(c.env.DB, { token, userId, deviceId, deviceName, createdAt, expiresAt })
+  // v2:绑定设备↔账号,统计活跃用户时按账号去重(跨设备只算 1)
+  await linkIdentity(c.env.DB, deviceFingerprint || deviceId || '', userId, createdAt)
   return c.json({
     token,
-    user: publicUser({ email, activated: 0, trial_ends_at: trialEndsAt, nickname, avatar }),
+    user: publicUser({ id: userId, email, activated: 0, trial_ends_at: trialEndsAt, nickname, avatar }),
   })
 })
 
@@ -610,13 +618,14 @@ app.post('/api/auth/profile', async (c) => {
 })
 
 app.post('/api/auth/login', async (c) => {
-  let body: { email?: unknown; password?: unknown; deviceName?: unknown; deviceId?: unknown }
+  let body: { email?: unknown; password?: unknown; deviceName?: unknown; deviceId?: unknown; deviceFingerprint?: unknown }
   try {
     body = (await c.req.json()) as {
       email?: unknown
       password?: unknown
       deviceName?: unknown
       deviceId?: unknown
+      deviceFingerprint?: unknown
     }
   } catch {
     return c.json({ error: 'invalid json' }, 400)
@@ -625,6 +634,7 @@ app.post('/api/auth/login', async (c) => {
   const password = str(body.password)
   const deviceName = str(body.deviceName) || '此设备'
   const deviceId = str(body.deviceId) || null
+  const deviceFingerprint = str(body.deviceFingerprint) || null
 
   const user = await getUserByEmail(c.env.DB, email)
   if (!user || user.disabled) return c.json({ error: '邮箱或密码错误' }, 401)
@@ -635,16 +645,48 @@ app.post('/api/auth/login', async (c) => {
   // 设备会话治理(不做数量限制):
   // 1) 先清掉该用户已过期的会话;
   // 2) 同 deviceId 重登视为同一台设备,替换旧会话,不新增设备行
-  //    (此前 localStorage 被清会生成新 deviceId,同一台电脑被当成新设备,幽灵设备会越积越多)。
-  await purgeExpiredSessions(c.env.DB, user.id)
-  if (deviceId) {
-    await deleteSessionsByDeviceId(c.env.DB, user.id, deviceId)
-  }
-
+  //    (此前 localStorage 被清会生成新 deviceId,同一台电脑被当成新设备,幽灵设备会越积越多);
+  // 3) 建新会话 + 绑定设备↔账号(v2 统计口径)。
+  // 优化(2026-10-27):以上写操作此前逐条 await(每次一次 D1 往返,叠加代理链路
+  // 延迟明显拖慢登录),现合并为一次 DB.batch——batch 内按顺序执行、整体提交,
+  // 语义与逐条一致,省去约 3 次子请求往返。语句与 db.ts / admin.ts 中同名助手保持一致。
   const token = randomToken()
   const createdAt = nowIso()
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 86_400_000).toISOString()
-  await createSession(c.env.DB, { token, userId: user.id, deviceId, deviceName, createdAt, expiresAt })
+  const db = c.env.DB
+  const writes: D1PreparedStatement[] = [
+    // 同 purgeExpiredSessions(db.ts)
+    db.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?').bind(user.id, createdAt),
+  ]
+  if (deviceId) {
+    // 同 deleteSessionsByDeviceId(db.ts)
+    writes.push(
+      db.prepare('DELETE FROM sessions WHERE user_id = ? AND device_id = ?').bind(user.id, deviceId),
+    )
+  }
+  writes.push(
+    // 同 createSession(db.ts)
+    db
+      .prepare(
+        `INSERT INTO sessions (token, user_id, device_id, device_name, created_at, last_seen_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(token, user.id, deviceId, deviceName, createdAt, createdAt, expiresAt),
+  )
+  const identity = deviceFingerprint || deviceId || ''
+  if (identity) {
+    // 同 linkIdentity(admin.ts)
+    writes.push(
+      db
+        .prepare(
+          `INSERT INTO identity_links (device, uid, first_seen, last_seen)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(device) DO UPDATE SET uid = excluded.uid, last_seen = excluded.last_seen`,
+        )
+        .bind(identity, user.id, createdAt, createdAt),
+    )
+  }
+  await db.batch(writes)
   return c.json({ token, user: publicUser(user) })
 })
 
@@ -754,23 +796,31 @@ app.get('/api/auth/me', async (c) => {
 // ---------------------------------------------------------------------------
 
 const TRACK_WINDOW_MS = 60_000
-const TRACK_MAX_PER_WINDOW = 180 // 单 IP 每分钟最多 180 次上报
+const TRACK_MAX_PER_WINDOW = 60 // 单设备每分钟最多 60 次上报
 const trackBuckets = new Map<string, { n: number; reset: number }>()
-function trackAllowed(ip: string): boolean {
+function trackAllowed(key: string): boolean {
   const now = Date.now()
-  const b = trackBuckets.get(ip)
+  const b = trackBuckets.get(key)
   if (!b || now > b.reset) {
-    trackBuckets.set(ip, { n: 1, reset: now + TRACK_WINDOW_MS })
+    trackBuckets.set(key, { n: 1, reset: now + TRACK_WINDOW_MS })
     return true
   }
   b.n += 1
   return b.n <= TRACK_MAX_PER_WINDOW
 }
 
+// 真实客户端 IP:server.js 已透传 x-client-ip;Cloudflare / 反代头兜底
+function realClientIp(c: Context): string {
+  return (
+    c.req.header('x-client-ip')?.split(',')[0]?.trim() ||
+    c.req.header('cf-connecting-ip')?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  )
+}
+
 app.post('/api/track', async (c) => {
-  // 超限时静默成功:埋点失败绝不影响用户体验
-  const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown'
-  if (!trackAllowed(ip)) return c.json({ ok: true, accepted: 0, skipped: true })
+  const ip = realClientIp(c)
   let body: { source?: unknown; events?: unknown }
   try {
     body = (await c.req.json()) as { source?: unknown; events?: unknown }
@@ -784,7 +834,27 @@ app.post('/api/track', async (c) => {
       !!e && typeof e === 'object' && ALLOWED_EVENTS.has((e as { event?: unknown }).event as string),
   )
   if (events.length === 0) return c.json({ ok: true, accepted: 0 })
-  const writing = insertEvents(c.env.DB, source, events, nowIso()).catch((e) =>
+  // 限流键:优先设备标识,其次真实 IP。避免下载站/App 各自经 server.js 共享出口 IP 被误限
+  const key = events[0].device || events[0].visitor || ip
+  if (!trackAllowed(key)) return c.json({ ok: true, accepted: 0, skipped: true })
+  const ts = nowIso()
+  const db = c.env.DB
+  // 下载站下载记录(来自 server.js /download 中转,带真实下载用户 IP)
+  const dlEvents = events.filter((e) => e.event === 'site_download')
+  if (dlEvents.length) {
+    const dlIp = c.req.header('x-real-download-ip')?.split(',')[0]?.trim() || ip
+    const dlRecords: Promise<unknown>[] = dlEvents.map((e) =>
+      recordSiteDownload(db, e.device || e.visitor || '', dlIp, c.req.header('user-agent') || '', ts),
+    )
+    await Promise.all(dlRecords).catch((e) => console.error('[track] dl record failed:', e))
+  }
+  // install 事件补真实 IP(用于下载→安装 24h 归因匹配)
+  for (const e of events) {
+    if (e.event === 'install') e.ip = ip
+  }
+  // site_download 只写 site_downloads 表,不进主事件表(避免污染站点统计)
+  const mainEvents = events.filter((e) => e.event !== 'site_download')
+  const writing = insertEvents(db, source, mainEvents, ts).catch((e) =>
     console.error('[track] insert failed:', e),
   )
   // waitUntil 让响应立即返回;执行上下文不可用时退化为同步等待

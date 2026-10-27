@@ -345,14 +345,32 @@ fn set_data_dir(app: tauri::AppHandle, target: Option<String>) -> Result<String,
     let db = "todobar.db";
     let link = cfg.join("todobar_data");
 
+    // 账号分库(账号数据隔离):除主库外,同目录还可能有多个 todobar.u-<hash>.db
+    // 账号库,迁移/重置必须一并搬移,否则更改存储位置后账号数据会"消失"在旧目录。
+    fn collect_dbs(dir: &std::path::Path) -> Vec<String> {
+        let mut names = Vec::new();
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with("todobar") && name.ends_with(".db") {
+                    names.push(name);
+                }
+            }
+        }
+        names.sort();
+        names
+    }
+
     if target.is_none() {
         // 重置:若曾建立 junction,把数据搬回默认位置并移除 junction。
         if link.exists() {
-            for ext in ["", "-wal", "-shm"] {
-                let src = link.join(format!("{db}{ext}"));
-                let dst = cfg.join(format!("{db}{ext}"));
-                if src.exists() {
-                    std::fs::copy(&src, &dst).map_err(|e| format!("恢复数据失败: {e}"))?;
+            for name in collect_dbs(&link) {
+                for ext in ["", "-wal", "-shm"] {
+                    let src = link.join(format!("{name}{ext}"));
+                    let dst = cfg.join(format!("{name}{ext}"));
+                    if src.exists() {
+                        std::fs::copy(&src, &dst).map_err(|e| format!("恢复数据失败: {e}"))?;
+                    }
                 }
             }
             remove_junction(&link)?;
@@ -370,14 +388,18 @@ fn set_data_dir(app: tauri::AppHandle, target: Option<String>) -> Result<String,
     let target_dir = std::path::PathBuf::from(&target_str);
     std::fs::create_dir_all(&target_dir).map_err(|e| format!("创建目录失败: {e}"))?;
 
-    // 目标目录已有数据 -> 直接采用(保留用户既有数据);否则从默认位置迁移过来。
+    // 目标目录已有数据 -> 直接采用(保留用户既有数据);否则从当前位置迁移过来。
+    // 迁移源:junction 已建立时数据在 junction 指向的旧目录,否则在 app_config_dir。
     let adopt_existing = target_dir.join(db).exists();
     if !adopt_existing {
-        for ext in ["", "-wal", "-shm"] {
-            let src = cfg.join(format!("{db}{ext}"));
-            let dst = target_dir.join(format!("{db}{ext}"));
-            if src.exists() {
-                std::fs::copy(&src, &dst).map_err(|e| format!("迁移数据失败: {e}"))?;
+        let src_dir = if link.exists() { link.clone() } else { cfg.clone() };
+        for name in collect_dbs(&src_dir) {
+            for ext in ["", "-wal", "-shm"] {
+                let src = src_dir.join(format!("{name}{ext}"));
+                let dst = target_dir.join(format!("{name}{ext}"));
+                if src.exists() {
+                    std::fs::copy(&src, &dst).map_err(|e| format!("迁移数据失败: {e}"))?;
+                }
             }
         }
     }
@@ -388,10 +410,13 @@ fn set_data_dir(app: tauri::AppHandle, target: Option<String>) -> Result<String,
     }
     create_junction(&link, &target_dir)?;
 
-    // 迁移成功后删除默认位置的旧文件(仅当是从默认迁出时)。
+    // 迁移成功后删除默认位置的旧文件(仅当是从默认迁出时;junction 目录不会被
+    // collect_dbs 命中,不会误删新位置数据)。
     if !adopt_existing {
-        for ext in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(cfg.join(format!("{db}{ext}")));
+        for name in collect_dbs(&cfg) {
+            for ext in ["", "-wal", "-shm"] {
+                let _ = std::fs::remove_file(cfg.join(format!("{name}{ext}")));
+            }
         }
     }
 
@@ -629,6 +654,38 @@ fn set_persist_config(
         cfg.cache_cleared = true;
     }
     write_persist(&cfg)
+}
+
+/// 设备硬件指纹:读取系统 MachineGuid 并做确定性 FNV 哈希。
+/// 重装 App、清除 WebView 数据、重置 deviceId 后仍可识别同一台物理机器,
+/// 用于统计口径的"设备去重"与"下载→安装归因"的跨设备缝合。
+#[tauri::command]
+fn device_fingerprint() -> String {
+    use std::process::Command;
+    let guid = Command::new("reg")
+        .args(["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| {
+            // 形如: ...    MachineGuid    REG_SZ    xxxxxxxx-xxxx-...
+            s.split("MachineGuid")
+                .nth(1)
+                .and_then(|tail| tail.split("REG_SZ").nth(1))
+                .map(|v| v.trim().to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+    let salted = format!("ticktask-device-{}", guid);
+    fnv1a_64(salted.as_bytes())
+}
+
+fn fnv1a_64(data: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in data {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{:016x}", hash)
 }
 
 /// 清理 WebView2 全部浏览数据(缓存/localStorage/IndexedDB)。
@@ -1577,6 +1634,7 @@ pub fn run() {
             show_main_window_ready,
             get_persist_config,
             set_persist_config,
+            device_fingerprint,
             get_pref,
             set_pref,
             clear_webview_cache,

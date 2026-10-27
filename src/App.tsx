@@ -73,7 +73,7 @@ import {
   type Recurrence,
   type Task,
 } from './types'
-import { useTaskStore } from './useTaskStore'
+import { DATA_MIGRATED_EVENT, useTaskStore } from './useTaskStore'
 import { trackFeature, trackPage } from './analytics'
 import { expandRecurrences, recurrenceLabel, parseInstanceId } from './recurrence'
 import { loadHolidays } from './holidays'
@@ -405,6 +405,16 @@ function App() {
 
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
+  // 账号分库:启动时把游客库数据并入已登录账号库后广播,这里弹 toast 告知。
+  useEffect(() => {
+    const onMigrated = (e: Event) => {
+      const n = (e as CustomEvent<number>).detail
+      if (typeof n === 'number' && n > 0) setToast({ kind: 'ok', text: `已把本地 ${n} 条数据并入账号` })
+    }
+    window.addEventListener(DATA_MIGRATED_EVENT, onMigrated)
+    return () => window.removeEventListener(DATA_MIGRATED_EVENT, onMigrated)
+  }, [])
+
   // 便利签:磁盘回灌 + 注册快捷键 + 处理「转待办」请求,逻辑全在 notes/useNotesBridge。
   useNotesBridge({
     noteShortcut: settings.noteShortcut,
@@ -436,10 +446,13 @@ function App() {
     if (prevSyncStatus.current === 'syncing' && status === 'idle') {
       setToast({ kind: 'ok', text: '同步成功' })
     } else if (prevSyncStatus.current === 'syncing' && status === 'error') {
-      setToast({ kind: 'err', text: `同步失败:${store.syncState.lastError ?? '网络异常'}` })
+      // 未登录/非会员(如刚登出)不弹同步失败:此时本就不该同步,弹窗只会造成困扰。
+      if (fullAccess) {
+        setToast({ kind: 'err', text: `同步失败:${store.syncState.lastError ?? '网络异常'}` })
+      }
     }
     prevSyncStatus.current = status
-  }, [store.syncState.status, store.syncState.lastError])
+  }, [store.syncState.status, store.syncState.lastError, fullAccess])
 
   useEffect(() => {
     if (!toast) return
@@ -1553,6 +1566,7 @@ function App() {
               syncConfig={store.syncConfig}
               syncState={store.syncState}
               onSyncChange={store.setSyncConfig}
+              onSwitchProfile={store.switchAccountProfile}
               onSyncNow={store.triggerSync}
               onOpenRestore={() => setRestoreSheetOpen(true)}
               onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
@@ -2740,6 +2754,7 @@ function SidebarSettingsPanel({
   syncConfig,
   syncState,
   onSyncChange,
+  onSwitchProfile,
   onSyncNow,
   onOpenRestore,
   onLocked,
@@ -2751,6 +2766,8 @@ function SidebarSettingsPanel({
   syncConfig: import('./types').SyncConfig
   syncState: import('./types').SyncState
   onSyncChange: (patch: Partial<import('./types').SyncConfig>) => void
+  /** 登录成功后切换到该账号的独立本地库(账号数据隔离)。 */
+  onSwitchProfile: (email: string) => Promise<number>
   onSyncNow: () => void
   onOpenRestore: () => void
   /** 点击受限同步入口时的回调(功能名),由父组件弹 toast 提示开通会员。 */
@@ -2781,7 +2798,7 @@ function SidebarSettingsPanel({
   return (
     // 嵌套在外层 .settings-scroll 内:底部 76px 预留由外层承担,内层清零。
     <div className="settings-scroll settings-scroll-nested">
-      <AccountSetting onSyncChange={onSyncChange} />
+      <AccountSetting onSyncChange={onSyncChange} onSwitchProfile={onSwitchProfile} />
       <VersionSetting />
       <div className="settings-group settings-appearance">
         <div className="settings-group-title">外观</div>

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { BrowserStore, SqliteStore, type TaskRepository } from './db/repository'
+import {
+  BrowserStore,
+  SqliteStore,
+  getActiveProfile,
+  resolveBootProfile,
+  setActiveProfile,
+  type TaskRepository,
+} from './db/repository'
 import {
   createBirthday as makeBirthday,
   createTask as makeTask,
@@ -118,6 +125,93 @@ function bumpQuota(): number {
  *  这里每次调用都现读登录态(而非闭包快照),保证刷新会员状态后立即生效。 */
 function hasFullAccess(): boolean {
   return isFullAccess(loadAccount())
+}
+
+// ---- 账号分库:游客数据并入账号库 ------------------------------------------
+//
+// 用户先以游客身份使用(数据在默认游客库),首次登录某账号时,把游客库的真实
+// 数据并入该账号的独立库并进入推送队列(与旧行为「登录后本地数据上云」一致),
+// 随后由 autoFillFromCloud 从云端补齐。换号登录另一账号时其库已有数据或游客库
+// 已清空,不会再并入,实现「每个账号只见自己的数据」。
+//
+// 迁移完成后清空游客库,防止第二个新账号登录时把同一份游客数据再并入一遍。
+
+/** 首次启动写入的示例种子标题:游客库只剩这些时视为「无真实数据」,不迁移(避免把演示数据上传云端)。 */
+const SEED_TITLES = new Set([
+  '设计侧栏框架',
+  '验证桌面快捷键',
+  '收集收件箱',
+  '开源路线图',
+  '随手记点灵感',
+])
+
+function isSeedOnly(tasks: { title: string }[]): boolean {
+  return tasks.length > 0 && tasks.length <= SEED_TITLES.size && tasks.every((t) => SEED_TITLES.has(t.title))
+}
+
+/** 账号库完成游客数据并入后广播,供 App 弹 toast 提示(e.detail = 并入条数)。 */
+export const DATA_MIGRATED_EVENT = 'ticktask-data-migrated'
+
+function notifyDataMigrated(count: number): void {
+  try {
+    window.dispatchEvent(new CustomEvent(DATA_MIGRATED_EVENT, { detail: count }))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 游客数据「并入窗口」标记:本设备第一个登录的账号独占并入资格,之后的账号
+ *  一律不并入(保证换账号登录只见自己的数据)。localStorage 被清时窗口重开,
+ *  但那时游客库要么已清空、要么账号库已有数据,均不会误并入。 */
+const GUEST_MIGRATED_KEY = 'todobar.guestMigrated'
+
+function guestMigrationConsumed(): boolean {
+  try {
+    return localStorage.getItem(GUEST_MIGRATED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markGuestMigrationConsumed(): void {
+  try {
+    localStorage.setItem(GUEST_MIGRATED_KEY, '1')
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 把游客库真实数据并入当前连接的账号库(仅当账号库为空,即该账号在本设备首次登录)。
+ *  并入的任务/生日自动进入推送队列(登录后上传云端),随后重置同步游标,
+ *  让 autoFillFromCloud 从云端补齐该账号已有数据。完成后清空游客库防止重复并入。
+ *  游客库只剩示例种子时视为无真实数据,不迁移(避免把演示数据上传到新账号)。 */
+async function migrateGuestDataIntoAccount(repo: SqliteStore): Promise<number> {
+  if (guestMigrationConsumed()) return 0
+  if ((await repo.getAllTasks()).length > 0 || (await repo.getAllBirthdays()).length > 0) {
+    // 该账号本地库已有数据(如云端已补齐):游客时代视为结束,后续账号不再并入。
+    markGuestMigrationConsumed()
+    return 0
+  }
+  const snap = await repo.readGuestSnapshot()
+  if (!snap) return 0
+  if (isSeedOnly(snap.tasks) && snap.birthdays.length === 0) return 0
+  for (const l of snap.lists) {
+    if (l.kind === 'custom') await repo.saveList(l)
+  }
+  let n = 0
+  for (const t of snap.tasks) {
+    await repo.saveTask(t)
+    n++
+  }
+  for (const b of snap.birthdays) {
+    await repo.saveBirthday(b)
+    n++
+  }
+  await repo.setSyncState({ lastPullAt: null, lastPushAt: null, status: 'idle', lastError: null })
+  await repo.clearGuestData()
+  // 迁移成功后才标记:中途失败时下次登录仍可重试(saveTask 按 id upsert,重跑安全)。
+  markGuestMigrationConsumed()
+  return n
 }
 
 /**
@@ -242,6 +336,9 @@ export function useTaskStore() {
           const dbKey = (await invoke('init_data_dir')) as string
           SqliteStore.setDbKey(dbKey)
           SqliteStore.setDataDir(pcfg.data_dir ?? null)
+          // ⑤ 账号分库指针:已登录账号优先,其次沿用上次活跃账号(退出登录后数据仍显示)。
+          //    localStorage 被清时指针丢失 → 回落游客库;重新登录后自动接回账号库,数据不丢。
+          setActiveProfile(resolveBootProfile(loadAccount()?.email ?? null))
         } catch (e) {
           console.warn('[bootstrap] 持久化配置恢复失败,回退默认:', e)
         }
@@ -253,9 +350,19 @@ export function useTaskStore() {
       for (const t of await repo.getAllTasks()) {
         if (t.id.includes('@')) await repo.purgeTask(t.id)
       }
-      // 仅在「默认库且确为空」时塞示例数据;自定义存储位置下不污染用户目录。
+      // 账号分库:已登录且账号库为空(老版本升级/换设备首次启动)时,
+      // 把游客库的真实数据并入账号库(与登录回调同一套迁移逻辑)。
+      if (repo instanceof SqliteStore && loadAccount()?.email) {
+        try {
+          const migrated = await migrateGuestDataIntoAccount(repo)
+          if (migrated > 0) notifyDataMigrated(migrated)
+        } catch (e) {
+          console.warn('[bootstrap] 游客数据并入账号库失败(不影响启动):', e)
+        }
+      }
+      // 仅在「游客默认库且确为空」时塞示例数据;自定义存储位置/账号分库不污染。
       const customDir = SqliteStore.getDataDir()
-      if ((await repo.getAllTasks()).length === 0 && !customDir) {
+      if ((await repo.getAllTasks()).length === 0 && !customDir && !getActiveProfile()) {
         const seeds: Task[] = [
           makeTask('today', '设计侧栏框架', { meta: '今天', priority: 'focus' }),
           makeTask('today', '验证桌面快捷键', { meta: '原生钩子' }),
@@ -836,6 +943,32 @@ export function useTaskStore() {
     [],
   )
 
+  // ---- 账号分库切换(登录成功时调用) ---------------------------------------
+  /** 切换到指定账号的独立本地库。若该账号在本设备首次登录(库为空)且游客库有
+   *  真实数据,自动并入并返回并入条数(换号登录不会并入,实现账号数据隔离)。
+   *  必须在 onSyncChange(开启同步)之前 await 完成,保证云端补齐落在正确的库。 */
+  const switchAccountProfile = useCallback(
+    async (email: string): Promise<number> => {
+      const repo = repoRef.current
+      if (!repo || getActiveProfile() === email) return 0
+      setActiveProfile(email)
+      if (repo instanceof SqliteStore) {
+        await repo.repoint()
+        await repo.init()
+        const migrated = await migrateGuestDataIntoAccount(repo)
+        await reload()
+        return migrated
+      }
+      if (repo instanceof BrowserStore) {
+        await repo.reloadForProfile()
+        await reload()
+        return 0
+      }
+      return 0
+    },
+    [reload],
+  )
+
   const triggerSync = useCallback(() => {
     const repo = repoRef.current
     if (!repo) return
@@ -1066,6 +1199,7 @@ export function useTaskStore() {
     updateBirthday,
     deleteBirthday,
     setSyncConfig,
+    switchAccountProfile,
     triggerSync,
     restoreFromCloud,
     autoFillFromCloud,

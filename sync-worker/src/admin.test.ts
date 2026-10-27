@@ -98,9 +98,12 @@ describe('tracking', () => {
         body: JSON.stringify({
           source: 'site',
           events: [
-            { event: 'pageview', visitor: 'v1' },
-            { event: 'download_click', visitor: 'v1' },
-            { event: 'bogus_event', visitor: 'v1' }, // 白名单外,应被丢弃
+            { event: 'pageview', visitor: 'v1', device: 'fps1' },
+            // 同一设备进入两次:访客数=1,点击数(进入次数)=2
+            { event: 'site_visit', visitor: 'v1', device: 'fps1' },
+            { event: 'site_visit', visitor: 'v1', device: 'fps1' },
+            { event: 'download_click', visitor: 'v1', device: 'fps1' },
+            { event: 'bogus_event', visitor: 'v1', device: 'fps1' }, // 白名单外,应被丢弃
           ],
         }),
       }),
@@ -108,14 +111,73 @@ describe('tracking', () => {
       ctx,
     )
     expect(res.status).toBe(200)
-    expect((await res.json()).accepted).toBe(2)
+    expect((await res.json()).accepted).toBe(4)
 
     const login = await (await adminLogin(env)).json()
     const ov = await (await adminGet(env, '/api/admin/overview?days=30', login.token)).json()
     expect(ov.funnel.visitors).toBe(1)
-    expect(ov.funnel.clicks).toBe(1)
+    expect(ov.funnel.clicks).toBe(2)
     expect(ov.trends.days.length).toBe(30)
     expect(ov.users.total).toBe(0)
+  })
+
+  it('安装按设备去重;注册需绑定设备先有安装;活跃用户已登录按账号去重', async () => {
+    const env = await makeEnv()
+
+    // 两台设备上报安装(fpA 上报两次验证去重),时间在注册之前
+    const t0 = new Date(Date.now() - 3600_000).toISOString()
+    for (const device of ['fpA', 'fpA', 'fpB']) {
+      await env.DB.prepare(
+        `INSERT INTO analytics_events (source, event, device, ip, ts) VALUES ('app', 'install', ?, '1.1.1.1', ?)`,
+      )
+        .bind(device, t0)
+        .run()
+    }
+    // u_fun1 绑定 fpA 且晚于安装注册 → 计入注册数
+    // u_fun2 无绑定 → 不计入;u_fun3 绑定了从未安装的 fpC → 不计入
+    const now = new Date().toISOString()
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString()
+    for (const [id, email] of [
+      ['u_fun1', 'fun1@example.com'],
+      ['u_fun2', 'fun2@example.com'],
+      ['u_fun3', 'fun3@example.com'],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO users (id, email, password_hash, salt, activated, trial_ends_at, created_at, disabled)
+         VALUES (?, ?, 'x', 'y', 0, ?, ?, 0)`,
+      )
+        .bind(id, email, tomorrow, now)
+        .run()
+    }
+    await env.DB.prepare(
+      `INSERT INTO identity_links (device, uid, first_seen, last_seen) VALUES ('fpA', 'u_fun1', ?, ?)`,
+    )
+      .bind(now, now)
+      .run()
+    await env.DB.prepare(
+      `INSERT INTO identity_links (device, uid, first_seen, last_seen) VALUES ('fpC', 'u_fun3', ?, ?)`,
+    )
+      .bind(now, now)
+      .run()
+
+    // 活跃用户:u_fun1 在两台设备启动(账号去重=1) + 一台未登录设备(按指纹) → 今日活跃=2
+    for (const [uid, device] of [
+      ['u_fun1', 'devA'],
+      ['u_fun1', 'devB'],
+      ['', 'devC'],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO analytics_events (source, event, uid, device, ts) VALUES ('app', 'app_open', ?, ?, ?)`,
+      )
+        .bind(uid, device, now)
+        .run()
+    }
+
+    const login = await (await adminLogin(env)).json()
+    const ov = await (await adminGet(env, '/api/admin/overview?days=30', login.token)).json()
+    expect(ov.funnel.installs).toBe(2)
+    expect(ov.funnel.registrations).toBe(1)
+    expect(ov.active.today).toBe(2)
   })
 })
 

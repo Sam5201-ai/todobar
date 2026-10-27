@@ -27,6 +27,7 @@ function seedAccount(patch: Record<string, unknown> = {}): void {
   const acc = {
     email: 'me@example.com',
     token: 'tok',
+    uid: 'u_test',
     deviceId: 'dev',
     activated: false,
     trialEndsAt: '2026-10-20T00:00:00.000Z',
@@ -108,6 +109,24 @@ describe('refreshAccount(会员状态云端对齐)', () => {
     const next = await refreshAccount()
     expect(next?.activated).toBe(true)
     expect(setSpy).not.toHaveBeenCalled()
+  })
+
+  it('旧格式登录态缺 uid:借 /me 响应回填,不影响会员字段', async () => {
+    seedAccount({ uid: undefined, activated: true })
+    const meUser = {
+      id: 'u_backfill',
+      email: 'me@example.com',
+      activated: true,
+      trialEndsAt: '2026-10-20T00:00:00.000Z',
+      nickname: null,
+      avatar: null,
+    }
+    mockFetch(() => meResponse(meUser))
+    const { refreshAccount, loadAccount } = await import('./account')
+    const next = await refreshAccount()
+    expect(next?.uid).toBe('u_backfill')
+    expect(loadAccount()?.uid).toBe('u_backfill')
+    expect(next?.activated).toBe(true)
   })
 
   it('网络异常:静默保留本地态(仍显示试用,不报错)', async () => {

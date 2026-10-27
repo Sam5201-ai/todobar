@@ -40,6 +40,7 @@ export function notifyAuthInvalid(): void {
 }
 
 export interface AccountUser {
+  id: string
   email: string
   activated: boolean
   trialEndsAt: string | null
@@ -50,6 +51,9 @@ export interface AccountUser {
 export interface AccountState {
   email: string
   token: string
+  /** 服务端账号 ID(users.id):埋点事件携带,统计口径"已登录按账号去重"的依据。
+   *  旧版本持久化数据无此字段(读出为 undefined),埋点侧按空串兜底走设备缝合。 */
+  uid?: string
   deviceId: string
   activated: boolean
   trialEndsAt: string | null
@@ -114,6 +118,31 @@ export function getDeviceId(): string {
     }
   }
   return id
+}
+
+/** 设备硬件指纹(MachineGuid 哈希),用于统计口径的跨设备身份缝合。失败返回空。 */
+export async function getDeviceFingerprint(): Promise<string> {
+  if (!IS_TAURI) return ''
+  try {
+    return String((await invoke('device_fingerprint')) || '')
+  } catch {
+    return ''
+  }
+}
+
+// 指纹进程级缓存:device_fingerprint 走 reg query 子进程,登录前串行等待会拖慢
+// 首次登录。打开登录弹窗时即预热(warmDeviceFingerprint),登录时直接取缓存结果。
+let fingerprintPromise: Promise<string> | null = null
+
+/** 预取设备指纹(幂等,可重复调用;失败按空串处理,不阻塞登录)。 */
+export function warmDeviceFingerprint(): void {
+  if (!IS_TAURI || fingerprintPromise) return
+  fingerprintPromise = getDeviceFingerprint().catch(() => '')
+}
+
+function cachedDeviceFingerprint(): Promise<string> {
+  warmDeviceFingerprint()
+  return fingerprintPromise ?? Promise.resolve('')
 }
 
 /**
@@ -206,6 +235,7 @@ function toAccount(email: string, data: { token: string; user: AccountUser }): A
   return {
     email,
     token: data.token,
+    uid: data.user.id,
     deviceId: getDeviceId(),
     activated: data.user.activated,
     trialEndsAt: data.user.trialEndsAt,
@@ -214,8 +244,29 @@ function toAccount(email: string, data: { token: string; user: AccountUser }): A
   }
 }
 
+/**
+ * 登录/注册/发码耗时打点:体感速度由「网络链路(国内代理→Cloudflare 回源)+
+ * 服务端密码哈希(PBKDF2 10 万次迭代,防暴力破解的故意设计)」共同决定。
+ * 这里记录请求总耗时,上报 auth_timing 事件并打印控制台日志,便于量化「慢在哪」。
+ */
+async function timedAuthFetch(label: string, url: string, init: RequestInit): Promise<Response> {
+  const t0 = performance.now()
+  try {
+    const res = await fetch(url, init)
+    const ms = Math.round(performance.now() - t0)
+    console.info(`[auth-timing] ${label}: ${ms}ms (HTTP ${res.status})`)
+    trackEvent('auth_timing', 'account', `${label}=${ms}ms`)
+    return res
+  } catch (err) {
+    const ms = Math.round(performance.now() - t0)
+    console.warn(`[auth-timing] ${label}: 请求失败于 ${ms}ms`, err)
+    trackEvent('auth_timing', 'account', `${label}=fail@${ms}ms`)
+    throw err
+  }
+}
+
 export async function sendCode(email: string, purpose: 'register' | 'reset'): Promise<void> {
-  const res = await fetch(`${AUTH_BASE}/api/auth/send-code`, {
+  const res = await timedAuthFetch(`sendCode:${purpose}`, `${AUTH_BASE}/api/auth/send-code`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, purpose }),
@@ -230,7 +281,8 @@ export async function register(
   nickname?: string,
   avatar?: string | null,
 ): Promise<AccountState> {
-  const res = await fetch(`${AUTH_BASE}/api/auth/register`, {
+  const fp = await cachedDeviceFingerprint()
+  const res = await timedAuthFetch('register', `${AUTH_BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -240,6 +292,7 @@ export async function register(
       nickname,
       avatar,
       deviceId: getDeviceId(),
+      deviceFingerprint: fp,
       deviceName: '此设备',
     }),
   })
@@ -253,13 +306,15 @@ export async function register(
 }
 
 export async function login(email: string, password: string): Promise<AccountState> {
-  const res = await fetch(`${AUTH_BASE}/api/auth/login`, {
+  const fp = await cachedDeviceFingerprint()
+  const res = await timedAuthFetch('login', `${AUTH_BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       email,
       password,
       deviceId: getDeviceId(),
+      deviceFingerprint: fp,
       deviceName: '此设备',
     }),
   })
@@ -364,11 +419,13 @@ export async function refreshAccount(): Promise<AccountState | null> {
   if (!cur) return null
   try {
     const me = await fetchMe()
-    if (me.user.activated === cur.activated && me.user.trialEndsAt === cur.trialEndsAt) {
+    // 状态未变且 uid 已就位才提前返回;旧持久化数据缺 uid 时借本次响应补齐
+    if (me.user.activated === cur.activated && me.user.trialEndsAt === cur.trialEndsAt && cur.uid) {
       return cur
     }
     const next: AccountState = {
       ...cur,
+      uid: cur.uid || me.user.id,
       activated: me.user.activated,
       trialEndsAt: me.user.trialEndsAt,
     }

@@ -1,1102 +1,1333 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="scroll-smooth">
+<html lang="zh-CN" data-theme="light">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TickTask - 贴在屏幕边缘的极简待办栏 | Windows 桌面端下载</title>
-  <meta name="description" content="TickTask 是一款贴边悬浮的极简待办栏：日/周/月视图、生日与纪念日提醒、内置计算器、云同步，支持自定义字体与背景。免费下载 Windows 安装包。" />
-  <meta property="og:title" content="TickTask - 贴在屏幕边缘的极简待办栏" />
-  <meta property="og:description" content="日/周/月待办、提醒、计算器、云同步，深度自定义字体与背景。免费下载 Windows 桌面端。" />
-  <meta property="og:type" content="website" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <link rel="icon" type="image/png" href="./favicon.png" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            primary: { DEFAULT: '#1d7ef0', light: '#3d97f5', dark: '#1565c8' },
-            accent: { DEFAULT: '#f59e0b', light: '#fbbf24' },
-          },
-          fontFamily: {
-            sans: ['"PingFang SC"', '"Microsoft YaHei"', '"Segoe UI"', 'system-ui', 'sans-serif'],
-          },
-        },
-      },
-    }
-  </script>
-  <style>
-    html { scroll-padding-top: 5rem; }
-    .hero-glow {
-      background:
-        radial-gradient(600px 300px at 70% 10%, rgba(29, 126, 240, 0.14), transparent 70%),
-        radial-gradient(500px 260px at 15% 85%, rgba(245, 158, 11, 0.10), transparent 70%);
-    }
-    .dark .hero-glow {
-      background:
-        radial-gradient(600px 300px at 70% 10%, rgba(29, 126, 240, 0.22), transparent 70%),
-        radial-gradient(500px 260px at 15% 85%, rgba(245, 158, 11, 0.10), transparent 70%);
-    }
-    .shot-frame {
-      box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.06);
-    }
-    details > summary { list-style: none; cursor: pointer; }
-    details > summary::-webkit-details-marker { display: none; }
-    details[open] .faq-chevron { transform: rotate(180deg); }
-    .faq-chevron { transition: transform 0.2s ease; }
-    /* ===== Hero 电脑桌面动画 ===== */
-    .demo-panel {
-      transform: translateX(102%);
-      animation: demo-slide 14s ease-in-out infinite;
-      will-change: transform;
-    }
-    @keyframes demo-slide {
-      0%, 9%    { transform: translateX(102%); }  /* 收起:只露一条细边 */
-      24%, 60%  { transform: translateX(0); }     /* 展开:完整待办栏,停留 */
-      75%, 100% { transform: translateX(102%); }  /* 用完自动收回 */
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .demo-panel { animation: none; transform: translateX(0); }
-    }
-    /* ===== 界面一览:横向滚动条带 ===== */
-    .shots-strip {
-      cursor: grab;
-      scrollbar-width: none;           /* Firefox 隐藏滚动条 */
-      -ms-overflow-style: none;
-    }
-    .shots-strip::-webkit-scrollbar { display: none; }  /* Chrome/Edge 隐藏滚动条 */
-    .shots-strip:active { cursor: grabbing; }
-  </style>
-  <script>
-    // 深色模式:初始化(优先 localStorage,其次系统偏好)
-    (function () {
-      const saved = localStorage.getItem('todobar-site-theme')
-      const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
-      if (dark) document.documentElement.classList.add('dark')
-    })()
-  </script>
-</head>
-<body class="bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200 font-sans">
-  <a href="#hero" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-primary focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">跳到主要内容</a>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TickTask - 贴在屏幕边缘的极简待办栏 | Windows 桌面端下载</title>
+<meta name="description" content="TickTask 是一款贴边悬浮的极简待办栏：日/周/月视图、生日与纪念日提醒、内置计算器、云同步，支持自定义字体与背景。免费下载 Windows 安装包。" />
+<meta property="og:title" content="TickTask - 贴在屏幕边缘的极简待办栏" />
+<meta property="og:description" content="日/周/月待办、提醒、计算器、云同步，深度自定义字体与背景。免费下载 Windows 桌面端。" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/png" href="./favicon.png" />
+<style>
+/* ==========================================================
+   TickTask 下载页 v2 · 原型
+   改版要点：
+   1. 8 大功能 → 每功能一页 · 3D 翻转滑动轮播（可拖拽/键盘/自动播放）
+   2. 去掉「版本更新」区块
+   3. Hero 保留贴边显示器动画；功能速览 chips 已移除（首页不重复罗列 8 大功能，保持干净）
+   ========================================================== */
+:root {
+  --primary: #1d7ef0;
+  --primary-dark: #1565c8;
+  --accent: #f59e0b;
+  --bg: #f7f9fc;
+  --bg-soft: #ffffff;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #5b6b83;
+  --faint: #94a3b8;
+  --border: rgba(15, 23, 42, .09);
+  --shadow-lg: 0 24px 60px -18px rgba(15, 23, 42, .25);
+  --nav-bg: rgba(255, 255, 255, .82);
+}
+[data-theme="dark"] {
+  --bg: #060a14;
+  --bg-soft: #0b1120;
+  --card: #0e1526;
+  --text: #e8eefb;
+  --muted: #9aa8bf;
+  --faint: #64748b;
+  --border: rgba(148, 163, 184, .14);
+  --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, .7);
+  --nav-bg: rgba(6, 10, 20, .82);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6;
+  overflow-x: hidden;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
 
-  <!-- ===== 导航 ===== -->
-  <header class="fixed top-0 inset-x-0 z-40 border-b border-slate-200/60 bg-white/80 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/80">
-    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="主导航">
-      <a href="#hero" class="flex items-center gap-2.5">
-        <img src="./logo.png" alt="TickTask 图标" class="h-9 w-9 rounded-xl object-cover shadow-md shadow-primary/30" width="36" height="36" />
-        <span class="text-lg font-bold tracking-tight">TickTask</span>
-      </a>
-      <div class="hidden items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
-        <a href="#features" class="hover:text-primary transition-colors">功能</a>
-        <a href="#shots" class="hover:text-primary transition-colors">界面预览</a>
-        <a href="#install" class="hover:text-primary transition-colors">安装指南</a>
-        <a href="#changelog" class="hover:text-primary transition-colors">版本更新</a>
-        <a href="#faq" class="hover:text-primary transition-colors">常见问题</a>
-      </div>
-      <div class="flex items-center gap-3">
-        <button id="theme-toggle" type="button" aria-label="切换深色模式"
-          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors">
-          <svg id="icon-moon" class="h-5 w-5 dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-          <svg id="icon-sun" class="hidden h-5 w-5 dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-        </button>
-        <a href="#download" class="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary-dark transition-colors">免费下载</a>
-      </div>
-    </nav>
-  </header>
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 
-  <main>
-    <!-- ===== Hero ===== -->
-    <section id="hero" class="hero-glow relative overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24">
-      <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
-        <div class="text-center lg:text-left">
-          <span class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1.5 text-xs font-semibold text-primary dark:bg-primary/10">
-            <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span></span>
-            <span id="latest-version">v0.4.47</span> · Windows 安装包已发布
-          </span>
-          <h1 class="mt-6 text-4xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-5xl">
-            待办事项,<br class="hidden sm:block" />
-            就该<span class="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">贴在屏幕边缘</span>。
-          </h1>
-          <p class="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-400 sm:text-lg lg:mx-0">
-            TickTask 是一条藏在屏幕右缘的极简待办栏:平时只占一条细边,<b class="text-slate-800 dark:text-slate-200">几乎不占用任何桌面空间</b>,鼠标一划即出、用完自动收回,不打扰任何正在工作的窗口。
-          </p>
-          <p class="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-500 lg:mx-0">
-            日 / 周 / 月视图、万年历节日、生日纪念日提醒、内置计算器、云同步,外观随心换。
-          </p>
-          <div class="mt-8 flex flex-col items-center gap-4 sm:flex-row lg:justify-start sm:justify-center" id="download">
-            <a href="./TickTask-setup.exe" download
-              class="group inline-flex items-center gap-2.5 rounded-2xl bg-primary px-7 py-4 text-base font-bold text-white shadow-xl shadow-primary/35 transition hover:-translate-y-0.5 hover:bg-primary-dark hover:shadow-2xl">
-              <svg class="h-5 w-5 transition-transform group-hover:translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              下载 Windows 安装包
-            </a>
-            <a href="#features" class="text-sm font-semibold text-slate-600 underline-offset-4 hover:text-primary hover:underline dark:text-slate-300">先看看功能 ↓</a>
-          </div>
-          <p class="mt-4 text-xs text-slate-500 dark:text-slate-500">Windows 10 / 11 · 64 位 · 约 17 MB · 免费使用 · 无需管理员权限</p>
-        </div>
+/* ============ 导航 ============ */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--nav-bg); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -.02em; }
+.brand img { width: 36px; height: 36px; border-radius: 11px; box-shadow: 0 4px 14px rgba(29,126,240,.35); }
+.nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.nav-links a { transition: color .2s; }
+.nav-links a:hover { color: var(--primary); }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 17px; line-height: 1;
+  transition: background .2s;
+}
+.theme-btn:hover { background: rgba(148,163,184,.15); }
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
+  color: #fff; font-weight: 700; border: none; border-radius: 14px;
+  padding: 11px 22px; font-size: 14px;
+  box-shadow: 0 10px 26px -8px rgba(29,126,240,.55);
+  transition: transform .18s, box-shadow .18s;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -8px rgba(29,126,240,.6); }
+@media (max-width: 860px) { .nav-links { display: none; } }
 
-        <!-- 电脑桌面演示:贴边展开/收起动画 -->
-        <div class="relative mx-auto w-full max-w-xl lg:max-w-2xl">
-          <div class="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/25 via-primary/5 to-accent/20 blur-2xl" aria-hidden="true"></div>
-          <!-- 显示器外观:黑色边框 + 底座 -->
-          <div class="monitor">
-            <div class="rounded-[1.4rem] bg-[#101319] p-[10px] shadow-[0_30px_70px_-20px_rgba(15,23,42,0.55),0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[0_30px_70px_-20px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.06)]">
-              <figure class="overflow-hidden rounded-[0.9rem]">
-                <!-- 桌面主体 -->
-                <div class="relative aspect-[3/2] overflow-hidden">
-                  <!-- 壁纸 -->
-                  <img src="./wallpaper.jpg" alt="" aria-hidden="true" class="absolute inset-0 h-full w-full object-cover" loading="eager" />
-                  <!-- 桌面快捷方式 -->
-                  <div class="absolute left-3 top-3 z-10 flex w-16 flex-col items-center gap-1 rounded-lg p-1.5 text-white">
-                    <img src="./logo.png" alt="" class="h-10 w-10 rounded-xl shadow-lg" width="40" height="40" />
-                    <span class="text-[10px] font-medium [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">TickTask</span>
-                  </div>
-                  <!-- 动画主体:待办栏面板 + 面板左缘把手(收起时贴边可见、展开时位于面板左侧,同步滑动) -->
-                  <div class="demo-panel absolute right-0 top-0 z-20 h-[calc(100%-2.5rem)]" >
-                    <img src="./screenshots/panel-crop.png" alt="TickTask 待办栏从屏幕右缘滑出:完整待办列表,收起时只占一条细边"
-                      class="h-full w-auto rounded-l-xl object-cover object-left shadow-2xl shadow-slate-900/50"
-                      loading="eager" width="680" height="1000" />
-                    <div class="absolute left-0 top-1/2 flex h-12 w-5 -translate-y-1/2 -translate-x-full items-center justify-center rounded-l-lg border border-r-0 border-slate-200/80 bg-white shadow-md shadow-slate-900/15 dark:border-slate-700 dark:bg-slate-800" aria-hidden="true">
-                      <svg class="h-3 w-3 text-slate-500 dark:text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path stroke-linecap="round" d="M9.5 4v16"/></svg>
-                    </div>
-                  </div>
-                  <!-- Windows 任务栏 -->
-                  <div class="absolute inset-x-0 bottom-0 z-30 flex h-10 items-center border-t border-white/50 bg-white/70 px-3 backdrop-blur-md dark:border-white/10 dark:bg-slate-900/70">
-                    <div class="flex items-center gap-3.5 text-slate-600 dark:text-slate-300">
-                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
-                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.3-4.3"/></svg>
-                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
-                      <img src="./logo.png" alt="" class="h-4.5 w-4.5 rounded-md" width="18" height="18" style="height:18px;width:18px" />
-                    </div>
-                    <div class="ml-auto text-right leading-tight text-slate-600 dark:text-slate-300">
-                      <p class="text-[10px] font-semibold">16:40</p>
-                      <p class="text-[9px]">2026/10/13</p>
-                    </div>
-                  </div>
-                </div>
-              </figure>
-            </div>
-            <!-- 支架 -->
-            <div class="mx-auto h-12 w-24 bg-gradient-to-b from-zinc-300 to-zinc-400 [clip-path:polygon(18%_0,82%_0,100%_100%,0_100%)] dark:from-zinc-700 dark:to-zinc-800" aria-hidden="true"></div>
-            <div class="mx-auto h-2.5 w-52 rounded-[50%] bg-gradient-to-b from-zinc-200 to-zinc-400 shadow-lg shadow-slate-900/25 dark:from-zinc-700 dark:to-zinc-900" aria-hidden="true"></div>
-          </div>
-        </div>
-      </div>
-    </section>
+/* ============ Hero ============ */
+.hero {
+  position: relative; overflow: hidden;
+  padding: 120px 0 64px;
+  background:
+    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.13), transparent 70%),
+    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.10), transparent 70%);
+}
+[data-theme="dark"] .hero {
+  background:
+    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.20), transparent 70%),
+    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.08), transparent 70%);
+}
+.hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 700; color: var(--primary);
+  border: 1px solid rgba(29,126,240,.25); background: rgba(29,126,240,.07);
+  padding: 6px 14px; border-radius: 999px;
+}
+.hero-badge .dot { position: relative; width: 8px; height: 8px; }
+.hero-badge .dot::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--primary);
+  animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes ping { 75%,100% { transform: scale(2.4); opacity: 0; } }
+.hero h1 { font-size: clamp(34px, 4.6vw, 52px); font-weight: 900; line-height: 1.18; letter-spacing: -.02em; margin-top: 22px; }
+.hero h1 .grad {
+  background: linear-gradient(92deg, #2e8df6, var(--primary) 40%, var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero .lead { margin-top: 18px; font-size: 16.5px; color: var(--muted); max-width: 540px; }
+.hero .lead b { color: var(--text); }
+.hero-cta { display: flex; align-items: center; gap: 20px; margin-top: 32px; flex-wrap: wrap; }
+.btn-download {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
+  color: #fff; font-weight: 800; font-size: 16px; border: none; border-radius: 16px;
+  padding: 16px 30px;
+  box-shadow: 0 14px 34px -10px rgba(29,126,240,.6);
+  transition: transform .18s, box-shadow .18s;
+}
+.btn-download:hover { transform: translateY(-2px); box-shadow: 0 20px 42px -10px rgba(29,126,240,.65); }
+.hero-meta { margin-top: 14px; font-size: 12.5px; color: var(--faint); }
+/* 手动选择其它平台 */
+.alt-dl { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 12.5px; }
+.alt-dl .alt-label { color: var(--faint); }
+.alt-dl a {
+  position: relative;
+  color: var(--muted); font-weight: 700; text-decoration: none;
+  border-bottom: 1px dashed var(--border); padding-bottom: 1px; cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.alt-dl a + a::before { content: none; }
+.alt-dl a:not(:last-child)::after {
+  content: "·"; position: absolute; right: -11px; color: var(--faint); font-weight: 400;
+}
+.alt-dl a:hover { color: var(--primary); border-color: var(--primary); }
+.alt-dl a.current { color: var(--primary); border-color: transparent; }
+.alt-dl a.current::after { content: " ·当前"; font-size: 10.5px; opacity: .8; }
 
-    <!-- ===== 功能 ===== -->
-    <section id="features" class="border-t border-slate-200/70 bg-white py-20 dark:border-slate-800 dark:bg-slate-900/40 sm:py-24">
-      <div class="mx-auto max-w-6xl px-4 sm:px-6">
-        <div class="mx-auto max-w-2xl text-center">
-          <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">小身材,大能力</h2>
-          <p class="mt-3 text-slate-600 dark:text-slate-400">不只是一条待办栏:记录、提醒、换算、同步,一件不落。</p>
-        </div>
-        <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">贴边悬浮,一划即出</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">平时只显示一条细边把手,不挡任何窗口;鼠标靠近或快捷键即可展开完整待办面板。</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">日 / 周 / 月 / 节日</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">按天、按周、按月安排待办,内置万年历与法定节假日,重复事项、子任务、置顶一应俱全。</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">云端同步</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">一键同步到云端,换电脑、重装系统数据不丢;本地优先,离线也能正常记录。</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m-6 4h6m-6 4h2m-4 6h12a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">内置全能计算器</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">四则运算、日期差与工作日、年龄计算,还有实时汇率的货币换算与长度重量温度换算。</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1h6z"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">生日与纪念日提醒</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">重要日子提前提醒,当天只提醒一次不打扰;待办提醒精确到分钟,再也不会错过。</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-6 transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">字体背景随心换</h3>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">7 种字体、9 种精选背景(远山、星夜、赛博、动漫…),浅色深色双主题,面板宽度行高全部可调。</p>
-          </div>
-        </div>
-      </div>
-    </section>
+/* Hero 显示器动画（沿用 v1 思路，节奏微调） */
+.monitor { position: relative; }
+.monitor::before {
+  content: ""; position: absolute; inset: -24px; z-index: -1; border-radius: 44px;
+  background: linear-gradient(135deg, rgba(29,126,240,.22), rgba(245,158,11,.14));
+  filter: blur(34px);
+}
+.screen {
+  border-radius: 22px; background: #101319; padding: 10px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(15,23,42,.08);
+}
+.screen-inner { position: relative; aspect-ratio: 3/2; border-radius: 14px; overflow: hidden; }
+.screen-inner > img.wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.desktop-icon {
+  position: absolute; left: 12px; top: 12px; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: #fff; width: 60px; text-align: center;
+}
+.desktop-icon img { width: 40px; height: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.desktop-icon span { font-size: 10px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+.demo-panel {
+  position: absolute; right: 0; top: 0; z-index: 10; height: calc(100% - 40px);
+  transform: translateX(103%);
+  animation: dock 13s ease-in-out infinite; will-change: transform;
+}
+/* 贴边把手：对齐线上真实把手——白色圆角小凸台 + 左侧收起箭头 */
+.panel-handle {
+  position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 44px; border-radius: 11px 0 0 11px;
+  background: #fff; color: #7a8494;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: -2px 2px 8px rgba(15,23,42,.18), inset 0 0 0 1px rgba(15,23,42,.05);
+}
+.panel-handle svg { width: 11px; height: 11px; display: block; }
+@keyframes dock {
+  0%, 8%   { transform: translateX(103%); }
+  22%, 58% { transform: translateX(0); }
+  74%, 100%{ transform: translateX(103%); }
+}
+.demo-panel img { height: 100%; width: auto; border-radius: 12px 0 0 12px; box-shadow: -14px 8px 40px rgba(0,0,0,.4); }
+.taskbar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; height: 40px;
+  display: flex; align-items: center; padding: 0 14px;
+  background: rgba(255,255,255,.72); backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255,255,255,.5);
+}
+.taskbar .ticons { display: flex; align-items: center; gap: 14px; color: #475569; font-size: 15px; }
+.taskbar .clock { margin-left: auto; text-align: right; color: #475569; font-size: 10px; line-height: 1.25; font-weight: 700; }
+.monitor-stand { margin: 0 auto; height: 44px; width: 96px; background: linear-gradient(#cbd5e1, #94a3b8); clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%); }
+.monitor-base { margin: 0 auto; height: 9px; width: 200px; border-radius: 50%; background: linear-gradient(#cbd5e1, #64748b); box-shadow: 0 10px 22px rgba(15,23,42,.3); }
+@media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } .hero { padding-top: 100px; } }
 
-    <!-- ===== 界面预览 ===== -->
-    <section id="shots" class="py-20 dark:bg-slate-950 sm:py-24">
-      <div class="mx-auto max-w-6xl px-4 sm:px-6">
-        <div class="mx-auto max-w-2xl text-center">
-          <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">界面一览</h2>
-          <p class="mt-3 text-slate-600 dark:text-slate-400">真实应用截图,所见即所得。</p>
-        </div>
-      </div>
-      <div id="shotsStrip" class="shots-strip mt-12 overflow-x-auto">
-        <div class="flex w-max min-w-full items-start justify-center gap-5 px-6 py-2">
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/home-light.png" alt="TickTask 待办首页:日期条、置顶任务与提醒" class="block w-full" loading="lazy" width="680" height="1900" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">待办首页 · 日 / 周 / 月视图</figcaption>
-          </figure>
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/calculator.png" alt="内置计算器:基础计算、日期计算与单位换算" class="block w-full" loading="lazy" width="678" height="1900" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">内置计算器 · 计算 / 日期 / 换算</figcaption>
-          </figure>
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/birthday.png" alt="记节日:生日与纪念日提醒,农历公历、倒计时高亮" class="block w-full" loading="lazy" width="680" height="1900" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">记节日 · 生日 / 纪念日提醒</figcaption>
-          </figure>
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/huangli.png" alt="万年历:月历、农历、法定节假日与每日宜忌详情" class="block w-full" loading="lazy" width="380" height="1032" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">万年历 · 农历 / 节假日 / 宜忌</figcaption>
-          </figure>
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/salary.png" alt="牛马计薪器:今日已赚、日薪时薪、周薪月薪与发薪倒计时" class="block w-full" loading="lazy" width="380" height="1032" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">牛马计薪器 · 实时薪资 / 发薪倒计时</figcaption>
-          </figure>
-          <figure class="w-[240px] shrink-0 sm:w-[280px]">
-            <div class="shot-frame overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700">
-              <img src="./screenshots/settings-bg.png" alt="设置页面:多种背景、字体与外观自定义" class="block w-full" loading="lazy" width="678" height="1900" style="max-height:500px;object-fit:cover;object-position:top" />
-            </div>
-            <figcaption class="mt-3 text-center text-sm font-medium text-slate-600 dark:text-slate-400">待办设置 · 9 种背景 / 7 种字体</figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
+/* ============ 功能轮播（核心区块） ============ */
+.fx-section { padding: 88px 0 72px; position: relative; }
+.fx-head { text-align: center; margin-bottom: 44px; }
+.fx-kicker-line {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
+  letter-spacing: .18em; color: var(--primary); text-transform: uppercase;
+}
+.fx-kicker-line::before, .fx-kicker-line::after { content: ""; width: 26px; height: 2px; background: linear-gradient(90deg, transparent, var(--primary)); border-radius: 2px; }
+.fx-kicker-line::after { background: linear-gradient(90deg, var(--primary), transparent); }
+.fx-head h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 900; letter-spacing: -.02em; margin-top: 14px; }
+.fx-head p { margin-top: 12px; color: var(--muted); font-size: 15.5px; }
 
-    <!-- ===== 下载 + 安装指南 ===== -->
-    <section id="install" class="bg-gradient-to-b from-primary/5 to-transparent py-20 dark:from-primary/10 sm:py-24">
-      <div class="mx-auto max-w-4xl px-4 sm:px-6">
-        <div class="rounded-3xl border border-primary/15 bg-white p-8 shadow-xl shadow-primary/10 dark:border-slate-800 dark:bg-slate-900 sm:p-12">
-          <div class="text-center">
-            <img src="./logo.png" alt="TickTask 图标" class="mx-auto h-16 w-16 rounded-2xl object-cover shadow-lg shadow-primary/30" width="64" height="64" />
-            <h2 class="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">下载并安装到电脑</h2>
-            <p class="mt-2 text-slate-600 dark:text-slate-400">Windows 10 / 11 · 64 位 · 约 17 MB · <span id="install-version">v0.4.47</span></p>
-            <a href="./TickTask-setup.exe" download
-              class="mt-6 inline-flex items-center gap-2.5 rounded-2xl bg-primary px-8 py-4 text-lg font-bold text-white shadow-xl shadow-primary/35 transition hover:-translate-y-0.5 hover:bg-primary-dark">
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              下载 TickTask-setup.exe
-            </a>
-          </div>
+.fx-stage-wrap { position: relative; }
+.fx-stage {
+  position: relative; height: 560px; perspective: 1500px; perspective-origin: 50% 42%;
+  touch-action: pan-y; cursor: grab;
+}
+.fx-stage.dragging { cursor: grabbing; }
+.fx-slide {
+  position: absolute; left: 50%; top: 0; width: min(1180px, 94vw); height: 100%;
+  transform-style: preserve-3d; will-change: transform, opacity;
+  transition: transform .75s cubic-bezier(.22,.85,.3,1.02), opacity .55s ease, filter .55s ease;
+}
+.fx-stage.dragging .fx-slide { transition: none; }
+.fx-card {
+  height: 100%; border-radius: 28px; display: grid;
+  grid-template-columns: 1fr 552px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+.fx-card::before {
+  content: ""; position: absolute; inset: 0; border-radius: 28px; pointer-events: none;
+  background: radial-gradient(520px 260px at 88% 0%, var(--accent-soft), transparent 72%);
+}
+/* 左栏：文案 */
+.fx-info { padding: 40px 44px 40px 46px; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 2; }
+.fx-info > * { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
+.fx-slide.is-active .fx-info > * { opacity: 1; transform: none; }
+.fx-slide.is-active .fx-info > *:nth-child(1) { transition-delay: .12s; }
+.fx-slide.is-active .fx-info > *:nth-child(2) { transition-delay: .20s; }
+.fx-slide.is-active .fx-info > *:nth-child(3) { transition-delay: .28s; }
+.fx-slide.is-active .fx-info > *:nth-child(4) { transition-delay: .36s; }
+.fx-slide.is-active .fx-info > *:nth-child(5) { transition-delay: .44s; }
+.fx-slide.is-active .fx-info > *:nth-child(6) { transition-delay: .52s; }
 
-          <ol class="mt-10 grid gap-6 sm:grid-cols-3">
-            <li class="relative rounded-2xl bg-slate-50 p-5 dark:bg-slate-800/60">
-              <span class="absolute -top-3 left-5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">1</span>
-              <h3 class="mt-2 font-bold text-slate-900 dark:text-white">下载安装包</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">点击上方按钮下载 <code class="rounded bg-slate-200 px-1 py-0.5 text-xs dark:bg-slate-700">TickTask-setup.exe</code>。</p>
-            </li>
-            <li class="relative rounded-2xl bg-slate-50 p-5 dark:bg-slate-800/60">
-              <span class="absolute -top-3 left-5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">2</span>
-              <h3 class="mt-2 font-bold text-slate-900 dark:text-white">双击运行</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">按安装向导点击"下一步",默认安装到当前用户目录,<b>无需管理员权限</b>。</p>
-            </li>
-            <li class="relative rounded-2xl bg-slate-50 p-5 dark:bg-slate-800/60">
-              <span class="absolute -top-3 left-5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">3</span>
-              <h3 class="mt-2 font-bold text-slate-900 dark:text-white">开始使用</h3>
-              <p class="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">安装完成后从开始菜单或桌面启动 <b>TickTask</b>,它就会安静地贴在屏幕右缘。</p>
-            </li>
-          </ol>
+.fx-tag {
+  display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+  background: var(--accent-soft); color: var(--accent-strong);
+  font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+  padding: 7px 14px; border-radius: 999px;
+}
+.fx-tag .num { font-size: 11px; opacity: .75; letter-spacing: .12em; }
+.fx-tag svg { width: 16px; height: 16px; }
+.fx-pro {
+  margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff;
+  padding: 3px 9px; border-radius: 999px;
+}
+.fx-title { font-size: 30px; font-weight: 900; letter-spacing: -.02em; line-height: 1.25; margin-top: 18px; }
+.fx-slogan {
+  margin-top: 8px; font-size: 15px; font-weight: 800;
+  background: linear-gradient(92deg, var(--accent-strong), var(--accent-strong-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.fx-desc { margin-top: 14px; font-size: 14.5px; color: var(--muted); line-height: 1.75; }
+.fx-points { list-style: none; margin-top: 18px; display: grid; gap: 9px; }
+.fx-points li {
+  display: flex; gap: 10px; font-size: 13.8px; color: var(--muted); line-height: 1.5;
+}
+.fx-points li::before {
+  content: "✓"; flex: none; width: 20px; height: 20px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent-strong);
+  border-radius: 7px; font-size: 12px; font-weight: 900;
+}
+.fx-tip {
+  margin-top: 20px; font-size: 12.8px; color: var(--faint);
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(148,163,184,.09); border: 1px dashed var(--border);
+}
+.fx-tip b { color: var(--muted); }
 
-          <div class="mt-8 rounded-2xl border border-amber-300/50 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-500/10" role="note">
-            <p class="flex items-start gap-2.5 text-sm leading-relaxed text-amber-900 dark:text-amber-200">
-              <svg class="mt-0.5 h-5 w-5 flex-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-              <span><b>安装提示:</b>安装包暂未进行付费代码签名,首次运行时若出现 <b>"Windows 已保护你的电脑"</b> 提示,请点击 <b>"更多信息" → "仍要运行"</b> 即可正常安装。这是未签名软件的正常提示,不代表文件有问题。</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
+/* 右栏：截图展示 */
+.fx-shot {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  padding: 24px; overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(148,163,184,.06), transparent 40%),
+    radial-gradient(420px 300px at 50% 88%, var(--accent-soft), transparent 75%);
+}
+/* 截图框：宽度由 --shot-w 决定，高度按 --ar 等比推出（绝不拉伸变形） */
+.fx-shot-frame {
+  position: relative;
+  width: min(var(--shot-w, 430px), 100%);
+  aspect-ratio: var(--ar, 430/576);
+  height: auto; flex: none;
+  border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 26px 52px -20px rgba(15,23,42,.42), 0 0 0 5px rgba(255,255,255,.55);
+  background: #fff;
+}
+[data-theme="dark"] .fx-shot-frame { box-shadow: 0 26px 52px -20px rgba(0,0,0,.8), 0 0 0 5px rgba(255,255,255,.05); background: #0b1120; }
+.fx-shot-frame img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+/* 竖向长截图只取上半部分，底部柔和收尾，避免生硬裁断（完整截图不加此遮罩） */
+.fx-shot-frame.crop::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 58px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.9));
+  pointer-events: none;
+}
+[data-theme="dark"] .fx-shot-frame.crop::after { background: linear-gradient(180deg, transparent, rgba(11,17,32,.9)); }
+/* GIF 徽标：提示此处在正式版将替换为 GIF 动图 */
+.gif-badge {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  background: rgba(10, 15, 28, .78); color: #fff; backdrop-filter: blur(6px);
+  font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); z-index: 3;
+}
+.gif-badge .play {
+  width: 18px; height: 18px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, #2e8df6, #1d7ef0);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.gif-badge .play::before {
+  content: ""; border-left: 6px solid #fff; border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent; margin-left: 2px;
+}
+/* ===== 界面示意：这三项暂无真机截图，用 HTML 按真实界面还原（矢量呈现，最清晰） ===== */
+.fx-shot-frame.mock { background: #fff; }
+.shot-ui { height: 100%; display: flex; flex-direction: column; background: linear-gradient(180deg,#fff,#f7f5ff); color: #1f2937; font-size: 11.5px; line-height: 1.5; }
+.shot-ui .ui-bar { display: flex; align-items: center; gap: 7px; padding: 10px 13px; background: #fff; border-bottom: 1px solid rgba(15,23,42,.07); }
+.shot-ui .ui-title { font-weight: 800; font-size: 12.5px; color: #0f172a; }
+.shot-ui .ui-badge { margin-left: auto; font-size: 9.5px; font-weight: 800; color: #64748b; background: #f1f5f9; border-radius: 6px; padding: 2px 6px; }
+.shot-ui .ui-body { flex: 1; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; overflow: hidden; }
+.ui-search { display: flex; align-items: center; gap: 6px; background: #f1f4f9; border-radius: 9px; padding: 6px 9px; color: #9aa8bf; font-size: 10.5px; }
+.ui-row { display: flex; gap: 8px; align-items: flex-start; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; padding: 8px 9px; box-shadow: 0 2px 6px rgba(15,23,42,.045); }
+.ui-row .k { flex: none; width: 19px; height: 19px; border-radius: 6px; background: #eef2f8; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #64748b; }
+.ui-row .t { flex: 1; min-width: 0; }
+.ui-row .t b { display: block; font-size: 11px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-row .t span { font-size: 10px; color: #9aa8bf; }
+.ui-row .hint { flex: none; font-size: 9px; font-weight: 800; color: #2563eb; background: #e8f0fe; border-radius: 5px; padding: 2px 5px; }
+.ui-row.skipped { background: #fafbfd; border-style: dashed; color: #9aa8bf; }
+.ui-row.skipped b { color: #9aa8bf; font-weight: 700; }
+/* 便利签 */
+.ui-notes { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 7px; height: 100%; }
+.ui-note { border-radius: 11px; padding: 9px 10px; font-size: 10.5px; line-height: 1.6; box-shadow: 0 3px 9px rgba(15,23,42,.07); display: flex; flex-direction: column; }
+.ui-note b { display: block; font-size: 10.5px; margin-bottom: 3px; }
+.ui-note .pin { float: right; font-size: 9px; opacity: .65; }
+.ui-note .ck { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.ui-note .ck i { width: 8px; height: 8px; border-radius: 2.5px; border: 1.4px solid rgba(15,23,42,.35); display: inline-block; }
+.ui-note .ck.done { text-decoration: line-through; opacity: .5; }
+.ui-note .ck.done i { background: #2563eb; border-color: #2563eb; }
+/* 截图贴图 */
+.ui-desk { position: relative; flex: 1; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg,#dbeafe,#ede9fe 55%,#fce7f3); }
+.ui-sel { position: absolute; left: 14%; top: 18%; width: 56%; height: 40%; border: 1.6px dashed #2563eb; background: rgba(37,99,235,.07); border-radius: 3px; }
+.ui-sel::before { content: "1280 × 640"; position: absolute; top: -19px; left: -1px; font-size: 9px; font-weight: 800; color: #fff; background: #2563eb; border-radius: 5px 5px 0 0; padding: 2px 6px; }
+.ui-toolbar { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; background: rgba(15,23,42,.82); backdrop-filter: blur(4px); padding: 5px 7px; border-radius: 9px; }
+.ui-toolbar span { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: #fff; font-size: 9.5px; background: rgba(255,255,255,.14); }
+.ui-pin { position: absolute; right: 9%; bottom: 14%; width: 40%; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 22px -8px rgba(15,23,42,.5), 0 0 0 3px #fff; background: #fff; }
+.ui-pin .ph { height: 44px; background: linear-gradient(135deg,#93c5fd,#c4b5fd); }
+.ui-pin .pt { font-size: 8.5px; font-weight: 700; color: #475569; padding: 3px 5px; display: flex; align-items: center; gap: 3px; }
+/* 漂浮标注气泡（示意截图里的重点） */
+.float-chip {
+  position: absolute; z-index: 4; display: inline-flex; align-items: center; gap: 7px;
+  background: var(--card); border: 1px solid var(--border);
+  box-shadow: 0 12px 28px -10px rgba(15,23,42,.3);
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  padding: 8px 13px; border-radius: 12px;
+  animation: floaty 4.5s ease-in-out infinite;
+}
+.float-chip .fc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-strong); flex: none; }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.float-chip.fc1 { top: 16%; right: 12%; animation-delay: .3s; }
+.float-chip.fc2 { bottom: 18%; left: 10%; }
 
-    <!-- ===== 版本更新 ===== -->
-    <section id="changelog" class="border-t border-slate-200/70 bg-white py-20 dark:border-slate-800 dark:bg-slate-900/40 sm:py-24">
-      <div class="mx-auto max-w-3xl px-4 sm:px-6">
-        <div class="mx-auto max-w-2xl text-center">
-          <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">版本更新</h2>
-          <p class="mt-3 text-slate-600 dark:text-slate-400">持续迭代,每个版本的改动都记录在这里。</p>
-        </div>
-        <ol id="changelog-list" class="relative mt-12 space-y-12 border-l-2 border-slate-200 pl-8 dark:border-slate-800">
-          <!-- 静态回退内容:云端接口可用时会被最新数据替换 -->
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.47</h3>
-              <span class="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary dark:bg-primary/20">最新</span>
-              <time class="text-xs text-slate-400" datetime="2026-10-24">2026-10-24</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">便利签（桌面便签）功能上线</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>新增「便利签」功能（会员专属）：快捷键一键创建桌面便签，最多同时显示 12 张、总计 50 张上限</li>
-              <li>便签支持勾选划线、增删改、一键转待办；6 色换肤 + 透明度滑条自定义；可钉住置顶、自由拖动、调大小</li>
-              <li>启动恢复：未删除便签关机/重启后按上次位置自动贴回桌面（多屏回原屏）；删除即撕且写墓碑双写，杜绝重启后已删便签复活</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.45</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-23">2026-10-23</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">截图去全屏 + 重复事项可跳过法定节假日</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>截图顶部操作栏去掉冗余的「全屏」选项（与窗口截取完全一致），选区蓝色边框加粗（线宽 2→4），截图状态更醒目</li>
-              <li>添加事项弹窗新增「跳过法定节假日」开关：重复事项可配置节假日当天不生成，标签自动追加「（节假日除外）」，内置 2024–2026 年国务院法定节假日数据</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.43</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-23">2026-10-23</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">托盘菜单中文化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>托盘右键菜单选项由英文改为中文：「打开 / 关闭 TickTask」「设置」「退出 TickTask」，更符合中文用户习惯</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.42</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-23">2026-10-23</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">窗口开关快捷键支持自定义</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>设置页「窗口」分组新增「打开/关闭窗口快捷键」文本框，交互与截图快捷键完全一致：双击进入编辑、录制组合键、✓/✕ 保存、实时冲突校验、toast 提示</li>
-              <li>新快捷键即时生效并持久保存，重启后仍有效；始终保留 Ctrl+Alt+T 作为备用呼出键，避免误改后无法呼出窗口</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.41</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-23">2026-10-23</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">截图/贴图体验打磨：消除闪屏弹动 + 贴图穿透控制条</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>彻底消除快捷键触发截图时的开始闪屏与退出截图时的弹动，进入/退出截图过渡无感</li>
-              <li>贴图展示优化：选中贴图显示蓝色边框、未选中显示灰色边框（参考 PixPin），边框带柔光阴影，一眼分辨贴图位置</li>
-              <li>贴图新增鼠标穿透控制条：开启穿透后悬浮独立控制条，支持拖拽移动贴图、调节不透明度、一键关闭，并附操作提示气泡</li>
-              <li>贴图滚轮改为以中心缩放（透明度调节移至 +/- 键与穿透控制条滑条）</li>
-              <li>修复截图/贴图启用开关显示与快捷键注册不同步（重启应用后设置正确回显）</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.40</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-23">2026-10-23</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">截图大升级：标注工具栏 + 选区拖动 + 贴图修复</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>新增截图标注工具栏：箭头、画笔、矩形、椭圆、序号、文字、马赛克、橡皮擦，支持撤销/清空、多色板与粗细调节</li>
-              <li>确认选区后可整体拖动平移；修复缩放手柄调整后选区外暗罩消失</li>
-              <li>修复贴图失败（坐标取整 + 大图改为内存暂存避免本地存储溢出）；设置页重构：快捷键缩写显示、双击编辑、保存改为 toast 提示、配置更新/重启后自动保留</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.38</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-22">2026-10-22</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">修复:彻底解决计薪器桌面组件不显示</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>根因:0.4.34 起主窗口承载录音机麦克风授权后,与组件窗口的 WebView2 浏览器参数不一致,导致组件窗口创建被系统拒绝(此前错误被静默吞掉,无法定位)</li>
-              <li>已让组件窗口与主窗口使用完全一致的环境参数,组件创建不再失败,启用即正常显示</li>
-              <li>加固诊断:组件创建失败的原因现写入日志;万一残留死句柄,自动换用备用窗口标识重建,启用后明确告知成功或失败</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.37</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-22">2026-10-22</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">修复:桌面组件显示与顶栏自适应</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>修复桌面组件启用后可能不显示的问题:启用时组件短暂置顶展示,不再被其它窗口挡住</li>
-              <li>组件启用结果以明确提示告知用户,窗口创建失败不再静默无感</li>
-              <li>顶栏功能入口图标随面板宽度自适应收紧间距,面板最窄时「录音机/计薪器/计算器/黄历/同步/设置」全部完整可见</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.36</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-22">2026-10-22</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">体验优化:提示文案与组件降级修复</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>精简非会员单日新建上限的提示文案,更短更清晰</li>
-              <li>计薪器页面所有提示显示几秒后自动消失,不再有常驻提示;「桌面组件为会员功能」仅在点击开关时触发</li>
-              <li>修复会员降级(试用结束)后桌面组件的处理:组件走正常关闭路径,开关同步显示为关闭,不再出现「启用中置灰不可点」的割裂状态</li>
-              <li>重新开通会员后可再次启用桌面组件,位置与风格记忆保留</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.35</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-22">2026-10-22</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">紧急修复 0.4.34 主界面报错</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>0.4.34 安装后主界面可能显示「出现异常,已停止渲染」(React #185 无限重渲染)</li>
-              <li>根因:会员状态订阅的快照函数每次返回新对象,触发 React 无限重渲染</li>
-              <li>修复:快照改为按本地存储原始串缓存,引用稳定后循环消失</li>
-              <li>仅修复此问题,录音机与会员限制功能与 0.4.34 一致</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.34</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-22">2026-10-22</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">新增录音机 + 会员体系</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>顶部牛马计薪器左侧新增录音入口,二级页含一键录音与录音记录管理</li>
-              <li>音频存为 mp3 保存在「文档\TickTask录音」,仅存本地不上云,可搜索、重命名、备注、定位、删除</li>
-              <li>支持暂停续录,单条最长 2 小时(1 小时 55 分提醒后自动保存);双击即可用系统默认播放器回放</li>
-              <li>麦克风授权自动应答,遇权限问题可一键跳转 Windows 隐私设置;拔麦自动保存,录音不丢</li>
-              <li>试用期结束且未激活时,6 项功能受限:云端上传与恢复、计薪器桌面组件、子任务与下级、单日新建事项(上限 3 条)、待办提醒、新增生日与纪念日</li>
-              <li>受限入口不隐藏、不置灰,点击后提示「此为会员功能,开通会员后可无限制使用」</li>
-              <li>已有数据完整保留:已有子任务、提醒、生日与纪念日仍可查看、编辑和删除,仅禁止新增</li>
-              <li>激活会员或重新登录后立即恢复全部功能,云端同步自动续上</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.33</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">修复计薪组件显示在屏幕外</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>更新工具、拔插副屏或分辨率/DPI 变化后,组件保存的历史位置可能落在可见屏幕之外,导致窗口存在但桌面看不见</li>
-              <li>启动时会校验位置是否仍在任一显示器内,失效则自动居中到桌面中央,不再被藏到屏幕外</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.32</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">弹层体验修复与设置持久化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>任务「处理日期」的日期选择面板改为自绘月历,完整显示不再被窗口边缘截断</li>
-              <li>提醒时间选择器同步换成同款自绘弹层(日期 + 时/分),完整显示不截断</li>
-              <li>计薪设置改为本地持久化:更新工具后自动恢复,无需重新填写</li>
-              <li>修复自绘弹层背景偶发透明、页面文字透出的显示问题</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.31</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">今日状态体验打磨</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>牛马寄语完整显示,不再截断省略:奶牛萌卡保持 3 行(短句智能同行),小马宽屏一行一句最多 5 行,暖阳三栏一行一句最多 4 行</li>
-              <li>今日状态改为仅点击标题旁铅笔图标弹窗,点卡片其他区域不再误触发</li>
-              <li>动态小字更直观:午休回血显示「正在回血 X 分钟」(已休息时长递增),等饭中为距干饭递减倒计时</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.30</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件上新「今日状态」</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>三套桌面组件的「今日已赚」卡片升级为「今日状态」,不再显示金额,薪资隐私不出屏</li>
-              <li>8 种状态按时段自动切换:刚出土 / 疯狂搬砖 / 等饭中 / 午休回血 / 电量耗尽 / 带薪发呆 / 冲刺下班 / 下班自由,时段跟随用户上下班与午休配置</li>
-              <li>动态小字实时变化:距干饭 / 距下班倒计时、已专注时长、已硬撑 / 已发呆趣味计时;吐槽语录每 8 秒轮换</li>
-              <li>「带薪发呆」每天下午 15:00 前后随机出现一次,持续 10 分钟</li>
-              <li>点击状态卡(或标题旁铅笔图标)手动切换状态并持久化,可一键恢复自动切换</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.29</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件细节回归参考图</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>奶牛萌卡:花束贴齐下班倒计时卡片右下角(溢出部分被组件边缘自然裁切);寄语气泡加长减高并与奶牛行居中对齐;奶牛与气泡整体右移 8px</li>
-              <li>小马宽屏:小马插图再右移 5px</li>
-              <li>暖阳三栏:寄语卡背景改为参考图的浅奶油底,插画大幅渐隐融合;寄语正文字体继续调大</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.28</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件比例微调</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>奶牛萌卡:整体高度压扁(窗口 398→344),奶牛缩小为原来的 60% 且贴顶,寄语框与其等高</li>
-              <li>奶牛萌卡:右下角花束移回下班倒计时卡片右下角</li>
-              <li>小马宽屏:小马插图缩小为原来的 80% 并右移 5px,不再挤占寄语文案</li>
-              <li>暖阳三栏:寄语卡加宽(比右侧卡片宽 15%),寄语正文字体调大</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.27</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件细节打磨</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>奶牛萌卡:顶部间距压缩,进度环随卡片高度自适应放大,「今日进度达成」标签紧贴金额下方</li>
-              <li>奶牛萌卡:右下角花束缩小为一半并移出倒计时卡,压在组件右下角(参考图样式)</li>
-              <li>小马宽屏:小马插图放大并水平居中,消除左侧空旷感</li>
-              <li>暖阳三栏:寄语正文改手写体并增加上边距;金额与时分秒数值改为卡片内垂直居中</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.26</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件排版精细化校准</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>奶牛萌卡:已赚/倒计时双卡改 4:3 比例,金额卡片内居中,进度标签改「今日进度达成X%」并水平居中</li>
-              <li>奶牛萌卡:进度环加大贴近卡片底部,「加油！马上下班啦！」两行移入圆环内;寄语气泡改手写体三行并收短;右下角改为一束花置于倒计时卡角</li>
-              <li>小马宽屏:整体高度压扁,寄语卡 4:3,文案在小马左侧、「加油！打工人！」在小马上方,右侧双卡压缩且数值间距加大</li>
-              <li>暖阳三栏:整体高度压扁,寄语卡背景与插画统一(消除上白下图割裂感),标题缩小,金额/时分秒水平居中且上边距加大</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.25</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件三套样式深度复刻参考图</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>外层升级为半透明磨砂玻璃质感,内层卡片更亮、层次分明(三套样式通用)</li>
-              <li>吉祥物全面升级为 3D 渲染图:小马宽屏(打工人头带+笔记本+书堆+咖啡)、奶牛萌卡(winking 招手奶牛)、暖阳三栏(牛牛伏案场景插画)</li>
-              <li>倒计时改为「数字 + 小时/分钟/秒」一一对应的三列布局,标签直接对齐各自数字</li>
-              <li>暖阳三栏对齐参考图:今日已赚绿色金额+柱状图+工作时长/时薪页脚、倒计时进度条+百分比、寄语卡带日期与牛牛插画</li>
-              <li>修复「下班倒计时」标题折行等排版细节</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.24</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-21">2026-10-21</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件按参考图校准 · 设置页新增样式预览</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>奶牛萌卡宽高比对齐参考图(不再窄高),今日已赚/下班倒计时卡片布局更宽松,倒计时进度环更大</li>
-              <li>奶牛萌卡补齐左上/右下花朵装饰;小马宽屏放大小马吉祥物并加书堆咖啡点缀;暖阳三栏新增日期、今日工作时长、时薪</li>
-              <li>组件不再置顶:不再悬浮盖住其他软件界面,回归普通桌面窗口层级</li>
-              <li>根治四角直角裁剪痕迹:窗口四周留透明边距,圆角与阴影完整渲染</li>
-              <li>设置页桌面组件样式选项改为「预览图 + 文字」卡片,所见即所得</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.23</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-20">2026-10-20</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">桌面组件样式重设计 · 修复网页框</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>修复桌面组件外围出现「网页框」(白底+滚动条)的问题,整卡铺满窗口无边框</li>
-              <li>三套组件样式按参考图 1:1 复刻:奶牛萌卡(粉紫奶油)/ 小马宽屏(浅蓝玻璃)/ 暖阳三栏(奶油白),各有专属吉祥物插画</li>
-              <li>组件默认居中于主窗口所在屏幕,可拖动记忆位置,自动避让右缘 Dock 把手区</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.22</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-20">2026-10-20</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">修复桌面组件导致的点击无响应</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>修复启用桌面组件后,主程序左侧把手点击无响应的问题(根因:主线程内联创建窗口死锁,现改为独立线程创建)</li>
-              <li>修复桌面组件不显示、但进程中存在的问题(同一根因,组件窗口渲染树未挂载完成)</li>
-              <li>组件现默认居中于主窗口所在屏幕桌面中央,切换风格即时生效、无需重建窗口</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.4.21</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-20">2026-10-20</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">牛马计薪器 · 桌面组件</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>新增独立桌面悬浮组件:常驻显示「今日已赚 / 下班倒计时 / 今日寄语」三字段</li>
-              <li>三种风格可选(杂志标签 / 竖排卡片 / 横条胶囊),默认杂志标签</li>
-              <li>启用后悬浮桌面中央,可自由拖动并记忆位置,自动避开右缘 Dock 把手区</li>
-              <li>配置随计薪设置本地保存,开机自启自动还原</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary ring-4 ring-white dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.5</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-16">2026-10-16</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">会员状态同步与体验优化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>修复:后台激活/兑换激活码后,工具端会员状态未即时更新的问题——启动与打开设置页时自动同步云端状态</li>
-              <li>管理后台:本地缓存优先加载,切换菜单无需等待;图表悬浮显示数据浮窗</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.4</h3>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">激活码兑换与数据埋点</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>设置页新增激活码输入:兑换后升级会员,永久全功能</li>
-              <li>匿名数据埋点:启动 / 页面访问 / 功能点击,用于产品改进(不含任何任务内容)</li>
-              <li>本地队列批量上报,断网不丢,恢复后自动补发</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.3</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-15">2026-10-15</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">体验优化与本地存储</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>头像 / 昵称修改提示移至页面顶部并自动消失</li>
-              <li>保存昵称头像改为本地即时生效 + 云端异步静默同步</li>
-              <li>同步设置精简:去掉启用开关,自动同步关闭时收起间隔选项</li>
-              <li>官网版本记录默认仅显示 3 条,可展开查看全部</li>
-              <li>新增本地数据存储路径设置,可自定义数据目录</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.2</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-15">2026-10-15</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">同步与账号体验优化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>头像 / 昵称修改成功改为 toast 提示</li>
-              <li>退出登录增加确认弹窗</li>
-              <li>同步去掉手动配置的服务地址与访问令牌,登录即用</li>
-              <li>关闭每次增删改的即时同步,改为定时 + 手动同步</li>
-              <li>数据按用户严格隔离</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.1</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-14">2026-10-14</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">账户中心升级</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>设置页账户区改为头像 + 昵称布局,未登录显示默认头像与「未登录」</li>
-              <li>登录 / 注册 / 找回密码统一为弹窗,支持自定义头像与昵称</li>
-              <li>修复获取验证码偶发 500 的建表问题,同步服务更稳定</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.2.0</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-14">2026-10-14</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">账号系统上线</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>新增账号系统:邮箱注册 / 登录 / 修改密码</li>
-              <li>云同步改用登录令牌,数据按账号隔离,无需手填同步令牌</li>
-              <li>设备管理:最多 3 台设备,支持远程解绑</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.1.9</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-14">2026-10-14</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">同步修复与体验优化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>修复老版本云端数据库导致的同步失败</li>
-              <li>同步失败时显示服务器返回的具体原因</li>
-              <li>下载页界面一览支持大图横向滚动浏览</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.1.6</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-13">2026-10-13</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">全新外观与同步优化</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>全新应用图标与官网配色</li>
-              <li>设置页新增赛博、动漫两款精选背景</li>
-              <li>自动同步间隔可选 5 分钟至 12 小时</li>
-              <li>官网新增版本更新记录页面</li>
-            </ul>
-          </li>
-          <li class="relative">
-            <span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white dark:bg-slate-600 dark:ring-slate-900" aria-hidden="true"></span>
-            <div class="flex flex-wrap items-center gap-3">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">v0.1.5</h3>
-              <time class="text-xs text-slate-400" datetime="2026-10-12">2026-10-12</time>
-            </div>
-            <p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">首个公开版本</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              <li>贴边悬浮待办栏,鼠标一划即出</li>
-              <li>日 / 周 / 月视图与万年历节假日</li>
-              <li>生日与纪念日提醒</li>
-              <li>内置计算器:计算、日期、汇率换算</li>
-              <li>多设备云同步</li>
-              <li>自定义字体与背景</li>
-            </ul>
-          </li>
-        </ol>
-        <div class="mt-10 text-center">
-          <button
-            id="changelog-expand"
-            type="button"
-            class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            style="display: none"
-          >
-            展开全部版本
-          </button>
-        </div>
-      </div>
-    </section>
+/* 左右箭头 */
+.fx-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 30;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--border); color: var(--muted);
+  font-size: 20px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 26px -10px rgba(15,23,42,.3);
+  transition: all .2s;
+}
+.fx-arrow:hover { color: #fff; background: var(--primary); border-color: var(--primary); transform: translateY(-50%) scale(1.08); }
+.fx-arrow.prev { left: -8px; }
+.fx-arrow.next { right: -8px; }
+@media (min-width: 1400px) { .fx-arrow.prev { left: -34px; } .fx-arrow.next { right: -34px; } }
 
-    <!-- ===== FAQ ===== -->
-    <section id="faq" class="py-20 sm:py-24">
-      <div class="mx-auto max-w-3xl px-4 sm:px-6">
-        <div class="text-center">
-          <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">常见问题</h2>
-        </div>
-        <div class="mt-10 space-y-4">
-          <details class="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" open>
-            <summary class="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
-              TickTask 是免费的吗?
-              <svg class="faq-chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-            </summary>
-            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">目前完全免费使用,全部功能(含计算器、云同步、自定义外观)均无限制。</p>
-          </details>
-          <details class="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <summary class="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
-              我的数据存在哪里?安全吗?
-              <svg class="faq-chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-            </summary>
-            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">数据默认保存在你自己的电脑上(本地优先);开启云同步后才会加密传输到你自己的云端服务,不上传给任何第三方。</p>
-          </details>
-          <details class="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <summary class="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
-              为什么安装时 Windows 会弹出安全提示?
-              <svg class="faq-chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-            </summary>
-            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">因为安装包还没有购买付费的代码签名证书。SmartScreen 提示是所有未签名软件都会遇到的,点击"更多信息 → 仍要运行"即可继续安装。</p>
-          </details>
-          <details class="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <summary class="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
-              支持哪些系统?会常驻后台拖慢电脑吗?
-              <svg class="faq-chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-            </summary>
-            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">支持 Windows 10 / 11(64 位)。TickTask 采用原生框架打造,内存占用极低,平时只渲染一条细边,几乎不消耗资源。</p>
-          </details>
-          <details class="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <summary class="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
-              之后会有 macOS 版吗?
-              <svg class="faq-chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-            </summary>
-            <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">在计划中。应用基于跨平台框架开发,macOS 版本会稍后推出,敬请期待。</p>
-          </details>
-        </div>
-      </div>
-    </section>
-  </main>
+/* 自动播放进度条 */
+.fx-progress { height: 4px; border-radius: 99px; background: rgba(148,163,184,.22); margin: 26px auto 0; max-width: 240px; overflow: hidden; }
+.fx-progress span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--primary), var(--accent)); }
+.fx-progress span.run { animation: fxprogress 9s linear forwards; }
+@keyframes fxprogress { from { width: 0; } to { width: 100%; } }
+.fx-progress.paused span { animation-play-state: paused; }
 
-  <!-- ===== 页脚 ===== -->
-  <footer class="border-t border-slate-200/70 py-10 dark:border-slate-800">
-    <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 text-center sm:px-6">
-      <a href="#hero" class="flex items-center gap-2">
-        <img src="./logo.png" alt="TickTask" class="h-7 w-7 rounded-lg object-cover" width="28" height="28" />
-        <span class="font-bold">TickTask</span>
-      </a>
-      <p class="text-sm text-slate-500 dark:text-slate-400">本地优先的桌面待办工具 · 让重要的事,贴在看得见的地方</p>
-      <p class="text-xs text-slate-400 dark:text-slate-500">© <span id="year">2026</span> TickTask. All rights reserved.</p>
-    </div>
-  </footer>
 
-  <script>
-    // 深色模式切换
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-      const dark = document.documentElement.classList.toggle('dark')
-      localStorage.setItem('todobar-site-theme', dark ? 'dark' : 'light')
-    })
-    // 版权年份
-    document.getElementById('year').textContent = new Date().getFullYear()
+/* 功能切换胶囊栏（轮播下方的 8 个功能选项） */
+.fx-pills {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  margin-top: 24px;
+}
+.fx-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 999px;
+  font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+  color: var(--muted); background: var(--card);
+  border: 1px solid var(--border); cursor: pointer;
+  transition: color .22s, background .22s, border-color .22s, transform .22s, box-shadow .22s;
+}
+.fx-pill .p-ico { width: 15px; height: 15px; flex: none; display: block; }
+.fx-pill:hover {
+  color: var(--primary); border-color: rgba(29,126,240,.42);
+  transform: translateY(-2px); box-shadow: 0 10px 20px -12px rgba(29,126,240,.55);
+}
+.fx-pill.active {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, var(--primary), #38bdf8);
+  box-shadow: 0 12px 24px -12px rgba(29,126,240,.8);
+}
+.fx-pill.active .p-ico { opacity: .95; }
 
-    // ===== 版本更新记录:云端读取(失败时保留页面内置的静态回退内容) =====
-    const RELEASE_APIS = [
-      '/api/releases',                                         // todobar.tuanzhang.site 同源
-      'https://sync.tuanzhang.site/api/releases',              // 自定义同步域名
-      'https://todobar-sync.level1232.workers.dev/api/releases' // workers.dev 兜底
-    ]
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-    }
-    // 版本记录默认最多展示 3 条;点击「展开全部版本」在当前页展开历史全部。
-    let allReleases = []
-    let releasesExpanded = false
+.fx-hint { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--faint); }
+.fx-hint kbd {
+  font-family: inherit; font-size: 11px; font-weight: 800; padding: 2px 7px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--muted);
+  box-shadow: 0 2px 0 var(--border);
+}
 
-    function itemHtml(rel, i) {
-      const items = (rel.items || []).map((it) => '<li>' + esc(it) + '</li>').join('')
-      const badge = i === 0 ? '<span class="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary dark:bg-primary/20">最新</span>' : ''
-      const dot = i === 0 ? 'bg-primary ring-white dark:ring-slate-900' : 'bg-slate-300 ring-white dark:bg-slate-600 dark:ring-slate-900'
-      return (
-        '<li class="relative">' +
-        '<span class="absolute -left-[41px] top-1 flex h-5 w-5 items-center justify-center rounded-full ring-4 ' + dot + '" aria-hidden="true"></span>' +
-        '<div class="flex flex-wrap items-center gap-3">' +
-        '<h3 class="text-xl font-bold text-slate-900 dark:text-white">v' + esc(rel.version) + '</h3>' + badge +
-        '<time class="text-xs text-slate-400" datetime="' + esc(rel.release_date) + '">' + esc(rel.release_date) + '</time>' +
-        '</div>' +
-        '<p class="mt-1.5 font-semibold text-slate-800 dark:text-slate-200">' + esc(rel.title) + '</p>' +
-        (items ? '<ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">' + items + '</ul>' : '') +
-        '</li>'
-      )
-    }
-
-    function paintReleases(list) {
-      const ol = document.getElementById('changelog-list')
-      if (!ol) return
-      const data = list && list.length ? list : null
-      if (data) {
-        ol.innerHTML = data.map((rel, i) => itemHtml(rel, i)).join('')
-      }
-      const nodes = Array.from(ol.children)
-      const showAll = releasesExpanded || nodes.length <= 3
-      nodes.forEach((li, i) => {
-        li.style.display = showAll || i < 3 ? '' : 'none'
-      })
-      const btn = document.getElementById('changelog-expand')
-      if (!btn) return
-      if (nodes.length <= 3) {
-        btn.style.display = 'none'
-      } else {
-        btn.style.display = ''
-        btn.textContent = releasesExpanded ? '收起' : '展开全部版本'
-        btn.onclick = () => {
-          releasesExpanded = !releasesExpanded
-          paintReleases(allReleases)
-        }
-      }
-    }
-
-    function renderReleases(list) {
-      allReleases = list
-      const latest = 'v' + list[0].version
-      // 徽章以同源 version.json(实际安装包版本)为准,仅当云端版本不落后时才跟随云端
-      if (window.__siteVersion && window.__siteVersion.isNewerOrEqual(list[0].version)) {
-        const badge = document.getElementById('latest-version')
-        if (badge) badge.textContent = latest
-        const install = document.getElementById('install-version')
-        if (install) install.textContent = latest
-      }
-      paintReleases(list)
-    }
-    // 版本徽章:直接读取同源静态 version.json,与下载的安装包始终一致
-    ;(async function loadSiteVersion() {
-      try {
-        const r = await fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
-        if (!r.ok) return
-        const v = (await r.json()).version
-        if (!v) return
-        window.__siteVersion = {
-          value: v,
-          isNewerOrEqual: (other) => {
-            const p = (s) => String(s).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
-            const a = p(v), b = p(other)
-            for (let i = 0; i < 3; i++) {
-              if ((a[i] || 0) > (b[i] || 0)) return true
-              if ((a[i] || 0) < (b[i] || 0)) return false
-            }
-            return true
-          }
-        }
-        const badge = document.getElementById('latest-version')
-        if (badge) badge.textContent = 'v' + v
-        const install = document.getElementById('install-version')
-        if (install) install.textContent = 'v' + v
-      } catch (e) { /* 保留页面内置版本号 */ }
-    })()
-    ;(async function loadReleases() {
-      for (const url of RELEASE_APIS) {
-        try {
-          const r = await fetch(url, { cache: 'no-store' })
-          if (!r.ok) continue
-          const data = await r.json()
-          if (Array.isArray(data.releases) && data.releases.length) {
-            renderReleases(data.releases)
-            return
-          }
-        } catch (e) { /* 尝试下一个源 */ }
-      }
-      // 云端不可用:对页面内置静态记录应用「最多 3 条 + 展开」
-      paintReleases(null)
-    })()
-
-    // ===== 数据埋点:匿名访客 ID + pageview / download_click(实时上报,失败静默) =====
-    ;(function () {
-      const TRACK_URL = '/api/track'
-      function visitorId() {
-        try {
-          let vid = localStorage.getItem('todobar-site-vid')
-          if (!vid) {
-            vid = 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
-            localStorage.setItem('todobar-site-vid', vid)
-          }
-          return vid
-        } catch (e) {
-          return 'anon-' + Math.random().toString(36).slice(2, 12)
-        }
-      }
-      const vid = visitorId()
-      function track(events) {
-        try {
-          const payload = JSON.stringify({ source: 'site', events })
-          if (navigator.sendBeacon) {
-            const ok = navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }))
-            if (ok) return
-          }
-          fetch(TRACK_URL, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: payload,
-            keepalive: true,
-          }).catch(() => {})
-        } catch (e) { /* 埋点失败绝不影响页面体验 */ }
-      }
-      // 页面访问
-      track([{ event: 'pageview', page: 'download', visitor: vid }])
-      // 下载点击:页面上两处下载按钮及任何 .exe 下载链接
-      document.addEventListener('click', (e) => {
-        const t = e.target
-        const a = t && t.closest ? t.closest('a[download], a[href$=".exe"]') : null
-        if (!a) return
-        track([{ event: 'download_click', page: 'download', visitor: vid, meta: (a.getAttribute('href') || '').slice(0, 120) }])
-      })
-    })()
-
-    // ===== 安装包下载链接按版本号加查询参数(缓存穿透) =====
-    // 安装包 URL 固定不变时,浏览器/边缘节点可能命中 max-age 内的旧版本缓存,
-    // 导致「网页显示新版、下载到的却是旧版安装包」。这里读取 version.json(no-cache)
-    // 把所有 .exe 下载链接改写为 TickTask-setup.exe?v=<版本>,每个版本的 URL 唯一。
-    ;(function () {
-      fetch('./version.json', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          const v = data && data.version
-          if (!v) return
-          document.querySelectorAll('a[href$=".exe"], a[download]').forEach((a) => {
-            const href = a.getAttribute('href') || ''
-            if (!/TickTask-setup\.exe(\?.*)?$/.test(href)) return
-            a.setAttribute('href', './TickTask-setup.exe?v=' + encodeURIComponent(v))
-          })
-        })
-        .catch(() => {})
-    })()
-  </script>
-  <script>
-    // 界面一览:自动横向往返滚动,鼠标悬停暂停,可用鼠标拖动查看
-    (function () {
-      const strip = document.getElementById('shotsStrip')
-      if (!strip) return
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-      let dir = 1
-      let paused = false
-      let dragging = false
-      let startX = 0
-      let startScroll = 0
-      const step = () => {
-        if (!paused && !dragging) {
-          const max = strip.scrollWidth - strip.clientWidth
-          if (max > 4) {
-            const x = strip.scrollLeft
-            if (dir > 0 && x >= max - 1) dir = -1
-            else if (dir < 0 && x <= 1) dir = 1
-            strip.scrollLeft = x + dir
-          }
-        }
-        requestAnimationFrame(step)
-      }
-      requestAnimationFrame(step)
-      strip.addEventListener('mouseenter', () => { paused = true })
-      strip.addEventListener('mouseleave', () => { paused = false; dragging = false })
-      strip.addEventListener('touchstart', () => { paused = true }, { passive: true })
-      strip.addEventListener('pointerdown', (e) => {
-        if (e.pointerType !== 'mouse') return
-        dragging = true
-        startX = e.clientX
-        startScroll = strip.scrollLeft
-        strip.setPointerCapture(e.pointerId)
-      })
-      strip.addEventListener('pointermove', (e) => {
-        if (!dragging) return
-        strip.scrollLeft = startScroll - (e.clientX - startX)
-      })
-      const endDrag = () => { dragging = false }
-      strip.addEventListener('pointerup', endDrag)
-      strip.addEventListener('pointercancel', endDrag)
-    })()
-  </script>
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "TickTask",
-    "operatingSystem": "Windows 10, Windows 11",
-    "applicationCategory": "ProductivityApplication",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
-    "softwareVersion": "0.4.47",
-    "description": "贴边悬浮的极简待办栏:日/周/月视图、生日纪念日提醒、内置计算器、云同步,支持自定义字体与背景。"
+/* 轮播响应式 */
+@media (max-width: 1020px) {
+  .fx-stage { height: 640px; }
+  .fx-card { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
+  .fx-info { padding: 28px 26px 8px; }
+  .fx-title { font-size: 24px; }
+  .fx-shot { padding: 12px 26px 26px; min-height: 420px; }
+  .fx-slide:not(.is-active) { opacity: 0 !important; pointer-events: none; }
+}
+@media (max-width: 560px) {
+  .fx-stage { height: 720px; }
+  /* 胶囊栏窄屏改为横向滑动，避免换行成三排占高度 */
+  .fx-pills {
+    flex-wrap: nowrap; justify-content: flex-start;
+    overflow-x: auto; padding: 2px 2px 8px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
   }
-  </script>
+  .fx-pills::-webkit-scrollbar { display: none; }
+  .fx-pill { flex: none; }
+}
+
+/* ============ 下载安装 ============ */
+.install { padding: 84px 0; background: linear-gradient(180deg, rgba(29,126,240,.06), transparent); }
+.install-card {
+  max-width: 900px; margin: 0 auto; text-align: center;
+  background: var(--card); border: 1px solid rgba(29,126,240,.16);
+  border-radius: 30px; padding: 52px 44px 44px; box-shadow: var(--shadow-lg);
+}
+.install-card img.applogo { width: 68px; height: 68px; border-radius: 20px; margin: 0 auto; box-shadow: 0 12px 30px -8px rgba(29,126,240,.45); }
+.install-card h2 { font-size: 30px; font-weight: 900; margin-top: 16px; letter-spacing: -.02em; }
+.install-card .ver { color: var(--muted); margin-top: 8px; font-size: 14px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; text-align: left; }
+.step { position: relative; background: rgba(148,163,184,.08); border-radius: 18px; padding: 22px 20px 18px; }
+.step .s-no {
+  position: absolute; top: -13px; left: 18px; width: 27px; height: 27px;
+  background: var(--primary); color: #fff; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900;
+  box-shadow: 0 6px 14px -4px rgba(29,126,240,.6);
+}
+.step h3 { font-size: 15.5px; font-weight: 800; }
+.step p { font-size: 13px; color: var(--muted); margin-top: 7px; line-height: 1.7; }
+.smartscreen {
+  margin-top: 30px; display: flex; gap: 11px; text-align: left;
+  background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35);
+  border-radius: 16px; padding: 16px 18px; font-size: 13px; line-height: 1.75; color: #92600a;
+}
+[data-theme="dark"] .smartscreen { color: #fcd34d; }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+
+/* ============ FAQ ============ */
+.faq { padding: 84px 0; }
+.faq h2 { text-align: center; font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
+.faq-list { max-width: 760px; margin: 36px auto 0; display: grid; gap: 14px; }
+details.faq-item {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 18px; padding: 19px 22px;
+}
+details.faq-item summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+  font-weight: 800; font-size: 15px;
+}
+details.faq-item summary::-webkit-details-marker { display: none; }
+details.faq-item summary .chev { transition: transform .25s; color: var(--faint); font-size: 13px; }
+details.faq-item[open] summary .chev { transform: rotate(180deg); }
+details.faq-item p { margin-top: 12px; font-size: 14px; color: var(--muted); line-height: 1.8; }
+details.faq-item code {
+  background: rgba(148,163,184,.16); border-radius: 5px; padding: 1px 5px;
+  font-size: 12.5px; font-family: ui-monospace, Consolas, monospace; color: var(--text);
+}
+
+/* ============ 页脚 ============ */
+footer { border-top: 1px solid var(--border); padding: 40px 0 44px; text-align: center; }
+footer .f-brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; }
+footer .f-brand img { width: 28px; height: 28px; border-radius: 9px; }
+footer .f-slogan { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
+
+/* 每个功能的主题色（通过 --accent-strong 等变量注入 slide） */
+@media (prefers-reduced-motion: reduce) {
+  .demo-panel { animation: none; transform: translateX(0); }
+  .fx-slide { transition: opacity .3s; }
+  .float-chip { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================= 导航 ================= -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand">
+      <img src="./assets/logo.webp" alt="TickTask 图标" />
+      <span>TickTask</span>
+    </a>
+    <nav class="nav-links" aria-label="主导航">
+      <a href="#features">功能亮点</a>
+      <a href="#install">安装指南</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <div class="nav-right">
+      <button class="theme-btn" id="themeToggle" aria-label="切换深浅色">🌙</button>
+      <a href="#install" class="btn-primary">免费下载</a>
+    </div>
+  </div>
+</header>
+
+<!-- ================= Hero ================= -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.56 · Windows 已发布 · macOS Beta</span></span>
+      <h1>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
+      <p class="lead">
+        TickTask 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
+        鼠标一划即出、用完自动收回。而且它不止是待办——<b>8 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
+      </p>
+      <div class="hero-cta">
+        <a href="#install" class="btn-download" id="mainDownload">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span id="mainDownloadText">下载安装包</span>
+        </a>
+      </div>
+      <p class="hero-meta" id="heroMeta">正在识别你的系统…</p>
+      <div class="alt-dl" id="altDl">
+        <span class="alt-label">不是这台电脑？</span>
+        <a data-dl="win">Windows 版</a>
+        <a data-dl="mac-arm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel">macOS · Intel</a>
+      </div>
+    </div>
+
+    <div class="monitor">
+      <div class="screen">
+        <div class="screen-inner">
+          <img class="wallpaper" src="./assets/wallpaper.webp" alt="" />
+          <div class="desktop-icon"><img src="./assets/logo.webp" alt="" /><span>TickTask</span></div>
+          <div class="demo-panel">
+            <span class="panel-handle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-6 7 6 7"/></svg></span>
+            <img src="./assets/panel-crop.webp" alt="TickTask 待办栏贴边展开演示" />
+          </div>
+          <div class="taskbar">
+            <div class="ticons">
+              <span>⊞</span><span>🔍</span><span>📁</span><span>🌐</span>
+              <img src="./assets/logo.webp" alt="" style="width:17px;height:17px;border-radius:4px" />
+            </div>
+            <div class="clock">16:40<br />2026/10/26</div>
+          </div>
+        </div>
+      </div>
+      <div class="monitor-stand"></div>
+      <div class="monitor-base"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 功能轮播（核心区块） ================= -->
+<section class="fx-section" id="features">
+  <div class="wrap">
+    <div class="fx-head">
+      <span class="fx-kicker-line">Features</span>
+      <h2>8 大功能，逐一看过再下载</h2>
+      <p>每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
+    </div>
+
+    <div class="fx-stage-wrap">
+      <button class="fx-arrow prev" id="fxPrev" aria-label="上一个功能">‹</button>
+      <button class="fx-arrow next" id="fxNext" aria-label="下一个功能">›</button>
+
+      <div class="fx-stage" id="fxStage">
+
+        <!-- 01 待办事项 -->
+        <article class="fx-slide" style="--accent-strong:#1d7ef0;--accent-strong-2:#38bdf8;--accent-soft:rgba(29,126,240,.10);--p:#1d7ef0">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">01 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
+                待办事项
+              </div>
+              <h3 class="fx-title">贴在屏幕边缘的待办清单</h3>
+              <p class="fx-slogan">一划即出，用完自动收回，抬眼就能看见今天该做什么</p>
+              <p class="fx-desc">TickTask 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。</p>
+              <ul class="fx-points">
+                <li>日 / 周 / 月三视图，置顶、子任务自由组合</li>
+                <li>重复事项一键跳过法定节假日（数据自动更新）</li>
+                <li>提醒精确到分钟，弹窗 + 声音，再忙也不错过</li>
+                <li>勾选即完成，今日进度条一目了然</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-01-todo.webp" alt="待办事项首页截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>⏰ 到点提醒弹窗</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>今日进度条</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 02 生日/纪念日 -->
+        <article class="fx-slide" style="--accent-strong:#ec4899;--accent-strong-2:#f472b6;--accent-soft:rgba(236,72,153,.10);--p:#ec4899">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">02 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v8m-4-4h8M20 12a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
+                生日 / 纪念日
+              </div>
+              <h3 class="fx-title">重要的人，一天都不会忘</h3>
+              <p class="fx-slogan">公历农历都能记，提前提醒，倒计时高亮</p>
+              <p class="fx-desc">把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。</p>
+              <ul class="fx-points">
+                <li>公历 / 农历双历记录，农历生日自动算</li>
+                <li>提前 N 天开始提醒，当天只提醒一次不打扰</li>
+                <li>「还有 X 天」倒计时高亮，最近的日子置顶</li>
+                <li>与待办栏同屏显示，不用来回切换应用</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-02-birthday.webp" alt="生日与纪念日记录截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>🎂 倒计时高亮</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>农历 / 公历切换</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 03 计算器 -->
+        <article class="fx-slide" style="--accent-strong:#8b5cf6;--accent-strong-2:#a78bfa;--accent-soft:rgba(139,92,246,.10);--p:#8b5cf6">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">03 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h6"/></svg>
+                计算器
+              </div>
+              <h3 class="fx-title">顺手一按，什么都能算</h3>
+              <p class="fx-slogan">四则运算、日期差、汇率换算，一页全搞定</p>
+              <p class="fx-desc">不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。</p>
+              <ul class="fx-points">
+                <li>基础四则运算，支持键盘连续输入</li>
+                <li>日期差 / 工作日 / 年龄计算</li>
+                <li>长度、重量、温度等单位换算</li>
+                <li>多币种实时汇率换算（联网自动更新）</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>算年假还剩几天、倒推项目工期、海外购物折算人民币。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-03-calculator.webp" alt="内置计算器截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>💱 实时汇率</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>键盘直达</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 04 万年历 -->
+        <article class="fx-slide" style="--accent-strong:#f59e0b;--accent-strong-2:#fbbf24;--accent-soft:rgba(245,158,11,.11);--p:#f59e0b">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">04 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg>
+                万年历
+              </div>
+              <h3 class="fx-title">农历、节气、宜忌，一查便知</h3>
+              <p class="fx-slogan">法定节假日休/班标记清晰，安排假期不踩坑</p>
+              <p class="fx-desc">内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。</p>
+              <ul class="fx-points">
+                <li>农历、节气、传统节日完整显示</li>
+                <li>法定节假日「休 / 班」角标，调休不搞混</li>
+                <li>每日宜忌详情，选日子有依据</li>
+                <li>「回到今天」一键返回，任意年月快速跳转</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>安排小长假出行、查农历生日、看黄历挑好日子。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-04-huangli.webp" alt="万年历截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>🗓 休/班角标</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>每日宜忌</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 05 牛马计薪器 -->
+        <article class="fx-slide" style="--accent-strong:#10b981;--accent-strong-2:#34d399;--accent-soft:rgba(16,185,129,.10);--p:#10b981">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">05 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7.5c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5-4 1-4 2.5 1.8 2.5 4 2.5 4-1 4-2.5"/></svg>
+                牛马计薪器
+              </div>
+              <h3 class="fx-title">每一秒搬砖，都看得见钱</h3>
+              <p class="fx-slogan">今日已赚实时滚动，下班倒计时精确到秒</p>
+              <p class="fx-desc">填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。</p>
+              <ul class="fx-points">
+                <li>今日已赚 / 日薪 / 时薪实时更新</li>
+                <li>下班 + 发薪双倒计时，精确到秒</li>
+                <li>8 种今日状态按时段自动轮换，可手动切换</li>
+                <li>专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>工作再苦，看着「已赚」数字往上跳，也能笑出声。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-05-salary.webp" alt="牛马计薪器截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>💰 今日已赚实时滚动</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>🖥 桌面组件</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 06 截图/贴图 -->
+        <article class="fx-slide" style="--accent-strong:#f43f5e;--accent-strong-2:#fb7185;--accent-soft:rgba(244,63,94,.10);--p:#f43f5e">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">06 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h.9a2 2 0 001.7-.94l.54-.9A2 2 0 019.8 4.2h4.4a2 2 0 011.66.94l.54.9A2 2 0 0018.1 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13.5" r="3.6"/></svg>
+                截图 / 贴图
+              </div>
+              <h3 class="fx-title">截完就贴，钉在桌面上</h3>
+              <p class="fx-slogan">参考图钉在屏幕一角，写文档对资料不再来回切窗口</p>
+              <p class="fx-desc">快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。</p>
+              <ul class="fx-points">
+                <li>窗口 / 区域截图，选区可拖动微调</li>
+                <li>标注工具栏：箭头、画笔、矩形、文字、马赛克等</li>
+                <li>一键贴图钉在桌面：滚轮缩放、透明度可调</li>
+                <li>鼠标穿透模式：贴图不挡下面的操作</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:1020/913">
+                <img src="./assets/shot-06-screenshot.webp" alt="TickTask 截图：圈选区域后带标注工具条，可直接贴图或保存" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 07 便利签 -->
+        <article class="fx-slide" style="--accent-strong:#eab308;--accent-strong-2:#facc15;--accent-soft:rgba(234,179,8,.12);--p:#eab308">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">07 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4A5.5 5.5 0 0121 9.5c0 1.33-.47 2.55-1.26 3.5H21l-4.3 4.3a2.4 2.4 0 01-3.4-3.4L16 12h-1.26A5.5 5.5 0 0115.5 4z"/><path d="M4 14a2 2 0 012-2h7a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6z"/></svg>
+                便利签
+              </div>
+              <h3 class="fx-title">灵感随手贴，关机也不丢</h3>
+              <p class="fx-slogan">Alt+N 一键贴一张便签到桌面，重启自动贴回原位</p>
+              <p class="fx-desc">想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。</p>
+              <ul class="fx-points">
+                <li>快捷键一键新建（默认 Alt+N），最多同屏 12 张</li>
+                <li>6 色换肤 + 透明度滑条自定义</li>
+                <li>勾选划线、一键「转待办」进今日清单</li>
+                <li>重启自动恢复原位，多显示器也能回到原屏</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:714/603">
+                <img src="./assets/shot-07-notes.webp" alt="TickTask 便利签：桌面上并排贴着的黄色与绿色便签" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 08 剪贴板 -->
+        <article class="fx-slide" style="--accent-strong:#06b6d4;--accent-strong-2:#22d3ee;--accent-soft:rgba(6,182,212,.10);--p:#06b6d4">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">08 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9.5 4a1.5 1.5 0 013 0M9 11h6M9 14.5h6M9 18h3"/></svg>
+                剪贴板
+              </div>
+              <h3 class="fx-title">复制过的，都帮你留着</h3>
+              <p class="fx-slogan">历史自动记录，键盘选条目，一次带走十几段内容</p>
+              <p class="fx-desc">TickTask 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。</p>
+              <ul class="fx-points">
+                <li>复制历史自动记录，浮窗快捷键随时唤出</li>
+                <li>↑↓ 选择 · Enter 复制 · 数字键 1-9 快选</li>
+                <li>关键词搜索，秒找三天前复制的内容</li>
+                <li>密码管理器内容自动识别跳过，隐私不落盘</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:432px;--ar:665/861">
+                <img src="./assets/shot-08-clipboard.webp" alt="TickTask 剪贴板历史：搜索框、多条复制记录与快捷回贴编号" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- 自动播放进度条 -->
+      <div class="fx-progress" id="fxProgress"><span></span></div>
+
+      <div class="fx-pills" id="fxPills">
+        <button class="fx-pill active" data-goto="0" aria-label="待办事项"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h6"/><path d="M3 5l1.6 1.6L7.4 3.7"/><path d="M3 12l1.6 1.6L7.4 10.7"/><path d="M3 19l1.6 1.6L7.4 17.7"/></svg><span>待办事项</span></button>
+        <button class="fx-pill" data-goto="1" aria-label="生日纪念日"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M4 20v-6.5a2 2 0 012-2h12a2 2 0 012 2V20"/><path d="M8 11.5V9m4 2.5V7.5m4 4V9"/><path d="M8 6.2a1 1 0 100-2 1 1 0 000 2zm4-2a1 1 0 100-2 1 1 0 000 2zm4 2a1 1 0 100-2 1 1 0 000 2z"/></svg><span>生日纪念日</span></button>
+        <button class="fx-pill" data-goto="2" aria-label="计算器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h.01M9 18.5h6"/></svg><span>计算器</span></button>
+        <button class="fx-pill" data-goto="3" aria-label="万年历"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg><span>万年历</span></button>
+        <button class="fx-pill" data-goto="4" aria-label="牛马计薪器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.3"/><path d="M6.5 7V5.6A1.6 1.6 0 018.1 4H16"/></svg><span>牛马计薪器</span></button>
+        <button class="fx-pill" data-goto="5" aria-label="截图贴图"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14a1 1 0 001 1h13"/><path d="M17 21V7a1 1 0 00-1-1H3"/><circle cx="13.5" cy="10.5" r="1.5"/></svg><span>截图贴图</span></button>
+        <button class="fx-pill" data-goto="6" aria-label="便利签"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h7.5"/><path d="M20 13.5l-6.5 6.5v-4.5a2 2 0 012-2H20z"/><path d="M8 9h8M8 12.5h5"/></svg><span>便利签</span></button>
+        <button class="fx-pill" data-goto="7" aria-label="剪贴板"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9.5 4.5V3.6A1.6 1.6 0 0111.1 2h1.8a1.6 1.6 0 011.6 1.6v.9z"/><path d="M9 11h6M9 15h6"/></svg><span>剪贴板</span></button>
+      </div>
+      <p class="fx-hint">点击下方功能名 / 鼠标拖拽 / <kbd>←</kbd><kbd>→</kbd> 方向键 / 点两侧卡片均可切换 · 悬停暂停自动播放</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 下载安装 ================= -->
+<section class="install" id="install">
+  <div class="wrap">
+    <div class="install-card">
+      <img class="applogo" src="./assets/logo.webp" alt="TickTask 图标" />
+      <h2 id="installTitle">下载并安装到电脑</h2>
+      <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 17 MB · v0.4.56 · 免费下载</p>
+      <div class="hero-cta" style="justify-content:center;margin-top:28px;">
+        <a href="./TickTask-setup.exe" class="btn-download" id="installDownload">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span id="installDownloadText">下载 TickTask-setup.exe</span>
+        </a>
+      </div>
+      <div class="alt-dl" style="justify-content:center;margin-top:12px;" id="installAlt">
+        <span class="alt-label">其它平台：</span>
+        <a data-dl="win">Windows 版</a>
+        <a data-dl="mac-arm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel">macOS · Intel</a>
+      </div>
+      <div class="steps" id="installSteps">
+        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>TickTask-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 TickTask，它会安静地贴在屏幕右缘，一划即出。</p></div>
+      </div>
+      <div class="smartscreen" id="installNote">
+        <span style="font-size:17px;line-height:1.4;">⚠️</span>
+        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>常见问题</h2>
+    <div class="faq-list">
+      <details class="faq-item" open>
+        <summary>TickTask 是免费的吗？<span class="chev">▾</span></summary>
+        <p>TickTask 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启，Windows 与 macOS 双端的记录格式完全一致。</p>
+      </details>
+      <details class="faq-item">
+        <summary>我的数据存在哪里？安全吗？<span class="chev">▾</span></summary>
+        <p>数据默认保存在你自己的电脑上（本地优先）；开启云同步后才会加密传输到你自己的云端服务，不上传给任何第三方。剪贴板历史中的密码内容也会自动识别并跳过记录。</p>
+      </details>
+      <details class="faq-item">
+        <summary>支持哪些系统？<span class="chev">▾</span></summary>
+        <p>Windows 10 / 11（64 位）已正式发布；macOS 12 及以上（Apple 芯片 / Intel 双版本）已进入 <b>Beta 测试</b>。页面会根据你的设备自动给出对应安装包，也可以在上方手动切换平台。TickTask 采用原生框架打造，Windows 安装包约 17 MB、macOS 约 18 MB，平时只渲染一条细边，内存占用极低。</p>
+      </details>
+      <details class="faq-item">
+        <summary>Mac 版是怎么安装的？为什么打开时会提示「无法验证开发者」？<span class="chev">▾</span></summary>
+        <p>下载对应芯片的 <b>.dmg</b> → 双击打开 → 把 TickTask 拖进「应用程序」即可。因为安装包暂未购买 Apple 开发者签名与公证，首次打开会被 Gatekeeper 拦截：在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>即可放行；也可以在终端执行 <code>xattr -cr /Applications/TickTask.app</code> 一次性解除。这是未签名软件的正常提示，不代表文件有问题。</p>
+      </details>
+      <details class="faq-item">
+        <summary>怎么判断该下载 Apple 芯片版还是 Intel 版？<span class="chev">▾</span></summary>
+        <p>点屏幕左上角  →「关于本机」：<b>芯片</b>一栏显示 M1 / M2 / M3 / M4 等 Apple 芯片的，下载 Apple 芯片版；显示 <b>Intel Core</b> 的，下载 Intel 版。选错会提示「无法在此 Mac 上运行」，重新下载对应版本即可，不影响已有数据。</p>
+      </details>
+      <details class="faq-item">
+        <summary>Mac 版和 Windows 版功能一样吗？<span class="chev">▾</span></summary>
+        <p>核心体验一致：待办与提醒、生日纪念日、计算器、万年历、牛马计薪器、便利签、剪贴板历史、截图贴图都可以用。目前 Mac 版处于 Beta，仍有两点差异：<b>暂不支持应用内自动更新</b>（新版本需手动下载安装包覆盖），个别系统级能力（如全局快捷键、通知样式）仍在校准中。使用中遇到问题欢迎反馈，会优先修复。</p>
+      </details>
+      <details class="faq-item">
+        <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
+        <p>不会。TickTask 只在需要时渲染一条细边和一个小面板，空闲时几乎不占用 CPU，内存占用也远低于常驻的聊天软件。</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 页脚 ================= -->
+<footer>
+  <div class="wrap">
+    <a href="#top" class="f-brand"><img src="./assets/logo.webp" alt="TickTask" /><span>TickTask</span></a>
+    <p class="f-slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
+    <p class="f-copy">© <span id="fYear">2026</span> TickTask. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+/* ============ 深浅色切换 ============ */
+const root = document.documentElement;
+const saved = localStorage.getItem('todobar-site-theme');
+const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+root.dataset.theme = dark ? 'dark' : 'light';
+document.getElementById('themeToggle').textContent = dark ? '☀️' : '🌙';
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const d = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = d;
+  localStorage.setItem('todobar-site-theme', d);
+  document.getElementById('themeToggle').textContent = d === 'dark' ? '☀️' : '🌙';
+});
+
+/* ============ 按设备自动匹配安装包 ============ */
+(function () {
+  /* 当前安装包版本:优先读同源 version.json(与实际安装包一致),失败则用内置兜底值。
+     dmg 文件名按 version.json 的版本号动态拼接。
+     说明:dmg 自托管在本下载站(与安装包同目录),文件名按 VER 动态拼接。
+     若改回指向 GitHub Release 直链,把 DMG_BASE 改为 'https://github.com/Sam5201-ai/todobar/releases/download/v'+VER+'/' 即可。 */
+  let VER = '0.4.56';
+  let currentKey = null;
+  const DMG_BASE = './';
+
+  function dlMap() {
+    const dmgArm = 'TickTask_' + VER + '_aarch64.dmg';
+    const dmgX64 = 'TickTask_' + VER + '_x64.dmg';
+    return {
+      win: {
+        label: '下载 Windows 安装包',
+        btn: '下载 TickTask-setup.exe',
+        meta: 'Windows 10 / 11 · 64 位 · 约 17 MB · 免费下载 · 无需管理员权限',
+        ver: 'Windows 10 / 11 · 64 位 · 约 17 MB · v' + VER + ' · 免费下载',
+        /* ?v= 让每个版本的下载 URL 唯一,避免浏览器/边缘缓存返回旧安装包 */
+        href: './TickTask-setup.exe?v=' + VER,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>TickTask-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 TickTask，它会安静地贴在屏幕右缘，一划即出。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">⚠️</span>
+        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>`
+      },
+      'mac-arm': {
+        label: '下载 macOS 版（Apple 芯片）',
+        btn: '下载 ' + dmgArm,
+        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 18 MB · Beta 测试中',
+        ver: 'macOS 12+ · Apple 芯片 · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgArm 并放好 dmg */
+        href: DMG_BASE + dmgArm,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgArm}</b>（Apple 芯片版）。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>TickTask</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
+        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/TickTask.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
+      },
+      'mac-intel': {
+        label: '下载 macOS 版（Intel）',
+        btn: '下载 ' + dmgX64,
+        meta: 'macOS 12+ · Intel 处理器 · 约 18 MB · Beta 测试中',
+        ver: 'macOS 12+ · Intel · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgX64 并放好 dmg */
+        href: DMG_BASE + dmgX64,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgX64}</b>（Intel 版）。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>TickTask</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
+        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/TickTask.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。</span>`
+      }
+    };
+  }
+
+  /* 自动判断：macOS 默认给 Apple 芯片版（近几年的 Mac 绝大多数是 Apple 芯片），其余给 Windows 版 */
+  function detect() {
+    const ua = navigator.userAgent || '';
+    if (/Windows/i.test(ua)) return 'win';
+    if (/Macintosh|Mac OS X/i.test(ua)) {
+      const p = (navigator.userAgentData && navigator.userAgentData.platform) || '';
+      return /mac/i.test(p) || !p ? 'mac-arm' : 'mac-arm';
+    }
+    return 'win';
+  }
+
+  function paintBadge() {
+    const badge = document.getElementById('osBadge');
+    if (badge) badge.textContent = 'v' + VER + ' · Windows 已发布 · macOS Beta';
+  }
+
+  function apply(key) {
+    const d = dlMap()[key]; if (!d) return;
+    currentKey = key;
+    document.documentElement.dataset.os = key === 'win' ? 'win' : 'mac';
+    document.getElementById('mainDownloadText').textContent = d.label;
+    document.getElementById('heroMeta').textContent = d.meta;
+    document.getElementById('installVer').textContent = d.ver;
+    document.getElementById('installDownloadText').textContent = d.btn;
+    /* 主按钮/安装区按钮指向真实安装包(下载而非跳转) */
+    const md = document.getElementById('mainDownload');
+    md.setAttribute('href', d.href);
+    md.setAttribute('download', '');
+    const idl = document.getElementById('installDownload');
+    idl.setAttribute('href', d.href);
+    idl.setAttribute('download', '');
+    idl.removeAttribute('onclick');
+    document.getElementById('installSteps').innerHTML = d.steps;
+    document.getElementById('installNote').innerHTML = d.note;
+    document.querySelectorAll('.alt-dl a').forEach(a => {
+      a.classList.toggle('current', a.dataset.dl === key);
+    });
+    /* 重新量一次轮播高度（安装区文字变化不影响，但保持一致性） */
+    if (window.__fxFit) window.__fxFit();
+  }
+
+  document.querySelectorAll('.alt-dl a').forEach(a => {
+    a.addEventListener('click', (e) => { e.preventDefault(); apply(a.dataset.dl); });
+  });
+
+  apply(detect());
+  paintBadge();
+
+  /* version.json 到达后刷新版本号与下载链接(与线上安装包严格一致) */
+  fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      const v = data && data.version;
+      if (!v) return;
+      VER = String(v).replace(/^v/, '');
+      paintBadge();
+      if (currentKey) apply(currentKey);
+    })
+    .catch(() => { /* 保留页面内置版本号 */ });
+})();
+
+/* ============ 功能轮播 ============ */
+(function () {
+  const stage = document.getElementById('fxStage');
+  const slides = Array.from(stage.querySelectorAll('.fx-slide'));
+  const pills = Array.from(document.querySelectorAll('.fx-pill'));
+  const progressWrap = document.getElementById('fxProgress');
+  const progress = progressWrap.querySelector('span');
+  const AUTO_MS = 9000;
+  let active = 0;
+  let autoTimer = null;
+  let dragging = false, dragX = 0, dragDX = 0, dragPointer = null;
+
+  function layout() {
+    const w = stage.clientWidth;
+    slides.forEach((s, i) => {
+      const off = i - active;
+      const ax = Math.abs(off);
+      let tf, op, filter, z;
+      if (ax > 2.4) { tf = 'translateX(-50%) scale(.4)'; op = 0; z = 1; filter = 'brightness(.6)'; }
+      else {
+        const x = off * Math.min(w * 0.46, 560) + (dragging ? dragDX * .25 : 0);
+        const rot = -off * 17 - (dragging ? dragDX * 0.012 : 0);
+        const sc = Math.max(1 - ax * 0.16, 0.62);
+        op = ax === 0 ? 1 : (ax <= 1 ? 0.9 : 0.45);
+        filter = ax === 0 ? 'none' : `brightness(${1 - ax * 0.18}) saturate(.9)`;
+        z = 100 - Math.round(ax * 10);
+        tf = `translateX(calc(-50% + ${x}px)) rotateY(${rot}deg) scale(${sc})`;
+      }
+      s.style.transform = tf;
+      s.style.opacity = op;
+      s.style.zIndex = z;
+      s.style.filter = filter;
+      s.style.pointerEvents = ax <= 1 ? 'auto' : 'none';
+      s.classList.toggle('is-active', i === active);
+    });
+    pills.forEach((p, pi) => p.classList.toggle('active', pi === active));
+  }
+
+  /* 自适应高度：按最高的左栏文案撑开舞台，避免长短不一的卡片被裁切 */
+  function fitStage() {
+    if (matchMedia('(max-width: 1020px)').matches) { stage.style.height = ''; return; }
+    const prevH = stage.style.height;
+    stage.style.height = '1500px';
+    let max = 0;
+    slides.forEach(s => {
+      const info = s.querySelector('.fx-info');
+      if (!info) return;
+      const oldH = info.style.height, oldA = info.style.alignSelf;
+      /* grid item 默认 stretch，必须临时取消拉伸才能量到内容自然高度 */
+      info.style.alignSelf = 'start';
+      info.style.height = 'auto';
+      max = Math.max(max, info.offsetHeight);
+      info.style.height = oldH;
+      info.style.alignSelf = oldA;
+    });
+    stage.style.height = prevH;
+    if (!max) return;
+    /* 右侧截图也要留出高度：竖版截图框 424×556 + 上下 padding，舞台最低 640 */
+    stage.style.height = Math.max(640, Math.min(max + 16, 860)) + 'px';
+  }
+  window.__fxFit = fitStage;
+
+  function go(i, user) {
+    active = ((i % slides.length) + slides.length) % slides.length;
+    layout();
+    restartProgress();
+    if (user) restartAuto();
+  }
+
+  /* 自动播放 + 进度条 */
+  function restartProgress() {
+    progress.classList.remove('run');
+    void progress.offsetWidth; /* 重置动画 */
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) progress.classList.add('run');
+  }
+  function restartAuto() {
+    clearInterval(autoTimer);
+    autoTimer = setInterval(() => go(active + 1), AUTO_MS);
+  }
+  function pauseAuto() { clearInterval(autoTimer); autoTimer = null; progressWrap.classList.add('paused'); }
+  function resumeAuto() { if (!autoTimer) restartAuto(); progressWrap.classList.remove('paused'); }
+
+  /* 交互绑定 */
+  document.getElementById('fxPrev').addEventListener('click', () => go(active - 1, true));
+  document.getElementById('fxNext').addEventListener('click', () => go(active + 1, true));
+  /* 点击两侧的相邻卡片切换 */
+  slides.forEach((s, i) => s.addEventListener('click', (e) => {
+    if (dragging || Math.abs(dragDX) > 6) return;
+    if (i !== active) { e.preventDefault(); go(i, true); }
+  }));
+  /* 点击胶囊直接跳到对应功能 */
+  pills.forEach((p, pi) => p.addEventListener('click', () => go(pi, true)));
+  /* 键盘 */
+  addEventListener('keydown', (e) => {
+    const rect = stage.getBoundingClientRect();
+    if (rect.top > innerHeight || rect.bottom < 0) return;
+    if (e.key === 'ArrowLeft') go(active - 1, true);
+    if (e.key === 'ArrowRight') go(active + 1, true);
+  });
+  /* 拖拽 / 触摸滑动 */
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true; dragX = e.clientX; dragDX = 0;
+    stage.classList.add('dragging');
+    stage.setPointerCapture(e.pointerId);
+    pauseAuto();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dragDX = e.clientX - dragX;
+    layout();
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    stage.classList.remove('dragging');
+    if (dragDX < -60) go(active + 1, true);
+    else if (dragDX > 60) go(active - 1, true);
+    else { dragDX = 0; layout(); }
+    dragging = false; dragDX = 0;
+    resumeAuto();
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  /* 悬停暂停自动播放 */
+  stage.addEventListener('mouseenter', pauseAuto);
+  stage.addEventListener('mouseleave', () => { if (!dragging) resumeAuto(); });
+  addEventListener('resize', () => { fitStage(); layout(); });
+
+  /* 启动 */
+  fitStage();
+  go(0);
+  /* 字体加载完成后重新量一次，避免字体度量变化导致再次裁切 */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { fitStage(); layout(); });
+  }
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) restartAuto();
+})();
+</script>
+<script>
+  // ===== 数据埋点 v2:设备指纹 + Cookie 双写 + 会话去重 + 下载中转(失败静默) =====
+  ;(function () {
+    const TRACK_URL = '/api/track'
+
+    // 设备指纹:canvas/webgl/硬件特征哈希,清缓存/重装后同机仍稳定(零第三方依赖)
+    function fingerprint() {
+      try {
+        const c = document.createElement('canvas')
+        const x = c.getContext('2d')
+        x.textBaseline = 'top'
+        x.font = "14px 'Arial'"
+        x.fillStyle = '#f60'
+        x.fillRect(125, 1, 62, 20)
+        x.fillStyle = '#069'
+        x.fillText('TickTask', 2, 15)
+        x.fillStyle = 'rgba(102,204,0,0.7)'
+        x.fillText('TickTask', 4, 17)
+        const ch = c.toDataURL().slice(-64)
+        let gl = null
+        try {
+          gl = document.createElement('webgl') || document.createElement('experimental-webgl')
+        } catch (e) {}
+        let wg = ''
+        if (gl) {
+          const d = gl.getExtension('WEBGL_debug_renderer_info')
+          if (d) wg = gl.getParameter(d.UNMASKED_RENDERER_WEBGL) + '|' + gl.getParameter(d.UNMASKED_VENDOR_WEBGL)
+        }
+        const parts = [
+          ch,
+          wg,
+          navigator.hardwareConcurrency || '',
+          navigator.deviceMemory || '',
+          screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+          new Date().getTimezoneOffset(),
+          (navigator.languages || []).join(','),
+          navigator.platform || '',
+          navigator.userAgent,
+        ]
+        let h = 2166136261
+        const s = parts.join('###')
+        for (let i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i)
+          h = Math.imul(h, 16777619)
+        }
+        return ('0000000' + (h >>> 0).toString(16)).slice(-8)
+      } catch (e) {
+        return 'fp-' + Math.random().toString(36).slice(2, 10)
+      }
+    }
+
+    // 稳定设备 ID:持久 ID(localStorage + Cookie 双写)优先,缺失时用指纹兜底
+    function visitorId() {
+      try {
+        let vid = localStorage.getItem('todobar-site-vid')
+        if (!vid) {
+          vid = 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+          localStorage.setItem('todobar-site-vid', vid)
+        }
+        const exp = new Date(Date.now() + 365 * 864e5).toUTCString()
+        document.cookie = 'todobar-site-vid=' + encodeURIComponent(vid) + ';path=/;max-age=31536000;SameSite=Lax'
+        return vid
+      } catch (e) {
+        return 'anon-' + Math.random().toString(36).slice(2, 12)
+      }
+    }
+
+    const vid = visitorId()
+    const device = fingerprint()
+
+    function track(events) {
+      try {
+        const payload = JSON.stringify({ source: 'site', events })
+        if (navigator.sendBeacon) {
+          const ok = navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }))
+          if (ok) return
+        }
+        fetch(TRACK_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {})
+      } catch (e) { /* 埋点失败绝不影响页面体验 */ }
+    }
+
+    // 会话 ID:同一次进入只上报 1 条 site_visit(进入次数,不随页内点击累加)
+    function sessionId() {
+      try {
+        let sid = sessionStorage.getItem('todobar-site-sid')
+        if (!sid) {
+          sid = 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+          sessionStorage.setItem('todobar-site-sid', sid)
+        }
+        return sid
+      } catch (e) {
+        return null
+      }
+    }
+
+    // 页面访问(设备去重 UV) + 进入会话(进入次数)
+    track([
+      { event: 'pageview', page: 'download', visitor: vid, device },
+      { event: 'site_visit', page: 'download', visitor: vid, device, sess: sessionId() },
+    ])
+
+    // 下载链接改写:点击前指向 /download 中转(带设备 + 缓存击穿参数)
+    function rewriteDownloads() {
+      document.querySelectorAll('a[download], a[href$=".exe"], a[href$=".dmg"]').forEach((a) => {
+        try {
+          const href = a.getAttribute('href') || ''
+          if (!href || href.indexOf('/download/') === 0) return
+          const u = new URL(href, location.href)
+          u.pathname = '/download' + u.pathname
+          u.searchParams.set('d', device)
+          a.setAttribute('href', u.pathname + u.search)
+        } catch (e) {}
+      })
+    }
+    rewriteDownloads()
+
+    // 下载点击:记录下载设备数(去重)。链接已改写走 /download 中转,由 server.js 记录归因
+    document.addEventListener('click', (e) => {
+      const t = e.target
+      const a = t && t.closest ? t.closest('a[download], a[href$=".exe"], a[href$=".dmg"]') : null
+      if (!a) return
+      track([{ event: 'download_click', page: 'download', visitor: vid, device, meta: (a.getAttribute('href') || '').slice(0, 120) }])
+    })
+  })()
+  // 版权年份
+  document.getElementById('fYear').textContent = new Date().getFullYear()
+</script>
 </body>
 </html>
+

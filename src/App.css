@@ -5522,6 +5522,53 @@ body.is-row-dragging * {
   background: rgba(127, 127, 127, 0.12);
 }
 
+/* 登录弹窗「记住账号」历史账号下拉列表 */
+.account-saved-pop {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  max-height: 156px;
+  overflow-y: auto;
+  background: var(--surface, #f7f7fb);
+  border: 1px solid rgba(31, 33, 38, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.account-saved-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border: none;
+  background: transparent;
+  color: var(--ink, #17181c);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.account-saved-item + .account-saved-item {
+  border-top: 1px solid rgba(31, 33, 38, 0.08);
+}
+
+.account-saved-item:hover {
+  background: rgba(31, 33, 38, 0.06);
+}
+
+.account-saved-item.is-active {
+  font-weight: 600;
+}
+
+.account-saved-check {
+  margin-left: auto;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
 .account-code-row {
   display: flex;
   gap: 8px;

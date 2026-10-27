@@ -380,9 +380,12 @@ export async function redeemActivationCode(
 export const ALLOWED_EVENTS = new Set([
   'pageview', // 下载页访问
   'download_click', // 下载页点击下载
+  'site_download', // 下载站下载记录(经 server.js /download 中转,仅写 site_downloads)
+  'site_visit', // 下载站进入会话(每次进入计 1)
   'app_open', // 工具启动
   'install', // 工具首次运行(安装)
   'register', // 注册成功
+  'auth_timing', // 登录/注册/发码接口耗时打点(meta 形如 "login=1234ms")
   'page_visit', // 工具内页面访问
   'feature_click', // 工具内功能点击
 ])
@@ -391,6 +394,10 @@ export type EventInput = {
   event: string
   page?: string
   visitor?: string
+  uid?: string
+  device?: string
+  sess?: string
+  ip?: string
   meta?: string
 }
 
@@ -405,14 +412,18 @@ export async function insertEvents(
   for (const e of events) {
     await db
       .prepare(
-        `INSERT INTO analytics_events (source, event, page, visitor, meta, ts)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO analytics_events (source, event, page, visitor, uid, device, sess, ip, meta, ts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         source,
         e.event,
         String(e.page ?? '').slice(0, 40),
         String(e.visitor ?? '').slice(0, 64),
+        String(e.uid ?? '').slice(0, 64),
+        String(e.device ?? '').slice(0, 64),
+        String(e.sess ?? '').slice(0, 64),
+        String(e.ip ?? '').slice(0, 64),
         String(e.meta ?? '').slice(0, 120),
         ts,
       )
@@ -420,6 +431,40 @@ export async function insertEvents(
     n += 1
   }
   return n
+}
+
+/** 绑定设备↔账号(登录/注册成功时调用),用于跨设备身份缝合。 */
+export async function linkIdentity(
+  db: D1Database,
+  device: string,
+  uid: string,
+  nowIso: string,
+): Promise<void> {
+  if (!device || !uid) return
+  await db
+    .prepare(
+      `INSERT INTO identity_links (device, uid, first_seen, last_seen)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(device) DO UPDATE SET uid = excluded.uid, last_seen = excluded.last_seen`,
+    )
+    .bind(device, uid, nowIso, nowIso)
+    .run()
+}
+
+/** 记录下载站一次下载(由 server.js 中转透传 device/ip/ua)。 */
+export async function recordSiteDownload(
+  db: D1Database,
+  device: string,
+  ip: string,
+  ua: string,
+  nowIso: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO site_downloads (device, ip, ua, ts) VALUES (?, ?, ?, ?)`,
+    )
+    .bind(String(device ?? '').slice(0, 64), String(ip ?? '').slice(0, 64), String(ua ?? '').slice(0, 200), nowIso)
+    .run()
 }
 
 // ---------------------------------------------------------------------------
@@ -439,14 +484,19 @@ export type Overview = {
     conversionRate: number
   }
   active: { today: number; d7: number; d30: number }
-  funnel: { visitors: number; clicks: number; installs: number; registrations: number }
+  funnel: {
+    visitors: number // 访客数:窗口内到过下载站的去重设备数(按指纹,进多少次=1)
+    clicks: number // 点击数:进入下载站的累计次数(site_visit 累计,进入1次=1,页内操作不计)
+    installs: number // 安装数:窗口内上报过 install 的去重设备数(按指纹)
+    registrations: number // 注册数:窗口内完成注册,且其绑定设备在注册前上报过安装的账号数
+  }
   trends: {
     days: string[]
     newUsers: number[]
     cumulativeUsers: number[]
     activeUsers: number[]
-    pageviews: number[]
-    downloadClicks: number[]
+    pageviews: number[] // 每日下载站独立设备(页面访问/进入)
+    downloadClicks: number[] // 每日下载独立设备
   }
 }
 
@@ -454,8 +504,9 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
   const nowIso = new Date().toISOString()
   const { sinceIso, list } = bjdWindow(days)
   const today = bjdToday()
+  const d7Since = new Date(Date.now() - 6 * 86_400_000).toISOString()
 
-  const [userAgg, newTodayRow, eventsAgg, registerRow] = await Promise.all([
+  const [userAgg, newTodayRow, registerRow] = await Promise.all([
     db
       .prepare(
         `SELECT
@@ -479,34 +530,113 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
       .bind(today)
       .first<{ n: number }>(),
     db
-      .prepare(
-        `SELECT date(ts, '+8 hours') AS d, event, COUNT(*) AS c, COUNT(DISTINCT visitor) AS uv
-         FROM analytics_events WHERE ts >= ? GROUP BY d, event`,
-      )
-      .bind(sinceIso)
-      .all<{ d: string; event: string; c: number; uv: number }>(),
-    db
       .prepare(`SELECT COUNT(*) AS n FROM users WHERE created_at >= ?`)
       .bind(sinceIso)
       .first<{ n: number }>(),
   ])
 
-  // 组装趋势序列
-  const newUsersMap = new Map<string, number>()
-  const activeMap = new Map<string, number>()
-  const pageviewMap = new Map<string, number>()
-  const clickMap = new Map<string, number>()
-  for (const r of eventsAgg.results ?? []) {
-    if (r.event === 'app_open') activeMap.set(r.d, Number(r.uv ?? 0))
-    if (r.event === 'pageview') pageviewMap.set(r.d, Number(r.c ?? 0))
-    if (r.event === 'download_click') clickMap.set(r.d, Number(r.c ?? 0))
-  }
-  const newUsersRows = await db
+  // 活跃用户:今日 / 近 7 天 / 近 30 天
+  // 口径:已登录按账号去重,未登录用设备指纹;同一账号在多设备登录只算 1(identity_links 缝合)
+  const activeAgg = await db
     .prepare(
-      `SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS c FROM users WHERE created_at >= ? GROUP BY d`,
+      `WITH base AS (
+         SELECT e.ts AS ts,
+           CASE
+             WHEN e.uid <> '' THEN 'u:' || e.uid
+             ELSE COALESCE((SELECT 'u:' || l.uid FROM identity_links l WHERE l.device = e.device LIMIT 1), 'd:' || e.device)
+           END AS subj
+         FROM analytics_events e
+         WHERE e.source = 'app' AND e.event = 'app_open'
+       )
+       SELECT
+         COUNT(DISTINCT CASE WHEN date(ts, '+8 hours') = ? THEN subj END) AS today,
+         COUNT(DISTINCT CASE WHEN ts >= ? THEN subj END) AS d7,
+         COUNT(DISTINCT CASE WHEN ts >= ? THEN subj END) AS d30
+       FROM base`,
+    )
+    .bind(today, d7Since, sinceIso)
+    .first<{ today: number; d7: number; d30: number }>()
+
+  // 活跃用户趋势(每日 subject 去重)
+  const activeTrendRows = await db
+    .prepare(
+      `SELECT date(e.ts, '+8 hours') AS d,
+              COUNT(DISTINCT CASE
+                WHEN e.uid <> '' THEN 'u:' || e.uid
+                WHEN l.uid IS NOT NULL THEN 'u:' || l.uid
+                ELSE 'd:' || e.device END) AS uv
+       FROM analytics_events e
+       LEFT JOIN identity_links l ON l.device = e.device
+       WHERE e.source = 'app' AND e.event = 'app_open' AND e.ts >= ?
+       GROUP BY d`,
     )
     .bind(sinceIso)
+    .all<{ d: string; uv: number }>()
+
+  // 下载站趋势:页面访问/进入 与 下载 均为每日去重设备(设备指纹判断)
+  const siteTrendRows = await db
+    .prepare(
+      `SELECT date(ts, '+8 hours') AS day,
+              COUNT(DISTINCT CASE WHEN event IN ('pageview', 'site_visit') AND device <> '' THEN device END) AS pv,
+              COUNT(DISTINCT CASE WHEN event = 'download_click' AND device <> '' THEN device END) AS dl
+       FROM analytics_events
+       WHERE source = 'site' AND ts >= ?
+       GROUP BY day`,
+    )
+    .bind(sinceIso)
+    .all<{ day: string; pv: number; dl: number }>()
+
+  // 漏斗(窗口内,全部按设备指纹/账号口径,不做 IP 归因)
+  const [visitorRow, clicksRow, installRow] = await Promise.all([
+    // 访客数:窗口内到过下载站的去重设备数(同设备进多少次=1)
+    db
+      .prepare(`SELECT COUNT(DISTINCT device) AS n FROM analytics_events WHERE source = 'site' AND ts >= ? AND device <> ''`)
+      .bind(sinceIso)
+      .first<{ n: number }>(),
+    // 点击数:进入下载站的累计次数(site_visit 累计,进入1次=1,页内操作不计)
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM analytics_events WHERE source = 'site' AND event = 'site_visit' AND ts >= ?`)
+      .bind(sinceIso)
+      .first<{ n: number }>(),
+    // 安装数:窗口内上报过 install 的去重设备数(同设备重复上报=1)
+    db
+      .prepare(`SELECT COUNT(DISTINCT device) AS n FROM analytics_events WHERE source = 'app' AND event = 'install' AND ts >= ? AND device <> ''`)
+      .bind(sinceIso)
+      .first<{ n: number }>(),
+  ])
+
+  // 注册数:窗口内完成注册,且其绑定设备(identity_links)在注册前上报过 install 的账号数。
+  // 不依赖 register 埋点事件(uid 旧数据恒为空),直接以 users 表注册时间为准。
+  const regRow = await db
+    .prepare(
+      `SELECT COUNT(*) AS n
+       FROM users u
+       WHERE u.created_at >= ?
+         AND EXISTS (
+           SELECT 1
+           FROM identity_links l
+           WHERE l.uid = u.id
+             AND EXISTS (
+               SELECT 1 FROM analytics_events i
+               WHERE i.source = 'app' AND i.event = 'install'
+                 AND i.device = l.device AND i.ts <= u.created_at
+             )
+         )`,
+    )
+    .bind(sinceIso)
+    .first<{ n: number }>()
+
+  // 组装趋势序列
+  const activeMap = new Map<string, number>()
+  for (const r of activeTrendRows.results ?? []) activeMap.set(r.d, Number(r.uv ?? 0))
+  const siteMap = new Map<string, { pv: number; dl: number }>()
+  for (const r of siteTrendRows.results ?? []) siteMap.set(r.day, { pv: Number(r.pv ?? 0), dl: Number(r.dl ?? 0) })
+
+  const newUsersRows = await db
+    .prepare(`SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS c FROM users WHERE created_at >= ? GROUP BY d`)
+    .bind(sinceIso)
     .all<{ d: string; c: number }>()
+  const newUsersMap = new Map<string, number>()
   for (const r of newUsersRows.results ?? []) newUsersMap.set(r.d, Number(r.c ?? 0))
 
   const newUsers: number[] = []
@@ -516,8 +646,9 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
   for (const d of list) {
     newUsers.push(newUsersMap.get(d) ?? 0)
     activeUsers.push(activeMap.get(d) ?? 0)
-    pageviews.push(pageviewMap.get(d) ?? 0)
-    downloadClicks.push(clickMap.get(d) ?? 0)
+    const s = siteMap.get(d)
+    pageviews.push(s?.pv ?? 0)
+    downloadClicks.push(s?.dl ?? 0)
   }
   // 累计用户:窗口起点之前的总数 + 逐日累加
   const beforeRow = await db
@@ -526,36 +657,6 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
     .first<{ n: number }>()
   let cum = Number(beforeRow?.n ?? 0)
   const cumulativeUsers = newUsers.map((v) => (cum += v))
-
-  // 活跃用户:今日 / 近 7 天 / 近 30 天(按 app_open 的去重访客)
-  const activeAgg = await db
-    .prepare(
-      `SELECT
-         COUNT(DISTINCT CASE WHEN date(ts, '+8 hours') = ? THEN visitor END) AS today,
-         COUNT(DISTINCT CASE WHEN ts >= ? THEN visitor END) AS d7,
-         COUNT(DISTINCT CASE WHEN ts >= ? THEN visitor END) AS d30
-       FROM analytics_events WHERE source = 'app' AND event = 'app_open'`,
-    )
-    .bind(today, new Date(Date.now() - 6 * 86_400_000).toISOString(), sinceIso)
-    .first<{ today: number; d7: number; d30: number }>()
-
-  // 下载站漏斗(窗口内)
-  const funnelRow = await db
-    .prepare(
-      `SELECT
-         COUNT(DISTINCT CASE WHEN event = 'pageview' AND visitor <> '' THEN visitor END) AS visitors,
-         SUM(CASE WHEN event = 'download_click' THEN 1 ELSE 0 END) AS clicks
-       FROM analytics_events WHERE source = 'site' AND ts >= ?`,
-    )
-    .bind(sinceIso)
-    .first<{ visitors: number; clicks: number }>()
-  const installRow = await db
-    .prepare(
-      `SELECT COUNT(DISTINCT CASE WHEN visitor <> '' THEN visitor END) AS n
-       FROM analytics_events WHERE source = 'app' AND event = 'install' AND ts >= ?`,
-    )
-    .bind(sinceIso)
-    .first<{ n: number }>()
 
   const total = Number(userAgg?.total ?? 0)
   const member = Number(userAgg?.member ?? 0)
@@ -577,10 +678,10 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
       d30: Number(activeAgg?.d30 ?? 0),
     },
     funnel: {
-      visitors: Number(funnelRow?.visitors ?? 0),
-      clicks: Number(funnelRow?.clicks ?? 0),
+      visitors: Number(visitorRow?.n ?? 0),
+      clicks: Number(clicksRow?.n ?? 0),
       installs: Number(installRow?.n ?? 0),
-      registrations: Number(registerRow?.n ?? 0),
+      registrations: Number(regRow?.n ?? 0),
     },
     trends: { days: list, newUsers, cumulativeUsers, activeUsers, pageviews, downloadClicks },
   }
@@ -602,7 +703,7 @@ export async function appPageStats(
     db
       .prepare(
         `SELECT page,
-                COUNT(DISTINCT CASE WHEN event = 'page_visit' AND visitor <> '' THEN visitor END) AS visitors,
+                COUNT(DISTINCT CASE WHEN event = 'page_visit' AND device <> '' THEN device END) AS visitors,
                 SUM(CASE WHEN event = 'feature_click' THEN 1 ELSE 0 END) AS clicks
          FROM analytics_events
          WHERE source = 'app' AND ts >= ? AND event IN ('page_visit', 'feature_click')
@@ -613,7 +714,7 @@ export async function appPageStats(
     db
       .prepare(
         `SELECT date(ts, '+8 hours') AS day, page,
-                COUNT(DISTINCT CASE WHEN event = 'page_visit' AND visitor <> '' THEN visitor END) AS visitors,
+                COUNT(DISTINCT CASE WHEN event = 'page_visit' AND device <> '' THEN device END) AS visitors,
                 SUM(CASE WHEN event = 'feature_click' THEN 1 ELSE 0 END) AS clicks
          FROM analytics_events
          WHERE source = 'app' AND ts >= ? AND event IN ('page_visit', 'feature_click')
@@ -647,18 +748,18 @@ export async function siteStats(
     db
       .prepare(
         `SELECT date(ts, '+8 hours') AS day,
-                COUNT(DISTINCT CASE WHEN event = 'pageview' AND visitor <> '' THEN visitor END) AS visitors,
-                SUM(CASE WHEN event = 'download_click' THEN 1 ELSE 0 END) AS clicks
+                COUNT(DISTINCT CASE WHEN event IN ('pageview', 'site_visit') AND device <> '' THEN device END) AS visitors,
+                COUNT(DISTINCT CASE WHEN event = 'download_click' AND device <> '' THEN device END) AS clicks
          FROM analytics_events
-         WHERE source = 'site' AND ts >= ? AND event IN ('pageview', 'download_click')
+         WHERE source = 'site' AND ts >= ? AND event IN ('pageview', 'site_visit', 'download_click')
          GROUP BY day`,
       )
       .bind(sinceIso)
       .all<{ day: string; visitors: number; clicks: number }>(),
     db
       .prepare(
-        `SELECT COUNT(DISTINCT CASE WHEN event = 'pageview' AND visitor <> '' THEN visitor END) AS visitors,
-                SUM(CASE WHEN event = 'download_click' THEN 1 ELSE 0 END) AS clicks
+        `SELECT COUNT(DISTINCT CASE WHEN event IN ('pageview', 'site_visit') AND device <> '' THEN device END) AS visitors,
+                COUNT(DISTINCT CASE WHEN event = 'download_click' AND device <> '' THEN device END) AS clicks
          FROM analytics_events WHERE source = 'site' AND ts >= ?`,
       )
       .bind(sinceIso)

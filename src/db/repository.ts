@@ -47,6 +47,72 @@ const DEFAULT_SYNC_CONFIG: SyncConfig = {
   intervalSec: 30,
 }
 
+// ---------------------------------------------------------------------------
+// 账号分库(本地数据按账号隔离)
+//
+// 云端数据按会话令牌天然隔离,但此前本地只有一份库:换账号登录后,上一账号的
+// 任务仍留在库里,一旦编辑就会推送到新账号的云端(数据互传)。现在每个邮箱
+// 账号使用独立的本地库(桌面端独立 .db 文件,预览端独立 localStorage 前缀),
+// 未登录时的数据保留在默认的「游客库」里,老用户升级零感知。
+// ---------------------------------------------------------------------------
+
+/** 当前活跃资料库对应的账号邮箱;null = 游客库(默认库)。 */
+let activeProfileEmail: string | null = null
+
+const PROFILE_POINTER_KEY = 'todobar.profileEmail'
+
+/** 读取持久化的资料库指针(localStorage 被清后回落游客库,账号数据仍在盘上不丢)。 */
+export function getStoredProfilePointer(): string | null {
+  try {
+    const v = localStorage.getItem(PROFILE_POINTER_KEY)
+    return v && v.trim() ? v.trim() : null
+  } catch {
+    return null
+  }
+}
+
+export function getActiveProfile(): string | null {
+  return activeProfileEmail
+}
+
+/** 切换活跃资料库指针并持久化。库连接由调用方负责重开(SqliteStore.repoint 等)。 */
+export function setActiveProfile(email: string | null): void {
+  activeProfileEmail = email && email.trim() ? email.trim() : null
+  try {
+    if (activeProfileEmail) localStorage.setItem(PROFILE_POINTER_KEY, activeProfileEmail)
+    else localStorage.removeItem(PROFILE_POINTER_KEY)
+  } catch {
+    /* 隐私模式等写入失败不致命,指针仅剩内存态 */
+  }
+}
+
+/** 启动时恢复指针:已登录账号优先,其次沿用上次活跃账号(退出登录仍显示其数据)。 */
+export function resolveBootProfile(loggedInEmail: string | null): string | null {
+  return loggedInEmail ?? getStoredProfilePointer()
+}
+
+/** 同步字符串哈希(FNV-1a ×2,16 hex):从邮箱派生稳定的分库文件名片段。
+ *  仅用于本地文件命名,非安全用途,碰撞概率可忽略。 */
+function profileTag(email: string): string {
+  const s = email.trim().toLowerCase()
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    h1 = (h1 ^ c) >>> 0
+    h1 = Math.imul(h1, 0x01000193) >>> 0
+    h2 = (h2 ^ ((c << 3) | (i & 7))) >>> 0
+    h2 = Math.imul(h2, 0x85ebca6b) >>> 0
+  }
+  return `u-${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`
+}
+
+/** localStorage 键名加资料库前缀(预览端分库);游客库键名保持原样(兼容旧数据)。 */
+function prefixedKey(key: string): string {
+  const tag = activeProfileEmail ? profileTag(activeProfileEmail) : ''
+  return tag ? `todobar.${tag}.${key.slice('todobar.'.length)}` : key
+}
+
 const DEFAULT_SYNC_STATE: SyncState = {
   status: 'idle',
   lastPushAt: null,
@@ -279,23 +345,23 @@ export class BrowserStore extends MapStore {
 
   private load(): void {
     try {
-      const tasks = localStorage.getItem('todobar.tasks.v2')
+      const tasks = localStorage.getItem(prefixedKey('todobar.tasks.v2'))
       if (tasks) for (const t of JSON.parse(tasks) as Task[]) this.tasks.set(t.id, t)
-      const lists = localStorage.getItem('todobar.lists.v2')
+      const lists = localStorage.getItem(prefixedKey('todobar.lists.v2'))
       if (lists) for (const l of JSON.parse(lists) as TaskList[]) this.lists.set(l.id, l)
-      const outbox = localStorage.getItem('todobar.outbox.v2')
+      const outbox = localStorage.getItem(prefixedKey('todobar.outbox.v2'))
       if (outbox)
         for (const [k, v] of Object.entries(JSON.parse(outbox) as Record<string, OutboxEntry>))
           this.outbox.set(k, v)
-      const birthdays = localStorage.getItem('todobar.birthdays.v1')
+      const birthdays = localStorage.getItem(prefixedKey('todobar.birthdays.v1'))
       if (birthdays) for (const b of JSON.parse(birthdays) as Birthday[]) this.birthdays.set(b.id, b)
-      const bOutbox = localStorage.getItem('todobar.boutbox.v1')
+      const bOutbox = localStorage.getItem(prefixedKey('todobar.boutbox.v1'))
       if (bOutbox)
         for (const [k, v] of Object.entries(JSON.parse(bOutbox) as Record<string, OutboxEntry>))
           this.bOutbox.set(k, v)
-      const cfg = localStorage.getItem('todobar.sync.v2')
+      const cfg = localStorage.getItem(prefixedKey('todobar.sync.v2'))
       if (cfg) this.syncConfig = { ...DEFAULT_SYNC_CONFIG, ...JSON.parse(cfg) }
-      const st = localStorage.getItem('todobar.syncstate.v2')
+      const st = localStorage.getItem(prefixedKey('todobar.syncstate.v2'))
       if (st) this.syncState = { ...DEFAULT_SYNC_STATE, ...JSON.parse(st) }
     } catch {
       // Corrupt storage -> start clean.
@@ -304,22 +370,38 @@ export class BrowserStore extends MapStore {
 
   protected persist(): void {
     try {
-      localStorage.setItem('todobar.tasks.v2', JSON.stringify([...this.tasks.values()]))
-      localStorage.setItem('todobar.lists.v2', JSON.stringify([...this.lists.values()]))
+      localStorage.setItem(prefixedKey('todobar.tasks.v2'), JSON.stringify([...this.tasks.values()]))
+      localStorage.setItem(prefixedKey('todobar.lists.v2'), JSON.stringify([...this.lists.values()]))
       localStorage.setItem(
-        'todobar.outbox.v2',
+        prefixedKey('todobar.outbox.v2'),
         JSON.stringify(Object.fromEntries(this.outbox)),
       )
-      localStorage.setItem('todobar.birthdays.v1', JSON.stringify([...this.birthdays.values()]))
       localStorage.setItem(
-        'todobar.boutbox.v1',
+        prefixedKey('todobar.birthdays.v1'),
+        JSON.stringify([...this.birthdays.values()]),
+      )
+      localStorage.setItem(
+        prefixedKey('todobar.boutbox.v1'),
         JSON.stringify(Object.fromEntries(this.bOutbox)),
       )
-      localStorage.setItem('todobar.sync.v2', JSON.stringify(this.syncConfig))
-      localStorage.setItem('todobar.syncstate.v2', JSON.stringify(this.syncState))
+      localStorage.setItem(prefixedKey('todobar.sync.v2'), JSON.stringify(this.syncConfig))
+      localStorage.setItem(prefixedKey('todobar.syncstate.v2'), JSON.stringify(this.syncState))
     } catch {
       // Best-effort persistence in the preview.
     }
+  }
+
+  /** 预览端切换资料库:清空内存态并按新前缀重载(桌面端走 SqliteStore.repoint)。 */
+  async reloadForProfile(): Promise<void> {
+    this.tasks.clear()
+    this.lists.clear()
+    this.birthdays.clear()
+    this.outbox.clear()
+    this.bOutbox.clear()
+    this.syncConfig = { ...DEFAULT_SYNC_CONFIG }
+    this.syncState = { ...DEFAULT_SYNC_STATE }
+    this.load()
+    await super.init()
   }
 }
 
@@ -491,13 +573,11 @@ export class SqliteStore implements TaskRepository {
     }
   }
 
-  /** 当前连接用的 sqlite 路径:优先用跨更新持久化的 dbKey,其次 localStorage 中的 dbKey,最后默认库名。
-   *  注意:plugin-sql 的 sqlite: 方案永远相对 app_config_dir,无法直接用绝对路径,
-   *  因此自定义目录通过 app_config_dir/todobar_data 这个 junction 间接实现。 */
-  private connectionPath(): string {
+  /** 基础库路径(不含账号分库后缀):优先跨更新持久化的 dbKey,其次 localStorage,最后默认库名。 */
+  private basePath(): string {
     const norm = (k: string) => (k.startsWith('sqlite:') ? k.slice('sqlite:'.length) : k)
     if (SqliteStore.dbKeyOverride && SqliteStore.dbKeyOverride.trim()) {
-      return 'sqlite:' + norm(SqliteStore.dbKeyOverride.trim())
+      return norm(SqliteStore.dbKeyOverride.trim())
     }
     let key: string | null = null
     try {
@@ -505,7 +585,96 @@ export class SqliteStore implements TaskRepository {
     } catch {
       /* 忽略 */
     }
-    return 'sqlite:' + (key && key.trim() ? norm(key.trim()) : 'todobar.db')
+    return key && key.trim() ? norm(key.trim()) : 'todobar.db'
+  }
+
+  /** 当前连接用的 sqlite 路径:基础路径 + 账号分库后缀。
+   *  游客(null)= 基础库本身;账号 = 在 .db 前插入 .u-<hash>,如
+   *  'todobar.db' → 'todobar.u-1a2b….db'、'todobar_data/todobar.db' →
+   *  'todobar_data/todobar.u-1a2b….db'(自定义目录 junction 天然覆盖分库文件)。
+   *  注意:plugin-sql 的 sqlite: 方案永远相对 app_config_dir,无法直接用绝对路径,
+   *  因此自定义目录通过 app_config_dir/todobar_data 这个 junction 间接实现。 */
+  private connectionPath(): string {
+    const base = this.basePath()
+    if (!activeProfileEmail) return 'sqlite:' + base
+    const accountFile = base.replace(/\.db$/i, '') + '.' + profileTag(activeProfileEmail) + '.db'
+    return 'sqlite:' + accountFile
+  }
+
+  /** 游客库连接键(迁移/清理临时连接用)。 */
+  private guestPath(): string {
+    return 'sqlite:' + this.basePath()
+  }
+
+  /** 当前是否正连着游客库。 */
+  isGuestProfile(): boolean {
+    return !activeProfileEmail
+  }
+
+  /** 读取游客库全量快照(供首次登录把本地数据并入账号库)。临时开连接,读完即关。
+   *  当前就在游客库时返回 null(无意义);快照包含软删除行,由调用方决定取舍。 */
+  async readGuestSnapshot(): Promise<{
+    tasks: Task[]
+    birthdays: Birthday[]
+    lists: TaskList[]
+  } | null> {
+    if (this.isGuestProfile()) return null
+    const { default: Database } = await import('@tauri-apps/plugin-sql')
+    let g: any = null
+    try {
+      g = await Database.load(this.guestPath())
+      const tasks = (await g.select('SELECT * FROM tasks')) as Row[]
+      const birthdays = (await g.select('SELECT * FROM birthdays')) as Row[]
+      const lists = (await g.select('SELECT * FROM lists')) as Row[]
+      return {
+        tasks: tasks.map(rowToTask),
+        birthdays: birthdays.map(rowToBirthday),
+        lists: lists.map((r) => ({
+          id: r.id as string,
+          title: r.title as string,
+          kind: r.kind as TaskList['kind'],
+          collapsed: Boolean(r.collapsed),
+          position: Number(r.position),
+        })),
+      }
+    } catch {
+      return null
+    } finally {
+      try {
+        // 坑:plugin-sql 的 close() 不带参数会关闭**全部**连接池(含主账号库),
+        // 导致迁移循环的下一条写入落在已关闭的连接上抛错。必须只关游客库这一条。
+        await g?.close(g.path)
+      } catch {
+        /* 忽略 */
+      }
+    }
+  }
+
+  /** 迁移完成后清空游客库内容(数据已并入账号库,防止再次登录其他新账号时重复并入)。
+   *  仅清业务数据与同步队列/配置,保留表结构。 */
+  async clearGuestData(): Promise<void> {
+    if (this.isGuestProfile()) return
+    const { default: Database } = await import('@tauri-apps/plugin-sql')
+    let g: any = null
+    try {
+      g = await Database.load(this.guestPath())
+      await g.execute('DELETE FROM tasks')
+      await g.execute('DELETE FROM birthdays')
+      await g.execute("DELETE FROM lists WHERE kind = 'custom'")
+      await g.execute('DELETE FROM outbox')
+      await g.execute('DELETE FROM b_outbox')
+      await g.execute("DELETE FROM sync_state WHERE key = 'state'")
+      await g.execute("DELETE FROM sync_config WHERE key = 'cfg'")
+    } catch {
+      /* 游客库可能不存在(全新安装即登录),忽略 */
+    } finally {
+      try {
+        // 同上:只关游客库连接池,绝不能误杀主账号库(见 readGuestSnapshot 注释)。
+        await g?.close(g.path)
+      } catch {
+        /* 忽略 */
+      }
+    }
   }
 
   /** 迁移前:关闭当前连接(文件交由 Rust 复制/建 junction)。 */

@@ -745,7 +745,7 @@
 
       const activeCard = `
         <div class="card card-pad">
-          <div class="card-title">活跃用户趋势 <span class="hint">每日启动 App 的去重用户</span></div>
+          <div class="card-title">活跃用户趋势 <span class="hint">每日活跃用户（已登录按账号、未登录按设备）</span></div>
           ${lineChartSvg(labels, [{ name: '活跃用户', color: CHART_COLORS[2], data: t.activeUsers, area: true }], { w: 370, height: 250 })}
         </div>`
 
@@ -772,38 +772,57 @@
         </div>`
 
       const f = d.funnel
-      const funnelMax = Math.max(1, f.visitors, f.clicks, f.installs, f.registrations)
       const rate = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—')
+      const perVisit = f.visitors ? (f.clicks / f.visitors).toFixed(1) : '—'
+      const installRate = rate(f.installs, f.visitors)
+      const regRate = rate(f.registrations, f.installs)
+      const fnRows = [
+        { l: '访客数(设备)', v: f.visitors, c: '#1d7ef0', sub: `按设备指纹去重 · 近${d.range}天同设备多次进入=1` },
+        { l: '点击数(进入次数)', v: f.clicks, c: '#3d97f5', sub: `进入1次计1次,页内操作不计 · 人均 ${perVisit} 次/设备` },
+        { l: '安装数(设备)', v: f.installs, c: '#f59e0b', sub: '上报过安装记录的去重设备数' },
+        { l: '注册数(账号)', v: f.registrations, c: '#16a34a', sub: '完成注册且注册前其设备有过安装' },
+      ]
+      const funnelMax = Math.max(1, ...fnRows.map((r) => r.v))
       const funnelCard = `
         <div class="card card-pad">
-          <div class="card-title">下载站转化漏斗 <span class="hint">近 ${d.range} 天</span></div>
+          <div class="card-title">下载站转化漏斗 <span class="hint">近 ${d.range} 天 · 设备指纹/账号去重</span></div>
           <div style="margin-top:10px">
-            ${[
-          { l: '访客数', v: f.visitors, c: '#1d7ef0' },
-          { l: '点击数', v: f.clicks, c: '#3d97f5' },
-          { l: '安装数', v: f.installs, c: '#f59e0b' },
-          { l: '注册数', v: f.registrations, c: '#16a34a' },
-        ].map((x, i, arr) => {
-          const prev = i === 0 ? null : arr[i - 1].v
-          const r = prev ? `<span class="rate">↓${rate(x.v, prev)}</span>` : ''
-          return `<div class="funnel-row"><span class="f-label">${x.l}</span><div class="f-track"><div class="f-bar" style="width:${Math.max(1.5, (x.v / funnelMax) * 100)}%;background:${x.c}"></div></div><span class="f-val"><b>${fmt(x.v)}</b>${r}</span></div>`
-        }).join('')}
+            ${fnRows.map((x, i) => {
+              // 点击数(进入次数)与访客数不同量纲,显示人均次数;安装/注册与上一设备级指标比百分比
+              const rateTexts = [null, `人均 ${perVisit} 次`, `↓${installRate}(安装/访客)`, `↓${regRate}(注册/安装)`]
+              const r = rateTexts[i] ? `<span class="rate">${rateTexts[i]}</span>` : ''
+              const sub = x.sub ? `<div style="margin:2px 0 6px 92px;font-size:11px;color:var(--text-3)">${x.sub}</div>` : ''
+              return `<div class="funnel-row"><span class="f-label">${x.l}</span><div class="f-track"><div class="f-bar" style="width:${Math.max(1.5, (x.v / funnelMax) * 100)}%;background:${x.c}"></div></div><span class="f-val"><b>${fmt(x.v)}</b>${r}</span></div>${sub}`
+            }).join('')}
           </div>
-          <div class="legend" style="margin-top:8px"><span class="item" style="color:var(--text-3)">点击率 ${rate(f.clicks, f.visitors)} · 安装率 ${rate(f.installs, f.clicks)} · 注册率 ${rate(f.registrations, f.installs)}</span></div>
+          <div class="legend" style="margin-top:8px"><span class="item" style="color:var(--text-3)">设备安装率 ${installRate}(安装数/访客数) · 注册率 ${regRate}(注册数/安装数)</span></div>
         </div>`
 
       const siteCard = `
         <div class="card card-pad">
-          <div class="card-title">下载站流量趋势 <span class="hint">页面访问 + 下载点击</span></div>
+          <div class="card-title">下载站流量趋势 <span class="hint">每日独立设备数（页面访问 / 下载,按设备指纹去重）</span></div>
           ${lineChartSvg(labels, [
         { name: '页面访问', color: CHART_COLORS[0], data: t.pageviews, area: true },
-        { name: '下载点击', color: CHART_COLORS[1], data: t.downloadClicks },
+        { name: '下载', color: CHART_COLORS[1], data: t.downloadClicks },
       ], { w: 980, height: 240 })}
-          <div class="legend"><span class="item"><span class="sw" style="background:#1d7ef0"></span>页面访问</span><span class="item"><span class="sw" style="background:#f59e0b"></span>下载点击</span></div>
+          <div class="legend"><span class="item"><span class="sw" style="background:#1d7ef0"></span>页面访问(独立设备)</span><span class="item"><span class="sw" style="background:#f59e0b"></span>下载(独立设备)</span></div>
         </div>`
 
       return `
         ${kpi}
+        <details style="margin:0 0 14px;font-size:12.5px;color:var(--text-2);background:var(--card,#fff);border:1px solid var(--line,#eee);border-radius:12px;padding:10px 14px">
+          <summary style="cursor:pointer;font-weight:600;color:var(--text-1,#222)">口径说明（点击展开 · 新口径自 2026-10-27 生效）</summary>
+          <ul style="margin:10px 0 2px;padding-left:18px;line-height:1.7">
+            <li><b>活跃用户</b>：每日启动 App 的去重主体。已登录按账号去重（事件携带账号 ID，同日多设备=1）；未登录按设备指纹去重；曾登录设备上未登录的使用归入其曾登录账号（避免"先游客后注册"同日被双计）。</li>
+            <li><b>访客数</b>：${d.range} 天内到过下载站的设备数，按设备指纹去重，同设备多次进入=1。</li>
+            <li><b>点击数</b>：进入下载站的累计次数，进入 1 次计 1 次，页内点击/操作不计。因与访客数不同量纲（人均可&gt;1），转化以「人均 X 次/设备」展示。</li>
+            <li><b>安装数</b>：窗口内上报过安装记录的设备数，按设备指纹去重（同设备重复上报=1，不做 IP 归因）。</li>
+            <li><b>注册数</b>：窗口内完成注册，且其绑定设备在注册前有过安装记录的账号数。</li>
+            <li><b>下载站流量趋势</b>：页面访问与下载均为每日独立设备数（按设备指纹去重）。</li>
+            <li><b>工具内页面访客</b>：按设备指纹去重的独立设备数；功能点击为真实点击次数。</li>
+            <li>历史埋点已回填设备标识（旧访客 ID 兜底）并从历史会话补齐设备↔账号绑定；2026-10-27 起按新口径统计，App 端账号 ID 随版本更新逐步覆盖。</li>
+          </ul>
+        </details>
         <div class="grid-charts">${trendCard}${activeCard}</div>
         <div class="grid-2">${donutCard}${funnelCard}</div>
         <div style="margin-top:14px">${siteCard}</div>
@@ -1245,8 +1264,8 @@
 
       return `
         <div class="kpi-grid">
-          <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>工具内页面访问</div><div class="value">${fmt(totalAppVisitors)}</div><div class="extra">各页面去重访客合计(近${data.days}天)</div></div>
-          <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>功能点击</div><div class="value">${fmt(totalAppClicks)}</div><div class="extra">App 内 feature_click 合计</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>工具内页面访问</div><div class="value">${fmt(totalAppVisitors)}</div><div class="extra">各页面独立设备数合计(近${data.days}天)</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>功能点击</div><div class="value">${fmt(totalAppClicks)}</div><div class="extra">App 内功能点击次数合计</div></div>
         </div>
         <div class="card card-pad" style="margin-bottom:14px">
           <div class="card-title">工具内页面访客趋势 <span class="hint">Top ${topPages.length} 页面</span></div>
@@ -1255,7 +1274,7 @@
         </div>
         <div class="card table-wrap">
           <table>
-            <thead><tr><th>页面</th><th>访客数</th><th>功能点击</th></tr></thead>
+            <thead><tr><th>页面</th><th>独立设备数</th><th>功能点击次数</th></tr></thead>
             <tbody>${data.app.pages.map((p) => `
               <tr>
                 <td>${esc(pageLabel(p.page))}</td>

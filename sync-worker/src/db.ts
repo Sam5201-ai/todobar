@@ -134,17 +134,43 @@ CREATE TABLE IF NOT EXISTS activation_codes (
 CREATE INDEX IF NOT EXISTS idx_codes_status ON activation_codes(status, created_at);
 
 -- 埋点事件:source = site(下载页) 或 app(工具内),event 取值见 ALLOWED_EVENTS
+-- uid/device/sess 为 v2 口径新增:uid=账号(未登录空) / device=设备指纹 / sess=会话ID
 CREATE TABLE IF NOT EXISTS analytics_events (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   source      TEXT    NOT NULL,
   event       TEXT    NOT NULL,
   page        TEXT    NOT NULL DEFAULT '',
   visitor     TEXT    NOT NULL DEFAULT '',
+  uid         TEXT    NOT NULL DEFAULT '',
+  device      TEXT    NOT NULL DEFAULT '',
+  sess        TEXT    NOT NULL DEFAULT '',
+  ip          TEXT    NOT NULL DEFAULT '',
   meta        TEXT    NOT NULL DEFAULT '',
   ts          TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON analytics_events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_event ON analytics_events(event, ts);
+
+-- 设备↔账号长期绑定:登录/注册成功时 upsert,用于跨设备身份缝合
+-- (同一账号在多台设备登录只算 1 个活跃用户,未登录设备按 device 计)
+CREATE TABLE IF NOT EXISTS identity_links (
+  device     TEXT PRIMARY KEY,
+  uid        TEXT NOT NULL,
+  first_seen TEXT NOT NULL,
+  last_seen  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_identity_uid ON identity_links(uid);
+
+-- 下载站下载记录(下载→安装归因):访问 /download 接口时由 server.js 透传写入
+CREATE TABLE IF NOT EXISTS site_downloads (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  device TEXT NOT NULL DEFAULT '',
+  ip     TEXT NOT NULL DEFAULT '',
+  ua     TEXT NOT NULL DEFAULT '',
+  ts     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_site_dl_ts ON site_downloads(ts);
+CREATE INDEX IF NOT EXISTS idx_site_dl_device ON site_downloads(device, ts);
 
 -- 用户反馈(联系客服):kind = issue(问题反馈) | demand(需求提报)
 -- status = open(待反馈) | replied(已回复) | done(已处理)
@@ -249,6 +275,21 @@ function splitSqlStatements(sql: string): string[] {
   let inString = false
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i]
+    // 行注释 "-- ..." 整段跳过:注释里的分号绝不能触发语句切分
+    // (0.4.18/0.4.55 两次踩坑:注释含 ; 导致后续 CREATE TABLE 被截断 → syntax error)
+    if (!inString && ch === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i++
+      cur += '\n'
+      continue
+    }
+    // 块注释 "/* ... */" 整段跳过
+    if (!inString && ch === '/' && sql[i + 1] === '*') {
+      i += 2
+      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++
+      i++ // 跳过结尾的 '/'
+      cur += ' '
+      continue
+    }
     if (ch === "'") {
       // SQL 转义引号用 '' 表示,跳过第二个引号,避免误切换字符串状态
       if (inString && sql[i + 1] === "'") {
@@ -313,6 +354,10 @@ export async function applySchema(db: D1Database): Promise<string[]> {
     'ALTER TABLE users ADD COLUMN avatar TEXT',
     "ALTER TABLE feedback ADD COLUMN contact_method TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE feedback ADD COLUMN last_read_at TEXT NOT NULL DEFAULT ''",
+    'ALTER TABLE analytics_events ADD COLUMN uid TEXT NOT NULL DEFAULT \'\'',
+    'ALTER TABLE analytics_events ADD COLUMN device TEXT NOT NULL DEFAULT \'\'',
+    'ALTER TABLE analytics_events ADD COLUMN sess TEXT NOT NULL DEFAULT \'\'',
+    'ALTER TABLE analytics_events ADD COLUMN ip TEXT NOT NULL DEFAULT \'\'',
   ]
   for (const sql of alters) {
     try {
@@ -322,6 +367,44 @@ export async function applySchema(db: D1Database): Promise<string[]> {
       if (/duplicate column|already exists/i.test(msg)) continue
       failures.push(`${sql} → ${msg}`)
       console.error('[schema] 补列失败:', sql, '::', msg)
+    }
+  }
+  // 依赖补列的索引必须在 ALTER 之后建:旧库 analytics_events 原本没有
+  // device/uid 列,若在 SCHEMA_SQL 阶段建索引会报 no such column
+  const postAlterIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_events_device ON analytics_events(device, ts)',
+    'CREATE INDEX IF NOT EXISTS idx_events_uid ON analytics_events(uid, ts)',
+  ]
+  for (const sql of postAlterIndexes) {
+    try {
+      await db.prepare(sql).run()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (/already exists/i.test(msg)) continue
+      failures.push(`${sql} → ${msg}`)
+      console.error('[schema] 建索引失败:', sql, '::', msg)
+    }
+  }
+  // 历史数据回填(v2 统计口径,2026-10-27):device 列引入前的旧行 device 为空,
+  // 导致访客/活跃等按指纹去重的指标对历史数据全部失效。visitor 在 App 端即设备 ID、
+  // 站点端即持久访客 ID,语义等价,直接兜底回填;语句幂等,每次冷启动只补增量。
+  const backfills = [
+    `UPDATE analytics_events SET device = visitor WHERE device = '' AND visitor <> ''`,
+    // 旧会话反查补齐设备↔账号绑定(仅补缺失设备,不覆盖现有链接),使历史
+    // app_open 等事件也能按"曾登录账号"归并,而非散落成独立设备。
+    `INSERT INTO identity_links (device, uid, first_seen, last_seen)
+     SELECT s.device_id, s.user_id, COALESCE(s.created_at, ''), COALESCE(s.last_seen_at, s.created_at, '')
+     FROM sessions s
+     WHERE s.device_id IS NOT NULL AND s.device_id <> '' AND s.user_id IS NOT NULL AND s.user_id <> ''
+     ON CONFLICT(device) DO NOTHING`,
+  ]
+  for (const sql of backfills) {
+    try {
+      await db.prepare(sql).run()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      failures.push(`${sql.slice(0, 60)}… → ${msg}`)
+      console.error('[schema] 历史回填失败:', sql.slice(0, 60), '::', msg)
     }
   }
   return failures

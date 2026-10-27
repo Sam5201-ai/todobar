@@ -8,9 +8,16 @@
 //   page_visit   页面/视图切换(day/week/month/birthday/huangli/calculator/settings)
 //   feature_click 关键功能点击(sync/add-task/check-update/…)
 
-import { AUTH_BASE, getDeviceId } from './account'
+import { AUTH_BASE, getDeviceId, loadAccount } from './account'
+import { invoke } from '@tauri-apps/api/core'
 
-export type TrackEventName = 'app_open' | 'install' | 'register' | 'page_visit' | 'feature_click'
+export type TrackEventName =
+  | 'app_open'
+  | 'install'
+  | 'register'
+  | 'auth_timing'
+  | 'page_visit'
+  | 'feature_click'
 
 export interface TrackEvent {
   event: TrackEventName
@@ -78,6 +85,28 @@ function currentVisitorId(): string {
     // account 模块异常时的兜底:临时 ID(仅当前批次生效)
     return 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12)
   }
+}
+
+// 设备硬件指纹(Rust 侧读 MachineGuid 哈希),用于统计口径的"设备去重"。
+// 与 register/login 上报的 deviceFingerprint 一致,后端据此做跨设备身份缝合。
+let deviceFp: string | null = null
+let deviceFpTried = false
+function ensureDeviceId(): Promise<string> {
+  if (deviceFp !== null) return Promise.resolve(deviceFp)
+  if (deviceFpTried) return Promise.resolve('')
+  deviceFpTried = true
+  return new Promise((resolve) => {
+    try {
+      invoke('device_fingerprint')
+        .then((v) => {
+          deviceFp = String(v || '')
+          resolve(deviceFp)
+        })
+        .catch(() => resolve(''))
+    } catch {
+      resolve('')
+    }
+  })
 }
 
 let queue: TrackEvent[] = loadQueue()
@@ -159,9 +188,13 @@ export async function flushAnalytics(): Promise<void> {
   }
   sending = true
   const batch = queue.slice(0, BATCH_SIZE)
+  const device = await ensureDeviceId()
+  // 已登录事件携带账号 ID:统计口径"已登录按账号去重(跨设备=1)、未登录按设备指纹"
+  // 的第一优先依据;未登录为空串,由服务端按设备指纹(或设备↔账号缝合)归并。
+  const uid = loadAccount()?.uid || ''
   const payload = {
     source: 'app' as const,
-    events: batch.map((e) => ({ ...e, visitor: currentVisitorId() })),
+    events: batch.map((e) => ({ ...e, visitor: currentVisitorId(), device, uid })),
   }
   try {
     const res = await fetch(trackEndpoint(), {

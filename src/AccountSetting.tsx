@@ -23,6 +23,7 @@ import {
   updateProfile,
   redeemActivationCode,
   refreshAccount,
+  warmDeviceFingerprint,
   AUTH_INVALID_EVENT,
   type AccountState,
   type DeviceInfo,
@@ -30,6 +31,62 @@ import {
 import { AUTH_BASE } from './account'
 
 type ModalView = 'auth' | 'password' | 'devices' | null
+
+// ---------------------------------------------------------------------------
+// 「记住账号」(多账号):勾选状态下成功登录的账号密码进入本地列表,下次打开
+// 登录弹窗默认带出最近登录的一个;点击邮箱输入框可从下拉列表切换历史账号。
+// 取消勾选提交 = 不记住(或移除)该账号,其余账号保留。明文仅存本机。
+// ---------------------------------------------------------------------------
+
+const SAVED_LOGINS_KEY = 'todobar.savedLogins'
+const LEGACY_SAVED_LOGIN_KEY = 'todobar.savedLogin' // 旧版单账号存储,读取时迁移
+const LAST_LOGIN_EMAIL_KEY = 'todobar.lastLoginEmail'
+
+type SavedLogin = { email: string; password: string; savedAt: number }
+
+function readSavedLogins(): SavedLogin[] {
+  try {
+    const raw = localStorage.getItem(SAVED_LOGINS_KEY)
+    if (raw) {
+      const v = JSON.parse(raw) as unknown
+      if (!Array.isArray(v)) return []
+      return v.filter(
+        (x): x is SavedLogin =>
+          !!x && typeof (x as SavedLogin).email === 'string' && typeof (x as SavedLogin).password === 'string',
+      )
+    }
+    // 旧版单账号记录 → 迁移成列表(一次性)
+    const legacy = localStorage.getItem(LEGACY_SAVED_LOGIN_KEY)
+    if (legacy) {
+      localStorage.removeItem(LEGACY_SAVED_LOGIN_KEY)
+      const v = JSON.parse(legacy) as { email?: unknown; password?: unknown }
+      if (typeof v.email === 'string' && typeof v.password === 'string') {
+        const list = [{ email: v.email, password: v.password, savedAt: 0 }]
+        writeSavedLogins(list)
+        return list
+      }
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+function writeSavedLogins(list: SavedLogin[]): void {
+  try {
+    localStorage.setItem(SAVED_LOGINS_KEY, JSON.stringify(list))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+function readLastLoginEmail(): string {
+  try {
+    return localStorage.getItem(LAST_LOGIN_EMAIL_KEY)?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
 
 /** 把用户选择的图片压成 256px 方形 JPEG dataURL(≤约 200KB,方便存 D1)。 */
 function fileToAvatarDataUrl(file: File): Promise<string> {
@@ -71,6 +128,10 @@ function Field(props: {
   onChange: (v: string) => void
   placeholder?: string
   type?: string
+  /** 邮箱历史下拉:透传给 input 的焦点/点击事件。 */
+  onInputFocus?: () => void
+  onInputBlur?: () => void
+  onInputClick?: () => void
 }) {
   return (
     <label className="labeled-input">
@@ -82,6 +143,9 @@ function Field(props: {
         value={props.value}
         placeholder={props.placeholder}
         onChange={(e) => props.onChange(e.target.value)}
+        onFocus={props.onInputFocus}
+        onBlur={props.onInputBlur}
+        onClick={props.onInputClick}
       />
     </label>
   )
@@ -89,8 +153,11 @@ function Field(props: {
 
 export function AccountSetting({
   onSyncChange,
+  onSwitchProfile,
 }: {
   onSyncChange: (patch: Partial<import('./types').SyncConfig>) => void
+  /** 登录成功后切换到该账号的独立本地库(账号数据隔离),返回并入的游客数据条数。 */
+  onSwitchProfile?: (email: string) => Promise<number>
 }) {
   const [account, setAccount] = useState<AccountState | null>(() => loadAccount())
   const [modalView, setModalView] = useState<ModalView>(null)
@@ -158,6 +225,9 @@ export function AccountSetting({
 
   async function handleLogout() {
     setBusy(true)
+    // 先关同步再调登出接口:logout 会使服务端会话立即作废,若等它返回后才关同步,
+    // 窗口期内的定时/防抖同步会拿着已失效的令牌推送 → 401 → 误弹「同步失败」提示。
+    onSyncChange({ enabled: false, token: '' })
     try {
       await logout()
     } catch {
@@ -165,7 +235,6 @@ export function AccountSetting({
     } finally {
       setAccount(null)
       setModalView(null)
-      onSyncChange({ enabled: false, token: '' })
       setBusy(false)
     }
   }
@@ -428,7 +497,17 @@ export function AccountSetting({
           onLoggedIn={(acc) => {
             setAccount(acc)
             setModalView(null)
-            onSyncChange({ enabled: true, endpoint: AUTH_BASE, token: acc.token })
+            void (async () => {
+              // 先切到该账号的独立本地库(首次登录会把游客数据并入),再开同步:
+              // 保证云端补齐落在正确的库,换账号登录后互不见对方数据、绝不互传。
+              try {
+                const migrated = (await onSwitchProfile?.(acc.email)) ?? 0
+                if (migrated > 0) setMsg({ kind: 'ok', text: `已把本地 ${migrated} 条数据并入账号` })
+              } catch (e) {
+                setMsg({ kind: 'err', text: `切换账号数据失败: ${(e as Error).message}` })
+              }
+              onSyncChange({ enabled: true, endpoint: AUTH_BASE, token: acc.token })
+            })()
           }}
           onPasswordChanged={() => {
             setAccount(null)
@@ -462,8 +541,22 @@ function AccountModal({
 }) {
   // auth 表单
   const [tab, setTab] = useState<'login' | 'register'>(account ? 'login' : 'login')
-  const [email, setEmail] = useState(account?.email ?? '')
-  const [password, setPassword] = useState('')
+  // 「记住账号」(多账号):默认带出最近一次登录的账号;邮箱框点击可下拉切换历史账号。
+  const [savedLogins] = useState(readSavedLogins)
+  const [email, setEmail] = useState(() => {
+    const last = readLastLoginEmail()
+    if (last) return last
+    return readSavedLogins()[0]?.email ?? account?.email ?? ''
+  })
+  const [password, setPassword] = useState(() => {
+    const chosen = readLastLoginEmail() || readSavedLogins()[0]?.email || account?.email || ''
+    return readSavedLogins().find((x) => x.email === chosen)?.password ?? ''
+  })
+  const [remember, setRemember] = useState(() => {
+    const chosen = readLastLoginEmail() || readSavedLogins()[0]?.email || account?.email || ''
+    return readSavedLogins().some((x) => x.email === chosen)
+  })
+  const [showSaved, setShowSaved] = useState(false)
   const [nickname, setNickname] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
   const [code, setCode] = useState('')
@@ -473,6 +566,14 @@ function AccountModal({
   const [countdown, setCountdown] = useState(0)
   // 设备管理
   const [devices, setDevices] = useState<DeviceInfo[] | null>(null)
+
+  // 弹窗打开即预取设备指纹(reg query 子进程较慢),登录/注册时直接取缓存,省去串行等待;
+  // 同时预热到云端的 DNS/TLS 连接:国内链路冷启动握手要 0.5~2s,预热后真正提交登录
+  // 走已建好的连接,实测接口本身只需 ~1s(几乎全是网络往返,服务端处理可忽略)。
+  useEffect(() => {
+    warmDeviceFingerprint()
+    void fetch(`${AUTH_BASE}/api/health`, { keepalive: true }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (countdown <= 0) return
@@ -522,6 +623,16 @@ function AccountModal({
         tab === 'register'
           ? await register(email, password, code, nickname.trim() || undefined, avatar)
           : await login(email, password)
+      // 成功后按勾选状态更新记住列表:勾选 = 记住/刷新该账号(置顶),取消 = 移除该账号。
+      const em = email.trim()
+      const list = readSavedLogins().filter((x) => x.email !== em)
+      if (remember && password) list.unshift({ email: em, password, savedAt: Date.now() })
+      writeSavedLogins(list)
+      try {
+        localStorage.setItem(LAST_LOGIN_EMAIL_KEY, em)
+      } catch {
+        /* 忽略 */
+      }
       onLoggedIn(acc)
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
@@ -672,7 +783,43 @@ function AccountModal({
                 />
               </div>
             ) : null}
-            <Field label="邮箱" value={email} placeholder="you@example.com" onChange={setEmail} />
+            {tab === 'login' && savedLogins.length > 0 ? (
+              <div style={{ position: 'relative' }}>
+                <Field
+                  label="邮箱"
+                  value={email}
+                  placeholder="you@example.com"
+                  onChange={setEmail}
+                  onInputFocus={() => setShowSaved(true)}
+                  onInputClick={() => setShowSaved(true)}
+                  onInputBlur={() => window.setTimeout(() => setShowSaved(false), 120)}
+                />
+                {showSaved ? (
+                  <div className="account-saved-pop">
+                    {savedLogins.map((s) => (
+                      <button
+                        key={s.email}
+                        type="button"
+                        className={`account-saved-item${s.email === email.trim() ? ' is-active' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          // 选中历史账号:带出该账号记住的密码并自动勾选。
+                          setEmail(s.email)
+                          setPassword(s.password)
+                          setRemember(true)
+                          setShowSaved(false)
+                        }}
+                      >
+                        <span>{s.email}</span>
+                        {s.email === email.trim() ? <span className="account-saved-check">当前</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Field label="邮箱" value={email} placeholder="you@example.com" onChange={setEmail} />
+            )}
             <Field
               label="密码"
               type="password"
@@ -680,6 +827,26 @@ function AccountModal({
               placeholder="至少 8 位"
               onChange={setPassword}
             />
+            {tab === 'login' ? (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 13,
+                  margin: '-2px 0 0',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                记住账号
+              </label>
+            ) : null}
             {tab === 'register' ? (
               <div className="account-code-row">
                 <Field label="验证码" value={code} placeholder="邮箱验证码" onChange={setCode} />
