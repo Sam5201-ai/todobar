@@ -14,7 +14,7 @@ function showFatal(title: string, detail?: string) {
   root.style.background = '#ffffff'
   const box = document.createElement('div')
   box.style.cssText =
-    'position:fixed;inset:0;padding:24px;font:14px/1.6 system-ui,sans-serif;color:#b00;background:#fff;overflow:auto;z-index:99999'
+    'position:fixed;top:0;right:0;bottom:0;left:0;padding:24px;font:14px/1.6 system-ui,sans-serif;color:#b00;background:#fff;overflow:auto;z-index:99999'
   box.innerHTML =
     '<div style="font-weight:700;font-size:16px;margin-bottom:8px">' +
     title +

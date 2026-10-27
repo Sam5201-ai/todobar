@@ -162,7 +162,7 @@
 
 .workspace.is-native .native-dock-surface {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
   z-index: 14;
   display: block;
   width: 100vw;
@@ -2440,7 +2440,7 @@ kbd {
 
 .sheet-backdrop {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
   z-index: 10;
   display: flex;
   align-items: flex-end;
@@ -3064,7 +3064,7 @@ kbd {
 .page-panel {
   --page-ms: 240ms;
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
   /* 高于底部悬浮按钮(.fab-add z-index:6),独立页面要完整遮住主视图 */
   z-index: 20;
   display: flex;
@@ -5467,7 +5467,7 @@ body.is-row-dragging * {
 
 .account-modal-overlay {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
   z-index: 90;
   background: rgba(0, 0, 0, 0.45);
   display: flex;

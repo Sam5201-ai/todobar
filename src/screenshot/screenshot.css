@@ -10,7 +10,7 @@ html.screenshot-mode #root {
 .shot-loading,
 .pin-loading {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,7 +22,7 @@ html.screenshot-mode #root {
 /* ---------------- 截图覆盖层 ---------------- */
 .capture-overlay-root {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   cursor: crosshair;
   user-select: none;
 }
@@ -32,7 +32,7 @@ html.screenshot-mode #root {
 .capture-anno,
 .capture-ui {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   width: 100%;
   height: 100%;
   display: block;
@@ -143,7 +143,7 @@ html.screenshot-mode #root {
 /* ---------------- 标注编辑器 ---------------- */
 .editor-root {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   display: flex;
   flex-direction: column;
   background: #1e2228;
@@ -241,7 +241,7 @@ html.screenshot-mode #root {
 /* ---------------- 悬浮贴图窗口 ---------------- */
 .pin-root {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   user-select: none;
   /* 注意:边框不能画在 .pin-root 自身(outline/border 都会被 inset:0 的
     .pin-image 盖住 —— Chromium 中 positioned 子元素绘制在根元素 outline
@@ -255,7 +255,7 @@ html.screenshot-mode #root {
 .pin-root::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   pointer-events: none;
   border: 2px solid rgba(150, 150, 150, 0.8);
   box-shadow:
@@ -273,7 +273,7 @@ html.screenshot-mode #root {
 
 .pin-image {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   width: 100%;
   height: 100%;
   object-fit: fill;
@@ -728,7 +728,7 @@ html.screenshot-mode #root {
 /* ---- 选区调整手柄(问题8):四角 + 四边中点,拖拽微调圈选范围 ---- */
 .capture-handles {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   z-index: 4;
   pointer-events: none;
 }
@@ -767,7 +767,7 @@ html.screenshot-mode #root {
 /* ---------------- 贴图穿透控制条窗口(pinctl-*,独立不穿透小窗,参考 PixPin) ---------------- */
 .pinctl-root {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持 */
   display: flex;
   flex-direction: column;
   align-items: center;
