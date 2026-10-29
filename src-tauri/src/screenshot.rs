@@ -118,7 +118,9 @@ pub fn close_window(app: tauri::AppHandle, label: String) -> Result<(), String> 
 // ===========================================================================
 
 /// 静态预热贴图窗口池的 label(tauri.conf.json 中定义,启动即创建并隐藏)。
-const PIN_POOL_LABELS: [&str; 2] = ["pin-1", "pin-2"];
+// 扩展到 6 个预热池窗:典型多张贴图(参考 PixPin)走可靠的预热池路径,
+// 无需依赖脆弱的动态建窗(fire-and-forget + 冷启动事件丢失),彻底规避"第 3 张不显示"。
+const PIN_POOL_LABELS: [&str; 6] = ["pin-1", "pin-2", "pin-3", "pin-4", "pin-5", "pin-6"];
 
 /// 上次覆盖层的定位矩形(物理像素)。相同目标屏重复截图时跳过 set_position/set_size,
 /// 避免 WebView2 窗口每次重排引发的可感知闪烁/缩放弹动。
@@ -270,9 +272,7 @@ pub fn show_pin_window(
         )
         .title("TickTask 贴图")
         // ⚠️ 与主窗口 additionalBrowserArgs 完全一致(WebView2 环境一致性铁律)!
-        .additional_browser_args(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream",
-        )
+        .additional_browser_args(crate::BROWSER_ARGS)
         .inner_size(w as f64, h as f64)
         .position(px as f64, py as f64)
         .decorations(false)
@@ -365,9 +365,8 @@ pub fn show_pin_control(
             tauri::WebviewUrl::App(std::path::PathBuf::new()),
         )
         .title("贴图控制条")
-        .additional_browser_args(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream",
-        )
+        // ⚠️ 与主窗口 additionalBrowserArgs 完全一致(WebView2 环境一致性铁律)!
+        .additional_browser_args(crate::BROWSER_ARGS)
         .inner_size(pw.max(80) as f64, ph.max(40) as f64)
         .position(px as f64, py as f64)
         .decorations(false)

@@ -1,5 +1,5 @@
 {
-  "version": "0.4.56",
-  "url": "https://todobar-app.app.workbuddy.host/TickTask-setup.exe?v=0.4.56",
-  "notes": "0.4.56 更新：修复多账户数据隔离——不同账号登录只显示各自数据，互不串库（游客数据并入窗口独占、迁移时不再误关主账号库连接）；登录窗口支持「记住账号」，可在已登录账号间快速切换。"
+  "version": "0.4.57",
+  "url": "https://todobar-app.app.workbuddy.host/TickTask-setup.exe?v=0.4.57",
+  "notes": "0.4.57 更新：贴图支持同时钉住更多截图（贴图池扩展至 6 张），并修复连续贴第 3 张时偶发不显示的问题；截图与贴图性能、稳定性优化；修复若干已知问题。"
 }

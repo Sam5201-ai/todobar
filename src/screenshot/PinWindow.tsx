@@ -6,12 +6,14 @@
 // 'pin-set' 事件驱动重新初始化。关闭统一走 dismiss_pin_window(池窗归还、动态窗销毁)。
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCurrentWindow, LogicalSize, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { listen, emitTo } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Eye, EyeOff, Lock, Unlock, Trash2, X, Plus, Minus } from 'lucide-react';
 import {
   dismissPinWindow,
   loadImageDataUrl,
+  shotLog,
   stashImage,
   takeImage,
 } from './bridge';
@@ -50,17 +52,29 @@ export default function PinWindow() {
   const aspectRef = useRef(1);
   const resizeRef = useRef<{ x0: number; y0: number; w0: number; h0: number } | null>(null);
   const pinIdRef = useRef<string | null>(null);
-  // 手动双击检测:startDragging 进入原生移动循环后会吞掉第二次 click,
-  // 原生 onDoubleClick 不可靠(问题5),改用 mousedown 时间戳判定。
-  const lastDownRef = useRef(0);
+  // 双击关闭判定:原生 onDoubleClick 不可靠(原生拖拽会吞掉第二次 click),
+  // 改用「两次 mousedown 间隔 + 首次按下未位移」判定。只在 mouseup 且未拖拽时
+  // 记录时间戳,所以拖拽结束不会误触发双击。
+  const lastClickRef = useRef(0);
+  // 本次按下的起点(用于区分「单击」与「拖拽」)。按下时不立刻 startDragging,
+  // 只有指针移动超过 3px 才启动原生拖拽 —— 这样拖拽零延迟、手感跟手,
+  // 同时纯点击不会误拖,双击判定不会被拖拽循环吞掉。
+  const pressRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(''), 1800);
   };
 
-  /** 载入贴图数据 + 恢复运行态(每次 pin-set / 挂载时执行)。 */
-  const init = useCallback(async (activated: boolean) => {
+  /**
+   * 载入贴图数据 + 恢复运行态。无参统一语义:
+   * - 读到 pin-meta → 装载并显示(若已是同一张则跳过,避免重复初始化)。
+   * - 读不到 → 保持现状(待命或已显示),**绝不再 dismiss/隐藏**。旧逻辑在重复
+   *   pin-set 或轮询兜底时读到 null 会把已显示的贴图误关掉,导致「贴图闪一下消失」。
+   * 由 pin-set 事件唤醒,或挂载后短轮询兜底(动态窗 WebView2 冷启动、pin-set 可能
+   * 丢失时,窗口加载完自行轮询到 pin-meta 显示)。
+   */
+  const init = useCallback(async () => {
     let id: string | null = null;
     try {
       const metaRaw = await takeImage(`pin-meta:${label}`);
@@ -71,13 +85,10 @@ export default function PinWindow() {
       /* 无元数据 */
     }
     if (!id) {
-      // 无数据:待命(预热挂载)或数据丢失。
-      if (activated) void dismissPinWindow(label);
-      setReady(false);
-      setPinId(null);
-      pinIdRef.current = null;
+      // 无数据:保持现状(待命或已显示),不 dismiss、不隐藏。
       return;
     }
+    if (pinIdRef.current === id) return; // 已是这张,跳过
     let url = getPinImage(id);
     if (!url) {
       // 跨窗口兜底:进程级暂存。
@@ -85,7 +96,9 @@ export default function PinWindow() {
       if (b64) url = `data:image/png;base64,${b64}`;
     }
     if (!url) {
-      if (activated) void dismissPinWindow(label);
+      // 图片数据暂未就绪(动态窗场景下 pin:<id> 晚于 pin-meta 写入)。把 meta 放回,
+      // 下次 pin-set/轮询再试 —— 否则 meta 被 takeImage 取走删除后会永久丢失。
+      await stashImage(`pin-meta:${label}`, JSON.stringify({ pinId: id }));
       return;
     }
     try {
@@ -101,14 +114,18 @@ export default function PinWindow() {
       setOpacity(st.opacity);
       setToolbarVisible(false);
       setReady(true);
-      // 图片装载完成:此刻才显示窗口(Rust 侧不再代为 show)。旧流程 Rust 立即
-      // show,窗口内容还是上一张贴图/空白,被拉伸到新窗口尺寸 → 「先变形后恢复」。
+      // 图片装载完成:此刻才显示窗口(Rust 侧不再代为 show)。
       try {
         await win.show();
+        // ⚠️ 必须连 WebView2 控制器一起置可见:池窗/动态窗都是 `visible: false` 建的,
+        // 只 show 外层 HWND 时 WebView2 仍认为「不可见」→ 页面 visibilityState=hidden,
+        // 渲染停摆。表现就是热键贴图后画面不出现,鼠标点一下(真实输入)才画出来。
+        await getCurrentWebview().show();
         await win.setFocus();
       } catch {
         /* ignore */
       }
+      void shotLog(`pin shown label=${label} vis=${document.visibilityState}`);
       if (st.penetrated) {
         win.setIgnoreCursorEvents(true).catch(() => {});
         setLastPenetratedPin(id);
@@ -117,13 +134,30 @@ export default function PinWindow() {
         setLastPenetratedPin(null);
       }
     } catch {
-      if (activated) void dismissPinWindow(label);
+      /* 加载失败保持现状 */
     }
   }, [label, win]);
 
-  // 挂载:读取元数据初始化(动态新窗);池窗待命则静默。
+  // 挂载:短轮询兜底。动态窗是全新 WebView2 冷启动,从 build 到 JS 加载完成、
+  // 注册 pin-set 监听要数百毫秒,前端 emitTo 的 pin-set 可能在此之前发出而丢失;
+  // 此处挂载后轮询 pin-meta,窗口一加载完就能自行显示(池窗则靠 pin-set 即时唤醒)。
+  // 已显示即停;最多 ~6s 后停止空转。
   useEffect(() => {
-    void init(false);
+    let cancelled = false;
+    let tries = 0;
+    const poll = async () => {
+      while (!cancelled && tries < 24) {
+        if (pinIdRef.current) return; // 已显示,停
+        await init();
+        tries += 1;
+        if (pinIdRef.current) return; // 本次已显示,停
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -135,11 +169,12 @@ export default function PinWindow() {
     };
   }, [win]);
 
-  // 池窗复用:监听 pin-set 重新初始化。
+  // pin-set 唤醒:贴图 / 复用池窗时由前端 emitTo 触发,读取 pin-meta 显示或待命。
+  // 动态窗若事件在 JS 未就绪时丢失,由挂载轮询兜底,此处不依赖事件必然命中。
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     void listen('pin-set', () => {
-      void init(true);
+      void init();
     }).then((fn) => {
       unlisten = fn;
     });
@@ -210,6 +245,8 @@ export default function PinWindow() {
 
   // 关闭到历史(不销毁数据,可从设置/历史重新钉出)。
   const closeToHistory = useCallback(() => {
+    pinIdRef.current = null;
+    setReady(false);
     void dismissPinWindow(label);
   }, [label]);
 
@@ -217,6 +254,8 @@ export default function PinWindow() {
   const destroy = useCallback(() => {
     const id = pinIdRef.current;
     if (id) removePin(id);
+    pinIdRef.current = null;
+    setReady(false);
     void dismissPinWindow(label);
   }, [label]);
 
@@ -253,21 +292,42 @@ export default function PinWindow() {
     return () => window.removeEventListener('keydown', onKey);
   }, [penetrated, closeToHistory, destroy]);
 
-  // 鼠标拖拽移动(未锁定且未穿透时);350ms 内第二次按下 = 双击关闭(问题5)。
+  // 鼠标交互(未锁定且未穿透时):按下只记录起点,**不立刻 startDragging**;
+  // 指针移动超过 3px 才启动原生拖拽。这样:
+  // ① 拖拽零延迟、跟手(旧实现延迟 260ms 才拖 → 明显发迟、拖不动就松手会失效);
+  // ② 纯点击(含双击的两次按下)永远不会误触发拖拽,双击判定也不会被拖拽循环吞掉;
+  // ③ 两次按下间隔 ≤250ms 且未发生位移 → 判定双击关闭。
   const onImageMouseDown = (e: React.MouseEvent) => {
     if (locked || penetrated) return;
     if (e.button !== 0) return;
     e.preventDefault();
     const now = Date.now();
-    if (now - lastDownRef.current < 350) {
-      lastDownRef.current = 0;
+    if (lastClickRef.current && now - lastClickRef.current <= 250) {
+      lastClickRef.current = 0;
+      pressRef.current = null;
       closeToHistory();
       return;
     }
-    lastDownRef.current = now;
+    pressRef.current = { x: e.screenX, y: e.screenY, moved: false };
     // 点击时抢焦点:边框随之变蓝,明确告知用户当前选中的是这张贴图。
     win.setFocus().catch(() => {});
-    win.startDragging().catch(() => {});
+  };
+
+  const onImageMouseMove = (e: React.MouseEvent) => {
+    const p = pressRef.current;
+    if (!p || p.moved || locked || penetrated) return;
+    // 3px 阈值:过滤手抖,保证「点击」不会变成「拖拽」。
+    if (Math.abs(e.screenX - p.x) > 3 || Math.abs(e.screenY - p.y) > 3) {
+      p.moved = true;
+      win.startDragging().catch(() => {});
+    }
+  };
+
+  const onImageMouseUp = () => {
+    const p = pressRef.current;
+    pressRef.current = null;
+    // 只有「没拖动过」的按下才算一次点击,用于双击计时。
+    if (p && !p.moved) lastClickRef.current = Date.now();
   };
 
   // 滚轮缩放贴图(参考 PixPin):以窗口中心为锚缩放,保持宽高比。
@@ -348,6 +408,8 @@ export default function PinWindow() {
         setHovered(false);
         setToolbarVisible(false);
       }}
+      onMouseMove={onImageMouseMove}
+      onMouseUp={onImageMouseUp}
       onWheel={onWheel}
     >
       <img

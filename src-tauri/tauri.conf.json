@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TickTask",
-  "version": "0.4.56",
+  "version": "0.4.57",
   "identifier": "dev.todobar.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -26,7 +26,7 @@
         "shadow": false,
         "fullscreen": false,
         "zoomHotkeysEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
       },
       {
         "label": "capture-overlay",
@@ -37,12 +37,12 @@
         "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "focus": false,
+        "focus": true,
         "visible": false,
         "transparent": true,
         "shadow": false,
         "zoomHotkeysEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
       },
       {
         "label": "pin-1",
@@ -53,12 +53,12 @@
         "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "focus": false,
+        "focus": true,
         "visible": false,
         "transparent": true,
         "shadow": false,
         "zoomHotkeysEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
       },
       {
         "label": "pin-2",
@@ -69,12 +69,76 @@
         "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "focus": false,
+        "focus": true,
         "visible": false,
         "transparent": true,
         "shadow": false,
         "zoomHotkeysEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+      },
+      {
+        "label": "pin-3",
+        "title": "TickTask 贴图",
+        "width": 320,
+        "height": 240,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true,
+        "visible": false,
+        "transparent": true,
+        "shadow": false,
+        "zoomHotkeysEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+      },
+      {
+        "label": "pin-4",
+        "title": "TickTask 贴图",
+        "width": 320,
+        "height": 240,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true,
+        "visible": false,
+        "transparent": true,
+        "shadow": false,
+        "zoomHotkeysEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+      },
+      {
+        "label": "pin-5",
+        "title": "TickTask 贴图",
+        "width": 320,
+        "height": 240,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true,
+        "visible": false,
+        "transparent": true,
+        "shadow": false,
+        "zoomHotkeysEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+      },
+      {
+        "label": "pin-6",
+        "title": "TickTask 贴图",
+        "width": 320,
+        "height": 240,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true,
+        "visible": false,
+        "transparent": true,
+        "shadow": false,
+        "zoomHotkeysEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
       }
     ],
     "security": {

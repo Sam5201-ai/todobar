@@ -15,7 +15,7 @@ const PORT = Number(process.env.PORT || 3000)
 const HOST = '0.0.0.0'
 
 // 代理上游:自定义域名优先,workers.dev 兜底
-const UPSTREAMS = ['https://sync.tuanzhang.site', 'https://todobar-sync.level1232.workers.dev']
+const UPSTREAMS = ['https://sync.tuanzhang.site', 'https://todobar-sync.loveliu1232.workers.dev']
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -97,7 +97,10 @@ async function proxyApi(req, res, pathname, search) {
       headers,
       body: payload,
       redirect: 'follow',
-      signal: AbortSignal.timeout(10000), // 单次请求 10s 超时,避免悬挂
+      // 单次请求 25s 超时:Worker 新版本部署后的首个请求需逐条执行全量建表
+      // (60+ 次 D1 往返),10s 会直接触发 502「upstream unreachable」;
+      // 后续冷启动走版本标记快速通道仅需 1 次往返,25s 只作为网络抖动余量。
+      signal: AbortSignal.timeout(25000),
     })
   }
 

@@ -13,6 +13,7 @@
 // - 关闭按钮 → dismissPinWindow(target)(Rust 侧联动销毁本控制条窗口)。
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { emit, listen } from '@tauri-apps/api/event';
 import { Move, X } from 'lucide-react';
 import { dismissPinWindow, takeImage } from './bridge';
@@ -36,6 +37,9 @@ export default function PinControlWindow() {
         if (Number.isFinite(v)) setOpacity(Math.min(1, Math.max(0.15, v)));
       }
       await win.show().catch(() => {});
+      // 同 PinWindow:visible:false 建的窗口必须把 WebView2 控制器也置可见,
+      // 否则页面 hidden、控制条不显示(要鼠标点一下才出来)。
+      await getCurrentWebview().show().catch(() => {});
     })();
     // 复用(PinWindow 再次开启穿透):重读初始透明度并自显。
     let un: (() => void) | undefined;
@@ -47,6 +51,7 @@ export default function PinControlWindow() {
           if (Number.isFinite(v)) setOpacity(Math.min(1, Math.max(0.15, v)));
         }
         await win.show().catch(() => {});
+        await getCurrentWebview().show().catch(() => {});
       })();
     }).then((fn) => {
       un = fn;

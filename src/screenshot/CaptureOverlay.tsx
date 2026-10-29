@@ -19,6 +19,7 @@ import {
   shotLog,
   stashImage,
   takeImage,
+  waitFrames,
   windowAtPoint,
   writeClipboardImage,
   type Rect,
@@ -866,8 +867,16 @@ export default function CaptureOverlay() {
   useEffect(() => {
     if (runId === 0) return; // 0 = 挂载待命,无数据
     let disposed = false;
+    // ⚠️ 本轮先清空画面(2026-10-28):覆盖层待命时不再隐藏、只缩到 16x16 停在屏内,
+    // 所以上一轮的冻结帧仍留在 canvas 上。若不清空,position 把它从 16x16 拉成全屏
+    // 的那一瞬间会把「上一张截图」拉伸显示出来。必须先清空并等一帧上屏,再定位。
+    setReady(false);
     (async () => {
       try {
+        // 等两帧,确保 React 已按 ready=false 重渲染(容器清空)后才做定位/放大。
+        // ⚠️ 必须带上限(90ms):窗口被判为不可见时 rAF 会停摆,无上限等待会让整轮
+        // 截图卡死在这里(「按了截图键要等 2~4 秒 / 要再点一下鼠标」的真因)。
+        await waitFrames(2, 90);
         // 主窗口 stash 在 emit 之前完成,理论上必有;重试兜底事件竞态。
         let raw: string | null = null;
         for (let i = 0; i < 5 && !raw; i++) {
@@ -931,8 +940,12 @@ export default function CaptureOverlay() {
           setReady(true);
           // 双保险:ready 翻转后 canvas 必然在 DOM,下一帧再补一次尺寸+绘制,
           // 防御任何 ref 时序问题(本轮修复的核心教训:静默空转不可接受)。
-          window.requestAnimationFrame(() => {
-            if (disposed) return;
+          // ⚠️ 这里同样不能只靠 rAF:窗口不可见时 rAF 不回调 → 覆盖层永远不显示。
+          // 采用「rAF 与 60ms 定时器赛跑,先到先执行」,保证一定上屏。
+          let applied = false;
+          const applyAndShow = () => {
+            if (applied || disposed) return;
+            applied = true;
             const meta2 = metaRef.current;
             const img2 = imgRef.current;
             if (meta2 && img2 && baseRef.current) {
@@ -941,7 +954,7 @@ export default function CaptureOverlay() {
               clearAnnoCanvas();
               redrawUI();
             }
-            // 冻结帧已上屏:此刻才显示覆盖层(定位早已在隐藏态完成)。
+            // 冻结帧已就绪:此刻才显示覆盖层(定位早已在待命态完成)。
             // 只显示+置焦,不动主窗(主窗全程在覆盖层下方,冻结帧与其一致)。
             if (metaRef.current) {
               invoke('show_capture_overlay').catch(async (e) => {
@@ -949,8 +962,10 @@ export default function CaptureOverlay() {
                 if (!disposed && activatedRef.current) await finishOverlay();
               });
             }
-          });
-          void shotLog('overlay ui ready');
+          };
+          window.requestAnimationFrame(applyAndShow);
+          window.setTimeout(applyAndShow, 60);
+          void shotLog(`overlay ui ready vis=${document.visibilityState}`);
         }
       } catch (e) {
         console.error('覆盖层初始化失败', e);

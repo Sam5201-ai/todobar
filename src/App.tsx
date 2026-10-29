@@ -942,11 +942,19 @@ function App() {
 
     let unlistenToggle: (() => void) | undefined
     let unlistenSettings: (() => void) | undefined
+    // [0.4.56 修复] cancelled 守卫:开发模式 StrictMode 下 effect 会 mount→cleanup→mount,
+    // 而 listen() 是异步的——首次 mount 的清理函数在其解析前就同步执行,unlisten 为空操作,
+    // 导致首次注册的监听器泄漏,最终 todobar-tray-toggle 挂上两个监听器;按一次快捷键触发
+    // 两次 setIsOpen((c)=>!c),两次取反等于没变 → 「呼出/打开窗口快捷键点了没反应」。
+    // 加此守卫后,被丢弃的首次 mount 在异步解析后直接 return,不注册,保证全局唯一监听器。
+    let cancelled = false
 
     const setupTrayListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event')
+        if (cancelled) return
         unlistenToggle = await listen('todobar-tray-toggle', () => setIsOpen((c) => !c))
+        if (cancelled) return
         unlistenSettings = await listen('todobar-tray-settings', () => {
           setIsOpen(true)
           setIsSettingsOpen(true)
@@ -958,6 +966,7 @@ function App() {
 
     void setupTrayListeners()
     return () => {
+      cancelled = true
       unlistenToggle?.()
       unlistenSettings?.()
     }

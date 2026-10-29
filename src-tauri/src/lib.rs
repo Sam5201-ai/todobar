@@ -17,6 +17,18 @@ mod notes;
 mod screenshot;
 mod clipboard;
 
+/// **所有窗口**共用的 WebView2 启动参数。
+///
+/// ⚠️ WebView2 铁律:同一进程、同一用户数据目录下,两个 webview 的
+/// `CoreWebView2EnvironmentOptions` 必须逐字符一致,否则后建的那个必失败
+/// (HRESULT 0x8007139F)。所以这里的字符串与 `tauri.conf.json` 里每个窗口的
+/// `additionalBrowserArgs` **必须完全一致** —— 改一处就要同步全部(见 MEMORY)。
+///
+/// `CalculateNativeWinOcclusion` 等三个开关:关闭 Chromium 对「被遮挡 / 后台」窗口的
+/// 渲染降频。截图覆盖层 / 贴图窗在隐藏⇄显示来回切换、或停在屏幕角落时,Chromium 可能
+/// 把页面判为后台而节流渲染;这几个开关是无害的保险,保证事件回调与绘制按正常节奏跑。
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling";
+
 /// 截图 / 贴图快捷键托管状态:记录本轮已注册的全局快捷键,便于下次注册前注销。
 #[derive(Default)]
 struct ScreenshotShortcutState {
@@ -981,13 +993,19 @@ fn register_screenshot_shortcuts(
         if sc.trim().is_empty() {
             continue;
         }
-        let kind = kind.to_string();
-        gs.on_shortcut(sc.as_str(), move |app, _sc, event| {
+        let k = kind.to_string();
+        // 注册失败=多半被另一个实例/软件占用(同一热键全局唯一)。旧实现把错误
+        // 只回给前端,日志里查无对证;这里落 app.log,便于区分「热键没注册上」
+        // 与「注册上了但窗口没进前台」两类完全不同的故障。
+        if let Err(e) = gs.on_shortcut(sc.as_str(), move |app, _sc, event| {
             if event.state() == ShortcutState::Pressed {
-                let _ = app.emit_to("main", "screenshot-trigger", kind.clone());
+                let _ = app.emit_to("main", "screenshot-trigger", k.clone());
             }
-        })
-        .map_err(|e| format!("快捷键 “{sc}” 注册失败: {e}"))?;
+        }) {
+            crate::append_app_log(&format!("[shot] hotkey REGISTER FAILED {kind}={sc}: {e}"));
+            return Err(format!("快捷键 “{sc}” 注册失败: {e}"));
+        }
+        crate::append_app_log(&format!("[shot] hotkey registered {kind}={sc}"));
         managed.push(sc);
     }
 
@@ -1160,7 +1178,7 @@ fn open_salary_widget(app: tauri::AppHandle, style: String, raise: Option<bool>)
             // 组件窗口沿用 wry 默认参数(缺它)→ 此后组件窗口创建必失败,
             // 再叠加 fire-and-forget+无 logger 被吞 → 「开关已开但桌面无组件」。
             .additional_browser_args(
-                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream",
+                crate::BROWSER_ARGS,
             )
             .inner_size(w, h)
             .decorations(false)

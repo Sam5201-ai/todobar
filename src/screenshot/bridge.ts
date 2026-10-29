@@ -104,6 +104,37 @@ export function loadImageDataUrl(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * 等若干帧(rAF),但**必须带上限**。
+ *
+ * ⚠️ 2026-10-28 血泪:WebView2 一旦认为窗口「不可见」(创建时 visible:false 未复位,
+ * 或被 Chromium 判为遮挡),`requestAnimationFrame` 会彻底停摆。旧实现用「无超时的
+ * 连续 rAF」当流程同步点,于是一整轮截图就卡死在这行 —— 要等浏览器周期性复检
+ * (实测 2~4 秒)或用户点一下鼠标(真实输入事件唤醒渲染)才继续,表现就是
+ * 「按了截图键迟迟不进入截图 / 要再点一下鼠标」。
+ * 结论:任何「等帧」的地方都必须有定时器兜底,绝不允许流程依赖帧回调。
+ */
+export function waitFrames(count = 1, timeoutMs = 90): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const tick = (left: number) => {
+      if (done) return;
+      if (left <= 0) {
+        finish();
+        return;
+      }
+      window.requestAnimationFrame(() => tick(left - 1));
+    };
+    tick(count);
+    window.setTimeout(finish, timeoutMs);
+  });
+}
+
 /** 显示主窗口(从任意子窗口调用,用于结束截图流程时恢复侧栏)。
  * 必须走 Rust 命令:JS 的 getByLabel 只能找到当前窗口自己创建的窗口。 */
 export async function restoreMain(): Promise<void> {
@@ -124,12 +155,8 @@ export async function finishOverlay(): Promise<void> {
   try {
     await invoke('finish_capture_overlay');
   } catch {
-    /* 兜底:分别尝试隐藏覆盖层与恢复主窗 */
-    try {
-      await invoke('hide_window', { label: OVERLAY_LABEL });
-    } catch {
-      /* ignore */
-    }
+    /* 兜底:warmup 后覆盖层恒可见、停泊屏外,绝不 hide(否则下次 show 又冻结);
+       异常路径只恢复主窗,覆盖层留在屏外停泊位,不影响下次截图。 */
     await restoreMain();
   }
 }
@@ -256,13 +283,25 @@ export async function openPin(
 /** 贴图快捷键:把最近一次选区或剪贴板图片钉到桌面。 */
 export async function pinFromClipboardOrLast(): Promise<void> {
   let pngBase64: string | null = null;
+  let source = '';
+  // ⚠️ 关键:takeImage 是「取出即删」。旧实现取走「上次截图」后不归还 → 第 1 次
+  // 贴图热键成功后,第 2、3 次无图源、`return` 静默失败(日志里只有
+  // `shortcut triggered: pin`、没有窗 label,即「第 3 张贴不出来」的真因)。
+  // 贴图热键的语义是「反复贴同一张」,故取到后立即原样放回,让图源常驻。
   const last = await takeImage(LAST_KEY);
   if (last) {
+    await stashImage(LAST_KEY, last);
     pngBase64 = last;
+    source = 'last-shot';
   } else {
     pngBase64 = await readClipboardImage();
+    source = 'clipboard';
   }
-  if (!pngBase64) return;
+  if (!pngBase64) {
+    void shotLog('pin source MISSING: 无上次截图且剪贴板无图片');
+    return;
+  }
+  void shotLog(`pin source=${source} bytes=${pngBase64.length}`);
   await pinImage(pngBase64);
 }
 

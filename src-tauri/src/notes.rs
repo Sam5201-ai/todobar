@@ -87,7 +87,7 @@ pub fn notes_open_window(
         // ⚠️ 必须与主窗口 (tauri.conf.json app.windows[0].additionalBrowserArgs) 完全一致,
         // 否则第二个便利签起创建必失败(0.4.38 同款根因)。
         .additional_browser_args(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream",
+            crate::BROWSER_ARGS,
         )
         .inner_size(240.0, 220.0)
         .decorations(false)

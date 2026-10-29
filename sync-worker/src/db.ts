@@ -312,8 +312,25 @@ function splitSqlStatements(sql: string): string[] {
   return out
 }
 
-/** Idempotently create the schema. Safe to call on every cold start. */
+// Schema 版本号:任何表结构/补列/回填逻辑变更时必须同步 +1,
+// 否则已写标记的线上库会走快速通道跳过全量 applySchema,新结构不会被补上。
+const SCHEMA_VERSION = '2026-10-28.1'
+
+/**
+ * Idempotently create the schema. Safe to call on every cold start.
+ * 快速通道:冷启动时只读一次版本标记(1 次 D1 往返)即确认就绪;
+ * 只有版本变化(新库/升级)才逐条重放全量建表语句。
+ */
 export async function applySchema(db: D1Database): Promise<string[]> {
+  try {
+    const marker = await db
+      .prepare("SELECT v FROM _meta WHERE k = 'schema_version'")
+      .first<{ v: string }>()
+    if (marker?.v === SCHEMA_VERSION) return []
+  } catch {
+    // 标记表不存在(新库/旧库首次)→ 继续走全量
+  }
+
   // 逐条执行:单条失败不中断,但**收集失败详情**返回给调用方——
   // 之前用 db.exec + 静默吞错,线上建表失败完全无感知,排查极其困难。
   // 改用 prepare().run()(D1 对多语句 exec 行为不稳定),并跳过纯注释语句。
@@ -405,6 +422,24 @@ export async function applySchema(db: D1Database): Promise<string[]> {
       const msg = e instanceof Error ? e.message : String(e)
       failures.push(`${sql.slice(0, 60)}… → ${msg}`)
       console.error('[schema] 历史回填失败:', sql.slice(0, 60), '::', msg)
+    }
+  }
+  // 全部语句成功才落版本标记;有失败则保持未标记,下次冷启动自动重试全量。
+  // 之后所有冷启动只读标记(1 次 RTT)即完成 schema 校验,入口请求不再被
+  // 60+ 条建表/补列/回填语句拖慢(此前的 502「upstream unreachable」根因)。
+  if (failures.length === 0) {
+    try {
+      await db
+        .prepare('CREATE TABLE IF NOT EXISTS _meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)')
+        .run()
+      await db
+        .prepare(
+          "INSERT INTO _meta (k, v) VALUES ('schema_version', ?1) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+        )
+        .bind(SCHEMA_VERSION)
+        .run()
+    } catch (e) {
+      console.error('[schema] 写入版本标记失败:', e)
     }
   }
   return failures

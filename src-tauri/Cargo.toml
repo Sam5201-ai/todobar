@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.4.56"
+version = "0.4.57"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"
@@ -54,3 +54,14 @@ windows = { version = "0.61", features = [
 winreg = "0.55"
 arboard = "3"
 image = "0.25"
+
+# ---------------------------------------------------------------------------
+# dev profile:依赖(尤其 image / png 编解码)编译为 opt-level 3。
+#
+# 为什么(2026-10-28):`tauri dev` 默认 dev profile 是 opt-level 0,整屏
+# 1920x1080 的 PNG 编码(截图冻结帧)在 debug 下要 600ms~4s,而 release 只要
+# 几十毫秒 —— 这就是「开发版按截图键要等 2~4 秒,生产版很快」的真正原因。
+# 只给依赖开优化,本项目源码仍为 0 级 → 增量编译依旧很快。
+# ---------------------------------------------------------------------------
+[profile.dev.package."*"]
+opt-level = 3
