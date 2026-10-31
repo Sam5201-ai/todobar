@@ -1,0 +1,220 @@
+/* OCR 结果浮层样式:对齐截图模块深色半透明语言(独立文件,不触碰 screenshot.css)。 */
+.ocr-panel {
+  position: absolute;
+  z-index: 20; /* 高于操作条(z=10),浮层打开时盖在其上 */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: rgba(20, 26, 34, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  color: #c9d4e0;
+  font-size: 13px;
+  user-select: none;
+}
+
+/* ---- 头部 ---- */
+/* relative:标题栏居中 toast 的定位基准 */
+.ocr-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+/* 操作反馈 toast:标题栏居中、绿色醒目(页面底部toast不可见,2026-10-30 用户反馈) */
+.ocr-head-toast {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #34c759;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ocr-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+  color: #e8eef5;
+}
+
+.ocr-elapsed {
+  color: #8fa3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.ocr-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8fa3b8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ocr-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8eef5;
+}
+
+/* ---- 工具栏 ---- */
+.ocr-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.ocr-btn {
+  flex: 1;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eef5;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ocr-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ocr-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ocr-btn-primary {
+  background: #3573f0;
+  border-color: #3573f0;
+}
+
+.ocr-btn-primary:hover:not(:disabled) {
+  background: #4a83f5;
+}
+
+/* ---- 识别中 ---- */
+.ocr-busy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px 6px;
+  color: #8fa3b8;
+}
+
+.ocr-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #6ea8ff;
+  animation: ocr-spin 0.9s linear infinite;
+}
+
+@keyframes ocr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- 结果行 ---- */
+/* PixPin 式自由选择:文本可拖选(跨行)、Ctrl+C / 右键复制;行按钮不受影响 */
+.ocr-lines {
+  overflow-y: auto;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 浮层本身已有内边距,列表贴边滚动 */
+  margin: 0 -4px;
+  padding: 0 4px;
+  user-select: text;
+}
+
+.ocr-lines ::selection {
+  background: rgba(53, 115, 240, 0.45);
+  color: #fff;
+}
+
+.ocr-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.ocr-line:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ocr-line-text {
+  flex: 1;
+  min-width: 0;
+  /* 结果文本允许用户选中手动复制 */
+  user-select: text;
+  cursor: text;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: #dde6ef;
+  line-height: 1.45;
+}
+
+.ocr-line-actions {
+  display: none;
+  flex: none;
+  gap: 4px;
+}
+
+.ocr-line:hover .ocr-line-actions,
+.ocr-line:focus-within .ocr-line-actions {
+  display: inline-flex;
+}
+
+.ocr-line-actions button {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c9d4e0;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ocr-line-actions button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8eef5;
+}
+
+.ocr-line-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 贴图窗口内联模式:窗口小,行按钮常显(hover 不可靠) */
+.ocr-panel-inline-hint .ocr-line-actions,
+.pin-ocr .ocr-line-actions {
+  display: inline-flex;
+}
+
+/* 注意:贴图文字层(.pin-text-layer/.pin-text-line)的样式曾寄生在本文件,
+   而 ocr.css 只有 OcrResultPanel.tsx 引入 —— v5 移除手动框选浮层后
+   PinWindow 不再渲染该组件,样式随之静默失效,表现为「贴图无法划选」
+   且界面毫无异常(2026-10-31 定位)。现已迁回 screenshot.css(PinWindow
+   实际加载的样式表),勿再放回本文件。 */

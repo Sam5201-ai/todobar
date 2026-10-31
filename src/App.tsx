@@ -74,6 +74,7 @@ import {
   type Task,
 } from './types'
 import { DATA_MIGRATED_EVENT, useTaskStore } from './useTaskStore'
+import { onOcrCreateTask } from './screenshot/ocr/ocrBridge'
 import { trackFeature, trackPage } from './analytics'
 import { expandRecurrences, recurrenceLabel, parseInstanceId } from './recurrence'
 import { loadHolidays } from './holidays'
@@ -1296,6 +1297,51 @@ function App() {
       }
     }
   }
+
+  // ---- OCR 转待办:截图/贴图子窗识别结果 → 今日清单逐行建任务 -----------------
+  // 额度/会员校验复用 addTask 内部闸门(不旁路);订阅一次,回调经 ref 取最新
+  // addTask / 额度状态,避免随渲染反复退订重挂。
+  const ocrAddTaskRef = useRef(store.addTask)
+  const ocrQuotaRef = useRef({ fullAccess, freeQuotaUsed: store.freeQuotaUsed })
+  // ref 更新收敛到 effect(渲染期写 ref 违反 react-compiler 规则)。
+  useEffect(() => {
+    ocrAddTaskRef.current = store.addTask
+    ocrQuotaRef.current = { fullAccess, freeQuotaUsed: store.freeQuotaUsed }
+  }, [store.addTask, store.freeQuotaUsed, fullAccess])
+
+  useEffect(() => {
+    if (!isNative) return
+    let off: (() => void) | null = null
+    let disposed = false
+    void onOcrCreateTask((lines) => {
+      let added = 0
+      for (const l of lines) {
+        if (ocrAddTaskRef.current('today', l.text.trim())) added += 1
+      }
+      const dropped = lines.length - added
+      if (added > 0) {
+        const quotaHint = dropped > 0 && !ocrQuotaRef.current.fullAccess
+        setToast({
+          kind: 'ok',
+          text: quotaHint
+            ? `已添加 ${added} 条,超出单日上限的 ${dropped} 条未添加`
+            : `已从截图添加 ${added} 条任务`,
+        })
+      } else {
+        setToast({
+          kind: 'err',
+          text: `单日最多新建 ${FREE_DAILY_TASK_LIMIT} 条,开通会员可解除限制`,
+        })
+      }
+    }).then((fn) => {
+      if (disposed) fn()
+      else off = fn
+    })
+    return () => {
+      disposed = true
+      off?.()
+    }
+  }, [isNative])
 
   // ---- 长按拖拽排序 -----------------------------------------------------------
   // 长按约 320ms 进入拖拽;仅允许在同一层级列表内移动(主任务之间/同一父任务的子任务之间)。
@@ -3368,7 +3414,10 @@ function TaskNode({
       <div
         className={`tree-row ${editing ? 'is-editing' : ''} ${isDragging ? 'is-dragging' : ''} ${
           isDropAbove ? 'is-drop-above' : ''
-        } ${isDropBelow ? 'is-drop-below' : ''}`}
+        } ${isDropBelow ? 'is-drop-below' : ''} ${
+          // 有标签/提醒时间等 meta 行时,圆圈需改为与标题首行对齐(见 CSS has-meta 规则)
+          !editing && (task.seriesId || task.remindAt || task.isPinned) ? 'has-meta' : ''
+        }`}
         data-node-id={task.id}
         data-sib={sibKey}
         onPointerDown={(e) => ctx.onRowPointerDown(e, task.id, sibKey)}
@@ -3424,14 +3473,15 @@ function TaskNode({
           ) : (
             <>
               <strong className={effDone ? 'is-done' : ''}>{task.title}</strong>
-              {task.seriesId &&
-                (task.seriesRecurrence ? (
-                  <span className="recur-tag">{recurrenceLabel(task.seriesRecurrence)}</span>
-                ) : (
-                  <i className="recur-tag">↻</i>
-                ))}
-              {(task.remindAt || task.isPinned) && (
+              {(task.seriesId || task.remindAt || task.isPinned) && (
                 <span className="tree-meta">
+                  {/* 重复周期标签与提醒时间同行显示,避免独占一行挤压标题空间 */}
+                  {task.seriesId &&
+                    (task.seriesRecurrence ? (
+                      <span className="recur-tag">{recurrenceLabel(task.seriesRecurrence)}</span>
+                    ) : (
+                      <i className="recur-tag">↻</i>
+                    ))}
                   {task.remindAt ? `⏰ ${formatDueShort(task.remindAt)}` : ''}
                   {task.isPinned && <i className="pinned-tag">置顶</i>}
                 </span>

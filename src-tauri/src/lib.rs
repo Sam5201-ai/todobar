@@ -16,6 +16,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 mod notes;
 mod screenshot;
 mod clipboard;
+mod ocr;
 
 /// **所有窗口**共用的 WebView2 启动参数。
 ///
@@ -1675,11 +1676,15 @@ pub fn run() {
             screenshot::read_capture_png,
             screenshot::hide_window,
             screenshot::show_pin_window,
+            screenshot::pin_frontend_ready,
             screenshot::dismiss_pin_window,
             screenshot::show_pin_control,
             screenshot::hide_pin_control,
             screenshot::move_pin_control,
             screenshot::find_pin_window,
+            ocr::ocr_save_input,
+            ocr::ocr_recognize,
+            ocr::ocr_status,
             register_screenshot_shortcuts,
             set_toggle_window_shortcut,
             show_main_window,
@@ -1735,6 +1740,8 @@ pub fn run() {
             handle_elevation(app.handle());
             setup_tray(app)?;
             setup_global_shortcuts(app);
+            // OCR 引擎预热:Win 端 WinRT 引擎激活提前到启动期后台完成,首次识别免等。
+            ocr::warmup_async();
             // 启动后台剪贴板监听(监听线程随进程存活,不随窗口开关而停)。
             clipboard::start_monitor(app.handle().clone());
 

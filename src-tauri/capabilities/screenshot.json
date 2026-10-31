@@ -34,6 +34,7 @@
     "core:window:allow-set-minimizable",
     "core:window:allow-set-closable",
     "core:event:default",
+    "core:menu:default",
     "core:app:default",
     "dialog:allow-save"
   ]

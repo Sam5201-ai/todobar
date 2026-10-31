@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.4.57"
+version = "0.4.58"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"
@@ -48,12 +48,34 @@ windows = { version = "0.61", features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_DataExchange",
     "Win32_System_Memory",
-    "Win32_UI_Input_KeyboardAndMouse"
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Com",
+    # OCR(Windows.Media.Ocr):WinRT 命名空间,依赖的 Foundation 系 feature 随引随启
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage_Streams"
 ] }
 # 自启动注册表自愈:删除 productName 改名前(Todobar)遗留的 Run 条目
 winreg = "0.55"
 arboard = "3"
 image = "0.25"
+# OCR(PP-OCRv4 本地神经网络模型,POC 验证精度显著优于系统引擎):
+# onnxruntime 推理;load-dynamic = 运行时加载随包分发的 onnxruntime.dll
+# (src-tauri/onnxruntime/,CPU EP,不解码 DirectML 避免多带 34MB GPU 库)
+ort = { version = "2.0.0-rc.15", features = ["load-dynamic"] }
+# 与 ort 内部同版;用 load_with_flags(DLL_LOAD_DIR) 预载 onnxruntime.dll,
+# 修正 ort 默认 flags=0 导致依赖落到 System32 旧版 VC 运行库的问题
+libloading = "0.9"
+
+# OCR(macOS):Vision 框架(accurate 档),objc2 系仅在 mac 目标编译;
+# API 签名需在 mac 构建机首次编译时校准(方案 §10-R3)
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSArray", "NSString"] }
+objc2-vision = "0.3"
 
 # ---------------------------------------------------------------------------
 # dev profile:依赖(尤其 image / png 编解码)编译为 opt-level 3。

@@ -1371,6 +1371,14 @@ kbd {
   border-radius: 7px;
 }
 
+/* 两行行(标题 + 重复标签/提醒时间 meta 行):完成圆圈只与标题首行对齐,
+   不再对整个两行块垂直居中;负边距把圆圈从块中心精确上移到标题行中心。
+   标题行高为 --task-title-size × 1.25,随用户字号设置自适应;单行行无 has-meta 类,不受影响。 */
+.tree-row.has-meta .check-button {
+  align-self: flex-start;
+  margin-top: calc((var(--task-title-size) * 1.25 - 25px) / 2);
+}
+
 .check-button svg,
 .priority-dot,
 .delete-button svg {
@@ -4280,10 +4288,9 @@ body.is-row-dragging * {
 }
 .recur-tag {
   display: inline-block;
-  /* tree-body 是列向 flex,默认会把子项拉满整行;这里收窄成内容宽度,
-     与置顶标签(pinned-tag)的样式和长度保持一致。 */
-  align-self: flex-start;
-  margin-left: 6px;
+  /* 位于 tree-meta 行内,与提醒时间同行;右边距隔开后面的 ⏰ 时间,
+     样式与置顶标签(pinned-tag)保持一致。 */
+  margin-right: 6px;
   padding: 1px 7px;
   border-radius: 999px;
   font-style: normal;

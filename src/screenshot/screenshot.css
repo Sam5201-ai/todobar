@@ -250,7 +250,7 @@ html.screenshot-mode #root {
 }
 
 /* 贴图边框层(PixPin 式):默认灰框指示贴图位置;聚焦/悬停变蓝表示选中。
-   z-index:8 高于图片(auto)低于缩放把手(9)/工具栏(10),保证始终可见。
+   z-index:8 高于图片(auto)低于缩放把手(9),保证始终可见。
    内侧 box-shadow 让边框向内晕开一层柔光,观感更自然(PixPin 同款观感)。 */
 .pin-root::after {
   content: '';
@@ -285,58 +285,46 @@ html.screenshot-mode #root {
   cursor: default;
 }
 
-.pin-toolbar {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 8px;
-  background: rgba(28, 32, 38, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(6px);
+/* ---- PixPin 式文字层(HTML span,整图自动 OCR,直接拖选复制) ----
+   ⚠️ 必须放在本文件:PinWindow.tsx 只 import screenshot.css。此组样式曾寄生
+   ocr/ocr.css(仅 OcrResultPanel.tsx 引入,v5 起贴图窗口不再加载),导致文字层
+   全部样式静默失效——span 无定位被图片盖住(视觉无异常)、继承 user-select:none,
+   表现为「贴图无法划选复制」(2026-10-31 定位的多次修复失败真因)。
+   层级:图片(auto) < 文字层(4) < 边框::after(8) < 缩放把手(9)。
+   层本体不接收事件,仅行 span 接收 → 文字上选字,bbox 之外仍可拖动贴图。
+   注:曾用 SVG <text> + textLength 做逐字对齐,但 WebView2 中 SVG 文本拖选
+   不可靠(HTML span 拖选可靠),已回退 HTML span + scaleX 校准(对齐等价)。 */
+.pin-text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
 }
 
-.pin-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: rgba(255, 255, 255, 0.06);
-  color: #e7edf3;
-  border-radius: 7px;
-  cursor: pointer;
+/* 行 span(定位/字号/scaleX 由内联样式给出):
+   - color:transparent → 字形恒不可见,只提供选择热区与选中高亮;
+   - user-select:text 覆盖 .pin-root 的 none,拖选即选字;
+   - transform:scaleX(内联)把字形串精确铺满 bbox 宽度 → 字符位置与图片
+     文字逐字对齐,圈选范围 = 复制内容;
+   - font-family 必须与 PinWindow.tsx measureTextWidth 的 ctx.font 一致,
+     否则 scaleX 校准失准。 */
+.pin-text-line {
+  position: absolute;
+  pointer-events: auto;
+  user-select: text;
+  cursor: text;
+  color: transparent;
+  white-space: pre;
+  line-height: 1;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  transform-origin: left center;
 }
 
-.pin-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.pin-btn.pin-danger:hover {
-  background: rgba(255, 77, 79, 0.85);
-  color: #fff;
-}
-
-.pin-opacity {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #e7edf3;
-  font-size: 12px;
-  padding: 0 4px;
-}
-
-.pin-opacity em {
-  font-style: normal;
-  min-width: 34px;
-  text-align: center;
+/* 选中:半透明蓝块盖在图片文字上,字形保持透明(图片文字从块下透出)——
+   PixPin 同款观感。 */
+.pin-text-line::selection {
+  color: transparent;
+  background: rgba(53, 115, 240, 0.45);
 }
 
 .pin-resize-handle {

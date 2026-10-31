@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// 进程内共享状态:截图数据暂存区 + 贴图窗口注册表(pinId → 窗口 label)。
 #[derive(Default)]
@@ -211,6 +211,83 @@ pub fn hide_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
     }
 }
 
+/// 贴图前端就绪标记:PinWindow 完成装载并自行 show 后调用 `pin_frontend_ready`
+/// 登记。show_pin_window 每轮先清除该标记,供看门狗判定「窗口建了但前端始终
+/// 没就绪」—— webview 加载失败 / 挂载崩溃 / init 静默失败时,表现为贴图永不
+/// 出现且前端零日志(2026-10-30 用户「贴图不显示且多次尝试均失败」的排查入口)。
+static PIN_FRONTEND_READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// 看门狗已对该 label 执行过 webview 重载的自救标记(每轮重置,防循环重载)。
+static PIN_WATCHDOG_RELOADED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+#[tauri::command]
+pub fn pin_frontend_ready(label: String) {
+    let mut ready = PIN_FRONTEND_READY.lock().unwrap();
+    if !ready.iter().any(|l| l == &label) {
+        ready.push(label);
+    }
+}
+
+/// 贴图前端就绪看门狗:show_pin_window 返回后,前端 PinWindow 应在数秒内
+/// 装载图片并自行 show 窗口。池窗的挂载轮询只跑 ~6s,错过 pin-set 事件就
+/// 永远不会再尝试 —— 因此超时按「事件丢失 → 页面假死」逐级自救:
+/// t+4s 重发 pin-set;t+8s 仍无进展则留痕并重载 webview(清掉假死页面,
+/// 重新挂载后会走轮询读到 stash 里尚存的 meta 自显);t+15s 仍失败记错误。
+/// 注意:本应用的 RustLog 只把 Warn 及以上落盘,诊断一律走 append_app_log。
+fn spawn_pin_frontend_watchdog(app: tauri::AppHandle, label: String) {
+    std::thread::spawn(move || {
+        let ready = |label: &str| {
+            PIN_FRONTEND_READY
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|l| l == label)
+        };
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        if ready(&label) {
+            return;
+        }
+        // t+4s:pin-set 事件可能丢失,重发自救(对已就绪组件重复 init 幂等无害)。
+        let _ = app.emit_to(&label, "pin-set", ());
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        if ready(&label) {
+            return;
+        }
+        // t+8s:前端始终未就绪 —— webview 页面状态异常(加载失败/假死),重载自救。
+        let already_reloaded = {
+            let mut g = PIN_WATCHDOG_RELOADED.lock().unwrap();
+            if g.iter().any(|l| l == &label) {
+                true
+            } else {
+                g.push(label.clone());
+                false
+            }
+        };
+        if already_reloaded {
+            crate::append_app_log(&format!(
+                "[shot] pin frontend not ready t+8s: {label}(本轮已重载过,不再重试)"
+            ));
+        } else {
+            crate::append_app_log(&format!(
+                "[shot] pin frontend not ready t+8s: {label},重载 webview 自救"
+            ));
+            if let Some(w) = app.get_webview_window(&label) {
+                // 仅未显示(窗口仍隐藏=前端从未 show)时重载,避免干扰正常贴图。
+                if !w.is_visible().unwrap_or(true) {
+                    let _ = w.eval("location.reload()");
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(7));
+            if ready(&label) {
+                crate::append_app_log(&format!("[shot] pin frontend recovered after reload: {label}"));
+                return;
+            }
+        }
+        crate::append_app_log(&format!(
+            "[shot] pin frontend not ready t+15s: {label} —— webview 疑似未加载/已死,重启应用可恢复"
+        ));
+    });
+}
+
 /// 显示贴图窗口:优先复用静态预热池(pin-1/pin-2,隐藏即空闲),池满则动态建窗。
 /// 返回实际使用的窗口 label —— 前端以 `pin-meta:<label>` 写入元数据后
 /// emit `pin-set` 事件通知(已挂载的池窗)或由挂载时读取(动态新窗)。
@@ -251,6 +328,14 @@ pub fn show_pin_window(
                 .lock()
                 .unwrap()
                 .insert(pin_id.clone(), cand.to_string());
+            // 本轮前端就绪判定复位 + 启动看门狗(事件丢失/页面假死的逐级自救)。
+            {
+                let mut ready = PIN_FRONTEND_READY.lock().unwrap();
+                ready.retain(|l| l != cand);
+                let mut rl = PIN_WATCHDOG_RELOADED.lock().unwrap();
+                rl.retain(|l| l != cand);
+            }
+            spawn_pin_frontend_watchdog(app.clone(), cand.to_string());
             return Ok(cand.to_string());
         }
     }
@@ -300,6 +385,14 @@ pub fn show_pin_window(
         .lock()
         .unwrap()
         .insert(pin_id.clone(), label.clone());
+    // 本轮前端就绪判定复位 + 启动看门狗(动态窗冷启动更慢,看门狗含重发自救)。
+    {
+        let mut ready = PIN_FRONTEND_READY.lock().unwrap();
+        ready.retain(|l| l != &label);
+        let mut rl = PIN_WATCHDOG_RELOADED.lock().unwrap();
+        rl.retain(|l| l != &label);
+    }
+    spawn_pin_frontend_watchdog(app.clone(), label.clone());
     Ok(label)
 }
 

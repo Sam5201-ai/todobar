@@ -1,5 +1,5 @@
 {
-  "version": "0.4.57",
-  "url": "https://todobar-app.app.workbuddy.host/TickTask-setup.exe?v=0.4.57",
-  "notes": "0.4.57 更新：贴图支持同时钉住更多截图（贴图池扩展至 6 张），并修复连续贴第 3 张时偶发不显示的问题；截图与贴图性能、稳定性优化；修复若干已知问题。"
+  "version": "0.4.58",
+  "url": "https://todobar-app.app.workbuddy.host/TickTask-setup.exe?v=0.4.58",
+  "notes": "0.4.58 更新：修复贴图偶发不显示、贴图上无法划选复制文字、圈选后复制缺字的问题；识别文字过程增加进度提示，同一张图再次贴图时秒出文字层。"
 }

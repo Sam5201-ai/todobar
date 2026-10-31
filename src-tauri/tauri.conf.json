@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TickTask",
-  "version": "0.4.57",
+  "version": "0.4.58",
   "identifier": "dev.todobar.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -152,6 +152,14 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "resources": [
+      "onnxruntime/onnxruntime.dll",
+      "onnxruntime/msvcp140.dll",
+      "onnxruntime/msvcp140_1.dll",
+      "onnxruntime/msvcp140_atomic_wait.dll",
+      "onnxruntime/vcruntime140.dll",
+      "onnxruntime/vcruntime140_1.dll"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

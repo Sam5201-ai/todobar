@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
-import { Copy, Eraser, Pin, Save, X } from 'lucide-react';
+import { Copy, Eraser, Pin, Save, ScanText, X } from 'lucide-react';
 import {
   FULL_KEY,
   LAST_KEY,
@@ -25,6 +25,11 @@ import {
   type Rect,
 } from './bridge';
 import type { CaptureMode } from './types';
+import { OcrResultPanel, type OcrPhase } from './ocr/OcrResultPanel';
+import { cropRegionPng } from './ocr/prepare';
+import { filterNoiseLines, joinLines, recognizeRegion, type OcrLine } from './ocr/ocrClient';
+import { emitOcrCreateTask } from './ocr/ocrBridge';
+import { copyText } from '../clipboard';
 import './screenshot.css';
 
 interface CaptureMeta {
@@ -136,6 +141,26 @@ export default function CaptureOverlay() {
   const confirmedRef = useRef(false);
   confirmedRef.current = confirmed;
   const [busy, setBusy] = useState(false);
+  // OCR 识别状态(idle→running→done);代际号防过期结果回填(finish/新流程后丢弃)。
+  const [ocr, setOcr] = useState<{ phase: OcrPhase; lines: OcrLine[]; startedAt: number }>({
+    phase: 'idle',
+    lines: [],
+    startedAt: 0,
+  });
+  const [ocrBusyAction, setOcrBusyAction] = useState<string | null>(null);
+  // OCR 浮层锚点:确认选区时快照(渲染期不读 ref)。
+  const [ocrAnchorSt, setOcrAnchorSt] = useState<{ x: number; y: number; above: boolean }>({
+    x: 0,
+    y: 0,
+    above: false,
+  });
+  const ocrRunRef = useRef(0);
+  // Esc 分支读 ref(键盘监听 effect 不依赖 ocr 状态,避免 stale closure);
+  // ref 更新收敛到 effect(渲染期写 ref 违反 react-compiler 规则)。
+  const ocrPhaseRef = useRef<OcrPhase>('idle');
+  useEffect(() => {
+    ocrPhaseRef.current = ocr.phase;
+  }, [ocr.phase]);
   const [toast, setToast] = useState('');
   const [cursor, setCursor] = useState({ x: -1, y: -1 });
   // 已确认选区的渲染副本:手柄拖拽时实时更新,驱动选框/手柄/操作条重绘。
@@ -511,6 +536,10 @@ export default function CaptureOverlay() {
     numCounterRef.current = 0;
     toolRef.current = 'move';
     setActiveToolState('move');
+    // OCR 浮层随本轮流程一并复位(代际号 +1 使进行中的识别结果作废)。
+    ocrRunRef.current += 1;
+    setOcr({ phase: 'idle', lines: [], startedAt: 0 });
+    setOcrBusyAction(null);
     if (uiRef.current) uiRef.current.style.cursor = 'default';
     // ② 清空四层画布 → 窗口内容变回纯透明。
     for (const r of [baseRef, mosaicRef, annoRef, uiRef]) {
@@ -550,6 +579,91 @@ export default function CaptureOverlay() {
     return out.toDataURL('image/png').split(',')[1] ?? '';
   };
 
+  /** 「识别文字」:base 层物理像素原图直出(不含标注/马赛克,打码区域不参与识别)。 */
+  const onOcr = useCallback(async () => {
+    const sel = confirmedSelRef.current;
+    if (!sel || busy || ocrPhaseRef.current === 'running') return;
+    const run = ++ocrRunRef.current;
+    setOcr({ phase: 'running', lines: [], startedAt: Date.now() });
+    try {
+      const png = cropRegionPng(baseRef.current!, sel.x, sel.y, sel.w, sel.h);
+      const r = await recognizeRegion(png);
+      if (ocrRunRef.current !== run) return; // 结果已过期(finish/新流程),丢弃
+      const lines = filterNoiseLines(r.lines);
+      if (!lines.length) {
+        setOcr({ phase: 'idle', lines: [], startedAt: 0 });
+        showToast('未识别到文字');
+        return;
+      }
+      setOcr({ phase: 'done', lines, startedAt: 0 });
+    } catch (e) {
+      if (ocrRunRef.current !== run) return;
+      setOcr({ phase: 'idle', lines: [], startedAt: 0 });
+      showToast(
+        String(e).includes('OCR_REGION_TOO_LARGE')
+          ? '识别区域过大,请框选更小范围'
+          : `识别失败: ${String(e)}`,
+      );
+    }
+  }, [busy]);
+
+  const resetOcr = useCallback(() => {
+    ocrRunRef.current += 1;
+    setOcr({ phase: 'idle', lines: [], startedAt: 0 });
+    setOcrBusyAction(null);
+  }, []);
+
+  /** OCR 行动作:复制单行/全部。 */
+  const onOcrCopy = useCallback(async (rows: OcrLine[], exit = false) => {
+    setOcrBusyAction('copy');
+    try {
+      await copyText(joinLines(rows));
+      showToast(rows.length > 1 ? '已复制全部' : '已复制');
+      if (exit) await finish(); // 复制全部:与转待办一致,完成后立即退出截图模式
+    } catch (e) {
+      showToast(`复制失败: ${String(e)}`);
+    } finally {
+      setOcrBusyAction(null);
+    }
+  }, [finish]);
+
+  /** OCR 行动作:转待办(重试+ack;全部成功后收起浮层并结束截图)。 */
+  const onOcrConvert = useCallback(
+    async (rows: OcrLine[], all: boolean) => {
+      setOcrBusyAction('convert');
+      try {
+        const ok = await emitOcrCreateTask(rows.map((l) => ({ text: l.text })));
+        if (ok) {
+          showToast(all ? '已全部转为待办' : '已转为待办');
+          if (all) await finish();
+        } else {
+          showToast('添加失败,请重试');
+        }
+      } catch (e) {
+        showToast(`转待办失败: ${String(e)}`);
+      } finally {
+        setOcrBusyAction(null);
+      }
+    },
+    [finish],
+  );
+
+  /** OCR 浮层锚点:与操作条避让规则同构 —— 条在下方则浮层贴条下,条在上方则浮层向上展开。 */
+  const ocrAnchor = (): { x: number; y: number; above: boolean } => {
+    const sel = confirmedSelRef.current;
+    const dpr = dprRef.current || 1;
+    if (!sel) return { x: window.innerWidth / 2, y: window.innerHeight / 2, above: false };
+    const vw = (metaRef.current?.width ?? 0) / dpr;
+    const vh = (metaRef.current?.height ?? 0) / dpr;
+    const half = 170; // 浮层宽 340 的一半,水平 clamp 预留
+    const x = Math.max(half + 8, Math.min((sel.x + sel.w / 2) / dpr, vw - half - 8));
+    const below = (sel.y + sel.h) / dpr + 10;
+    const barBelow = below + 44 <= vh;
+    return barBelow
+      ? { x, y: below + 44, above: false }
+      : { x, y: Math.max(8, sel.y / dpr - 48), above: true };
+  };
+
   /** 固化确认选区:记录基准 + 初始化标注原点。 */
   const applyConfirm = (sel: Sel) => {
     confirmedSelRef.current = sel;
@@ -558,6 +672,7 @@ export default function CaptureOverlay() {
     setConfirmed(true);
     confirmedRef.current = true;
     dragRef.current = null;
+    setOcrAnchorSt(ocrAnchor()); // 浮层锚点随确认选区固化(事件上下文,可读 ref)
     selectTool('move');
     redrawUI();
   };
@@ -584,8 +699,13 @@ export default function CaptureOverlay() {
   const onPin = useCallback(async () => {
     const sel = confirmedSelRef.current;
     const meta = metaRef.current;
-    if (!sel || !meta || busy) return;
+    if (!sel || !meta || busy) {
+      // 静默早退不留痕迹:「贴图没出现」时日志无任何记录无从排查(2026-10-30)。
+      void shotLog(`pin skipped sel=${!!sel} meta=${!!meta} busy=${busy}`);
+      return;
+    }
     setBusy(true);
+    void shotLog('pin click');
     try {
       const png = extractPng(sel);
       await stashImage(LAST_KEY, png);
@@ -871,6 +991,9 @@ export default function CaptureOverlay() {
     // 所以上一轮的冻结帧仍留在 canvas 上。若不清空,position 把它从 16x16 拉成全屏
     // 的那一瞬间会把「上一张截图」拉伸显示出来。必须先清空并等一帧上屏,再定位。
     setReady(false);
+    // 复位 busy:上一轮 finish 中途卡死(invoke 挂起)会把 busy 卡在 true,
+    // 所有操作按钮静默失效且轮轮传染 —— 每轮开始强制复位(2026-10-30)。
+    setBusy(false);
     (async () => {
       try {
         // 等两帧,确保 React 已按 ready=false 重渲染(容器清空)后才做定位/放大。
@@ -1006,6 +1129,11 @@ export default function CaptureOverlay() {
           setTextInput((v) => ({ ...v, visible: false }));
           return;
         }
+        // OCR 浮层打开:先关浮层,再按 Esc 才退出截图。
+        if (ocrPhaseRef.current !== 'idle') {
+          resetOcr();
+          return;
+        }
         void shotLog('overlay cancel (esc)');
         void finish();
       } else if (e.key === 'Enter') {
@@ -1018,6 +1146,9 @@ export default function CaptureOverlay() {
         else confirmSelection();
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
         // Ctrl+C 复制(问题4):与主流截图工具一致,无需点「复制」按钮。
+        // OCR 结果浮层/文字输入框内已有选中文字时放行:交由 WebView2 原生加速键
+        // 复制所选文字(与贴图自由复制文案体验一致);无选区仍复制整张截图。
+        if (window.getSelection()?.type === 'Range') return;
         e.preventDefault();
         if (confirmed && !textInput.visible) void onCopy();
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
@@ -1372,6 +1503,16 @@ export default function CaptureOverlay() {
                 <Pin size={15} />
                 贴图
               </button>
+              <button
+                type="button"
+                className="cab-btn"
+                disabled={busy || ocr.phase === 'running'}
+                onClick={() => void onOcr()}
+                title="识别选区文字(本地离线)"
+              >
+                <ScanText size={15} />
+                识别文字
+              </button>
               <button type="button" className="cab-btn" disabled={busy} onClick={onSave} title="保存为 PNG 文件">
                 <Save size={15} />
                 保存
@@ -1385,6 +1526,23 @@ export default function CaptureOverlay() {
                 复制
               </button>
             </div>
+          )}
+          {ocr.phase !== 'idle' && selDisp && (
+            <OcrResultPanel
+              phase={ocr.phase}
+              lines={ocr.lines}
+              startedAt={ocr.startedAt}
+              variant="floating"
+              anchor={ocrAnchorSt}
+              placeAbove={ocrAnchorSt.above}
+              actionBusy={ocrBusyAction}
+              toast={toast}
+              onClose={resetOcr}
+              onCopyAll={() => void onOcrCopy(ocr.lines, true)}
+              onCopyLine={(l) => void onOcrCopy([l])}
+              onConvertAll={() => void onOcrConvert(ocr.lines, true)}
+              onConvertLine={(l) => void onOcrConvert([l], false)}
+            />
           )}
           {textInput.visible && (
             <input
@@ -1407,7 +1565,8 @@ export default function CaptureOverlay() {
               }}
             />
           )}
-          {toast && <div className="capture-toast">{toast}</div>}
+          {/* OCR 浮层存在时 toast 已显示在浮层标题栏(绿色),底部不再重复渲染 */}
+          {toast && ocr.phase === 'idle' && <div className="capture-toast">{toast}</div>}
         </>
       )}
     </div>

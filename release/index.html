@@ -541,7 +541,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <section class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.57 · Windows 已发布 · macOS Beta</span></span>
+      <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.58 · Windows 版</span></span>
       <h1>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
       <p class="lead">
         TickTask 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
@@ -853,7 +853,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
     <div class="install-card">
       <img class="applogo" src="./assets/logo.webp" alt="TickTask 图标" />
       <h2 id="installTitle">下载并安装到电脑</h2>
-      <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 17 MB · v0.4.57 · 免费下载</p>
+      <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.58 · 免费下载</p>
       <div class="hero-cta" style="justify-content:center;margin-top:28px;">
         <a href="./TickTask-setup.exe" class="btn-download" id="installDownload">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -886,7 +886,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
     <div class="faq-list">
       <details class="faq-item" open>
         <summary>TickTask 是免费的吗？<span class="chev">▾</span></summary>
-        <p>TickTask 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启，Windows 与 macOS 双端的记录格式完全一致。</p>
+        <p>TickTask 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。</p>
       </details>
       <details class="faq-item">
         <summary>我的数据存在哪里？安全吗？<span class="chev">▾</span></summary>
@@ -894,19 +894,11 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
       </details>
       <details class="faq-item">
         <summary>支持哪些系统？<span class="chev">▾</span></summary>
-        <p>Windows 10 / 11（64 位）已正式发布；macOS 12 及以上（Apple 芯片 / Intel 双版本）已进入 <b>Beta 测试</b>。页面会根据你的设备自动给出对应安装包，也可以在上方手动切换平台。TickTask 采用原生框架打造，Windows 安装包约 17 MB、macOS 约 18 MB，平时只渲染一条细边，内存占用极低。</p>
+        <p>目前正式支持 <b>Windows 10 / 11（64 位）</b>，安装包约 17 MB。TickTask 采用原生框架打造，平时只渲染一条细边，内存占用极低。<b>macOS 版正在内测</b>，暂未开放下载。</p>
       </details>
       <details class="faq-item">
-        <summary>Mac 版是怎么安装的？为什么打开时会提示「无法验证开发者」？<span class="chev">▾</span></summary>
-        <p>下载对应芯片的 <b>.dmg</b> → 双击打开 → 把 TickTask 拖进「应用程序」即可。因为安装包暂未购买 Apple 开发者签名与公证，首次打开会被 Gatekeeper 拦截：在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>即可放行；也可以在终端执行 <code>xattr -cr /Applications/TickTask.app</code> 一次性解除。这是未签名软件的正常提示，不代表文件有问题。</p>
-      </details>
-      <details class="faq-item">
-        <summary>怎么判断该下载 Apple 芯片版还是 Intel 版？<span class="chev">▾</span></summary>
-        <p>点屏幕左上角  →「关于本机」：<b>芯片</b>一栏显示 M1 / M2 / M3 / M4 等 Apple 芯片的，下载 Apple 芯片版；显示 <b>Intel Core</b> 的，下载 Intel 版。选错会提示「无法在此 Mac 上运行」，重新下载对应版本即可，不影响已有数据。</p>
-      </details>
-      <details class="faq-item">
-        <summary>Mac 版和 Windows 版功能一样吗？<span class="chev">▾</span></summary>
-        <p>核心体验一致：待办与提醒、生日纪念日、计算器、万年历、牛马计薪器、便利签、剪贴板历史、截图贴图都可以用。目前 Mac 版处于 Beta，仍有两点差异：<b>暂不支持应用内自动更新</b>（新版本需手动下载安装包覆盖），个别系统级能力（如全局快捷键、通知样式）仍在校准中。使用中遇到问题欢迎反馈，会优先修复。</p>
+        <summary>Mac 版什么时候能用？<span class="chev">▾</span></summary>
+        <p>macOS 版已完成基础适配，目前处于内测阶段（截图贴图、剪贴板历史等系统级能力仍在适配），<b>暂不开放下载</b>。内测完成后会在本页开放入口，并同步更新下载链接。现阶段建议先在 Windows 上体验完整功能。</p>
       </details>
       <details class="faq-item">
         <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
@@ -945,9 +937,17 @@ document.getElementById('themeToggle').addEventListener('click', () => {
      dmg 文件名按 version.json 的版本号动态拼接。
      说明:dmg 自托管在本下载站(与安装包同目录),文件名按 VER 动态拼接。
      若改回指向 GitHub Release 直链,把 DMG_BASE 改为 'https://github.com/Sam5201-ai/todobar/releases/download/v'+VER+'/' 即可。 */
-  let VER = '0.4.57';
+  let VER = '0.4.58';
   let currentKey = null;
   const DMG_BASE = './';
+
+  /* ============ Mac 开放开关 ============
+     当前阶段只验证 Windows 端付费意愿,macOS 版内测中、不对外提供下载。
+     内测完成要开放 Mac 时,把 MAC_OPEN 改成 true 即可:
+     下载配置(mac-arm / mac-intel)、安装步骤、放行提示、FAQ 都已就绪,
+     打开后会自动恢复「按设备匹配 macOS 安装包」与平台切换条。 */
+  const MAC_OPEN = false;
+  const IS_MAC = /Macintosh|Mac OS X/i.test(navigator.userAgent || '');
 
   function dlMap() {
     const dmgArm = 'TickTask_' + VER + '_aarch64.dmg';
@@ -956,8 +956,8 @@ document.getElementById('themeToggle').addEventListener('click', () => {
       win: {
         label: '下载 Windows 安装包',
         btn: '下载 TickTask-setup.exe',
-        meta: 'Windows 10 / 11 · 64 位 · 约 17 MB · 免费下载 · 无需管理员权限',
-        ver: 'Windows 10 / 11 · 64 位 · 约 17 MB · v' + VER + ' · 免费下载',
+        meta: 'Windows 10 / 11 · 64 位 · 约 40 MB · 免费下载 · 无需管理员权限',
+        ver: 'Windows 10 / 11 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载',
         /* ?v= 让每个版本的下载 URL 唯一,避免浏览器/边缘缓存返回旧安装包 */
         href: './TickTask-setup.exe?v=' + VER,
         steps: `
@@ -998,20 +998,36 @@ document.getElementById('themeToggle').addEventListener('click', () => {
     };
   }
 
-  /* 自动判断：macOS 默认给 Apple 芯片版（近几年的 Mac 绝大多数是 Apple 芯片），其余给 Windows 版 */
+  /* 自动判断:仅 Windows 提供下载;macOS 视 MAC_OPEN 决定给不给 dmg */
   function detect() {
-    const ua = navigator.userAgent || '';
-    if (/Windows/i.test(ua)) return 'win';
-    if (/Macintosh|Mac OS X/i.test(ua)) {
-      const p = (navigator.userAgentData && navigator.userAgentData.platform) || '';
-      return /mac/i.test(p) || !p ? 'mac-arm' : 'mac-arm';
-    }
+    if (IS_MAC) return MAC_OPEN ? 'mac-arm' : 'win';
     return 'win';
+  }
+
+  /* macOS 访客(MAC 未开放时):把主按钮从「下载 exe」改成「内测中」并说明,
+     避免 Mac 用户点了下载到一个自己跑不起来的安装包。 */
+  function applyMacClosed() {
+    const md = document.getElementById('mainDownload');
+    if (md) {
+      md.removeAttribute('download');
+      md.setAttribute('href', '#faq');
+    }
+    const t = document.getElementById('mainDownloadText');
+    if (t) t.textContent = 'macOS 版内测中';
+    const hm = document.getElementById('heroMeta');
+    if (hm) {
+      hm.textContent = '检测到你正在使用 macOS：Mac 版正在内测，暂未开放下载，开放后会在本页公布。';
+    }
+    const iv = document.getElementById('installVer');
+    if (iv) iv.textContent = '当前仅提供 Windows 版 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载';
   }
 
   function paintBadge() {
     const badge = document.getElementById('osBadge');
-    if (badge) badge.textContent = 'v' + VER + ' · Windows 已发布 · macOS Beta';
+    if (badge) {
+      badge.textContent =
+        'v' + VER + (MAC_OPEN ? ' · Windows 已发布 · macOS Beta' : ' · Windows 版');
+    }
   }
 
   function apply(key) {
@@ -1037,11 +1053,25 @@ document.getElementById('themeToggle').addEventListener('click', () => {
     });
     /* 重新量一次轮播高度（安装区文字变化不影响，但保持一致性） */
     if (window.__fxFit) window.__fxFit();
+    if (IS_MAC && !MAC_OPEN) applyMacClosed();
+    /* 重新做一次下载链接改写:埋点脚本的 /download 中转会被上面的 href 重置覆盖 */
+    if (window.__rewriteDownloads) window.__rewriteDownloads();
   }
 
   document.querySelectorAll('.alt-dl a').forEach(a => {
     a.addEventListener('click', (e) => { e.preventDefault(); apply(a.dataset.dl); });
   });
+
+  /* Mac 入口关闭时:隐藏 macOS 下载链接与「不是这台电脑？」切换条
+     (只剩 Windows 一个选项,切换条没有意义) */
+  if (!MAC_OPEN) {
+    document.querySelectorAll('.alt-dl a[data-dl^="mac-"]').forEach(a => {
+      a.style.display = 'none';
+    });
+    if (!document.querySelector('.alt-dl a[data-dl^="mac-"]:not([style*="display: none"])')) {
+      document.querySelectorAll('.alt-dl').forEach(el => { el.style.display = 'none'; });
+    }
+  }
 
   apply(detect());
   paintBadge();
@@ -1317,6 +1347,9 @@ document.getElementById('themeToggle').addEventListener('click', () => {
       })
     }
     rewriteDownloads()
+    /* 暴露给安装包匹配脚本:版本号异步刷新会重设 href,需要再改写一次,
+       否则这部分下载会绕过 /download 中转、丢失归因。 */
+    window.__rewriteDownloads = rewriteDownloads
 
     // 下载点击:记录下载设备数(去重)。链接已改写走 /download 中转,由 server.js 记录归因
     document.addEventListener('click', (e) => {

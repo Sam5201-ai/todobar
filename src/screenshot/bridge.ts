@@ -153,7 +153,14 @@ export async function restoreMain(): Promise<void> {
  */
 export async function finishOverlay(): Promise<void> {
   try {
-    await invoke('finish_capture_overlay');
+    // 3s 超时兜底:IPC 偶发挂起会让调用方(复制/贴图/保存/取消)的 await 永不落定
+    // → busy 卡死、后续轮次按钮全部静默失效。超时按失败走恢复分支。
+    await Promise.race([
+      invoke('finish_capture_overlay'),
+      new Promise<never>((_, rej) =>
+        window.setTimeout(() => rej(new Error('finish_capture_overlay 超时(3s未响应)')), 3000),
+      ),
+    ]);
   } catch {
     /* 兜底:warmup 后覆盖层恒可见、停泊屏外,绝不 hide(否则下次 show 又冻结);
        异常路径只恢复主窗,覆盖层留在屏外停泊位,不影响下次截图。 */
@@ -240,13 +247,22 @@ export async function pinImage(
   const ry = y == null ? null : Math.round(y);
   const rw = Math.round(img.naturalWidth);
   const rh = Math.round(img.naturalHeight);
-  const label = await invoke<string>('show_pin_window', {
-    pinId: id,
-    x: rx,
-    y: ry,
-    width: rw,
-    height: rh,
-  });
+  // 诊断留痕:此前 invoke 挂起时整条链路无任何日志,「贴图没出现」无从排查。
+  void shotLog('pin invoking show_pin_window');
+  // 3s 超时兜底:IPC 偶发挂起会让 await 永不落定 → busy 卡死、按钮静默失效。
+  // 超时转为异常抛出,onPin 的 catch 弹「贴图失败」并复位 busy(2026-10-30)。
+  const label = await Promise.race([
+    invoke<string>('show_pin_window', {
+      pinId: id,
+      x: rx,
+      y: ry,
+      width: rw,
+      height: rh,
+    }),
+    new Promise<never>((_, rej) =>
+      window.setTimeout(() => rej(new Error('创建贴图窗口超时(3s未响应)')), 3000),
+    ),
+  ]);
   void shotLog(`pin window label=${label} size=${rw}x${rh} at=(${rx},${ry})`);
   // 元数据 + 图片数据双兜底:池窗已挂载走事件,动态新窗挂载时自读。
   await stashImage(`pin-meta:${label}`, JSON.stringify({ pinId: id }));
@@ -261,6 +277,11 @@ export async function pinImage(
       await new Promise((r) => setTimeout(r, 120));
     }
   }
+  // 复用池窗的挂载轮询早已停止(pinIdRef 非空),错过首次 pin-set 就会永不显示
+  // → 500ms 后补发一次兜底;PinWindow init 对同一 pinId 幂等跳过,重复事件无害。
+  window.setTimeout(() => {
+    void emitTo(label, 'pin-set').catch(() => {});
+  }, 500);
   return label;
 }
 

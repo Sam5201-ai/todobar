@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getSettings, setSettings, onSettingsChanged } from './store';
 import type { ScreenshotSettings } from './types';
 import { RESERVED_SHORTCUTS } from './types';
+import { ocrStatus, type OcrStatus } from './ocr/ocrClient';
 import './screenshot.css';
 import { applyShortcuts } from './shortcuts';
 import { ShortcutField } from '../ShortcutField';
@@ -69,6 +70,21 @@ export default function ScreenshotSettingsPanel({
   const [settings, setSettingsState] = useState<ScreenshotSettings>(() => getSettings());
   // 会员闸门:非会员不能启用截图 / 贴图。
   const { fullAccess, showVip } = useAccount();
+  // 本地 OCR 引擎能力探测(一次性;Win 缺语言包时展示系统安装指引)。
+  const [ocrSt, setOcrSt] = useState<OcrStatus | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void ocrStatus()
+      .then((s) => {
+        if (alive) setOcrSt(s);
+      })
+      .catch(() => {
+        /* 探测失败保持 null,展示检查失败文案 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /**
    * 启动后 hydrate 会把磁盘真实值写回 localStorage,此处订阅广播并重新同步显示值,
@@ -164,6 +180,17 @@ export default function ScreenshotSettingsPanel({
             onCommit={(v) => patch({ exitShortcut: v })}
             onToast={onToast}
           />
+          <p className="settings-hint">
+            {ocrSt
+              ? ocrSt.available
+                ? `识别文字:本地离线引擎已就绪(${
+                    [ocrSt.zhAvailable && '中文', ocrSt.enAvailable && '英文']
+                      .filter(Boolean)
+                      .join(' / ') || ocrSt.engine
+                  })。`
+                : `识别文字暂不可用:${ocrSt.message}`
+              : '正在检查本地文字识别引擎…'}
+          </p>
         </>
       ) : null}
     </div>
