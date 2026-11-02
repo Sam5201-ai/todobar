@@ -1,0 +1,11 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ args: ['--no-proxy-server', '--allow-file-access-from-files'] })
+const page = await browser.newPage({ viewport: { width: 468, height: 344 }, deviceScaleFactor: 2 })
+await page.addStyleTag({ content: '' }).catch(() => {})
+await page.goto('file:///D:/Wordbuddy/2026-10-09-10-11-34/todobar/dist/index.html?widget=1&style=candy', { waitUntil: 'load', timeout: 20000 })
+await page.waitForTimeout(1500)
+await page.click('.st-body')
+await page.waitForTimeout(600)
+await page.screenshot({ path: 'preview-picker.png', omitBackground: true })
+console.log('shot picker done')
+await browser.close()

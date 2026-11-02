@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>今日状态模块 · 设计稿</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Microsoft YaHei','PingFang SC',sans-serif;
+    background:#eef1f6; padding:28px;
+    display:flex; flex-direction:column; gap:34px; align-items:flex-start;
+    width:max-content;
+  }
+  .label { font-size:15px; font-weight:800; color:#2b3245; margin-bottom:10px; }
+  .label small { font-weight:400; color:#7a8496; margin-left:10px; font-size:12px; }
+  .row { display:flex; gap:22px; align-items:flex-start; }
+
+  /* ================= 奶牛萌卡(440×316) ================= */
+  .candy {
+    width:440px; height:316px; border-radius:26px;
+    background:linear-gradient(152deg,rgba(255,240,248,.92),rgba(247,240,255,.88) 55%,rgba(255,243,238,.9));
+    border:1.5px solid rgba(255,255,255,.9); box-shadow:0 5px 12px rgba(214,138,180,.3);
+    padding:8px 14px 10px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden;
+  }
+  .hero { display:flex; align-items:center; gap:2px; height:104px; padding-left:16px; flex:0 0 auto; }
+  .cow { font-size:64px; line-height:1; }
+  .bubble {
+    position:relative; flex:0 1 320px; align-self:center;
+    background:#fff; border-radius:16px; padding:9px 14px 10px;
+    box-shadow:0 2px 10px rgba(214,138,180,.16);
+  }
+  .bubble::before { content:''; position:absolute; left:-7px; top:24px; width:14px; height:14px; background:#fff; border-radius:3px; transform:rotate(45deg); }
+  .bt { font-size:15px; font-weight:800; color:#4a3f45; letter-spacing:.04em; }
+  .bt .h { color:#f27d9d; font-size:12px; }
+  .bq { margin-top:4px; font-size:11.5px; line-height:1.7; color:#7a6a70; }
+  .bdeco {
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:2px; font-size:11px;
+  }
+  .cards { display:flex; gap:10px; height:152px; flex:0 0 auto; }
+  .card { flex:1; border-radius:18px; padding:8px 12px 6px; display:flex; flex-direction:column; background:rgba(255,255,255,.86); box-shadow:0 2px 8px rgba(180,130,160,.12); position:relative; }
+  .card.earn { background:linear-gradient(165deg,rgba(255,255,255,.9),rgba(235,248,255,.85)); }
+  .card.down { background:linear-gradient(165deg,rgba(255,255,255,.9),rgba(253,240,246,.88)); }
+  .chead { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .cico { width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; }
+  .cico.blue { background:#5b8fd8; } .cico.pink { background:#f27d9d; }
+  .ctitle { font-size:12px; font-weight:700; color:#3f4552; }
+  .cdate { margin-left:auto; font-size:9.5px; color:#a8a2b0; }
+  .ring { position:relative; flex:1; min-height:0; aspect-ratio:1; margin:0 auto; display:flex; align-items:center; justify-content:center; }
+  .ring svg { position:absolute; inset:0; width:100%; height:100%; }
+  .ring-c { position:relative; z-index:1; text-align:center; }
+  .ring-c .b { font-size:15px; }
+  .ring-c strong { display:block; font-size:16.5px; color:#4a3f45; font-variant-numeric:tabular-nums; }
+  .ring-c .n { font-size:8.5px; color:#c47a92; line-height:1.4; display:block; }
+  .pills { display:flex; gap:6px; flex:0 0 auto; }
+  .pill { flex:1; display:flex; align-items:center; justify-content:center; gap:4px; background:rgba(255,255,255,.9); border-radius:999px; padding:4px 2px; font-size:10.5px; color:#6b5f66; }
+  .pi { width:13px; height:13px; border-radius:50%; color:#fff; font-size:8.5px; display:inline-flex; align-items:center; justify-content:center; }
+
+  /* ---- 状态模块(替换今日已赚) ---- */
+  .st-body { flex:1; display:flex; align-items:center; gap:12px; min-height:0; padding:0 4px; }
+  .st-avatar {
+    width:56px; height:56px; border-radius:50%; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center; font-size:30px;
+    background:var(--c,#e3f0ff); box-shadow:inset 0 -3px 0 rgba(0,0,0,.05);
+  }
+  .st-info { min-width:0; }
+  .st-name { font-size:22px; font-weight:900; color:var(--t,#3d6fa8); line-height:1.2; letter-spacing:.02em; }
+  .st-sub { margin-top:4px; font-size:11px; color:#6f7890; font-variant-numeric:tabular-nums; }
+  .st-sub b { color:#3d6fa8; font-size:12.5px; }
+  .st-quip { margin-top:4px; font-size:10.5px; color:#9aa2b4; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ================= 小马宽屏(560×220) ================= */
+  .wide {
+    width:560px; height:220px; border-radius:28px;
+    background:linear-gradient(140deg,rgba(255,255,255,.94),rgba(238,246,253,.9));
+    border:1.5px solid rgba(255,255,255,.95); box-shadow:0 5px 12px rgba(90,130,180,.28);
+    padding:10px; display:flex; gap:9px; overflow:hidden;
+  }
+  .wq { flex:0 0 48%; border-radius:20px; overflow:hidden; position:relative;
+    background:linear-gradient(150deg,#dcecfb,#f2f8fe 60%,#e8f2fc); }
+  .wq .horse { position:absolute; right:6px; bottom:0; font-size:76px; line-height:1; }
+  .wq .in { position:relative; z-index:1; padding:12px 12px 8px; }
+  .wq .h { display:flex; align-items:center; gap:6px; font-size:15px; font-weight:800; color:#2e4a6b; }
+  .wq .t { margin-top:7px; font-size:12.5px; line-height:1.7; color:#41597a; }
+  .wdoodle { position:absolute; top:14px; right:14px; z-index:1; font-size:11.5px; color:#3f6ea8; transform:rotate(6deg); text-align:right; }
+  .wcol { flex:1; display:flex; flex-direction:column; gap:9px; min-width:0; }
+  .wcard { flex:1; border-radius:20px; padding:9px 12px 7px; display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.9); box-shadow:0 2px 8px rgba(110,140,180,.12); position:relative; }
+  .wcard.earn { background:linear-gradient(165deg,rgba(255,255,255,.94),rgba(235,248,255,.9)); }
+  .wcard.down { background:linear-gradient(165deg,rgba(255,255,255,.94),rgba(237,244,252,.9)); }
+  .wico { width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--c,#e3f0ff); flex:0 0 auto; }
+  .wt { font-size:12px; font-weight:700; color:#4a5866; }
+  .wname { font-size:17px; font-weight:900; color:var(--t,#3d6fa8); margin-top:2px; }
+  .wsub { font-size:10px; color:#8296ac; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wnote { position:absolute; top:8px; right:10px; font-size:9.5px; color:#8fa8c4; text-align:right; line-height:1.5; transform:rotate(2deg); }
+
+  /* ================= 暖阳三栏(560×210) ================= */
+  .sunset {
+    width:560px; height:210px; border-radius:26px;
+    background:linear-gradient(140deg,rgba(255,253,248,.95),rgba(250,243,232,.9));
+    border:1.5px solid rgba(255,255,255,.95); box-shadow:0 5px 12px rgba(180,140,90,.28);
+    padding:10px; display:flex; gap:9px; overflow:hidden;
+  }
+  .scol { flex:1; border-radius:18px; background:rgba(255,255,255,.9); box-shadow:0 2px 8px rgba(170,140,100,.12); padding:10px 12px 9px; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+  .scol.q { flex:1.15; background:linear-gradient(180deg,#fefaf2,#fbf4e6 55%,#f8ecda); }
+  .shead { display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:#3a4148; }
+  .sico { width:20px; height:20px; border-radius:50%; background:var(--c,#e3f0ff); display:flex; align-items:center; justify-content:center; font-size:12px; flex:0 0 auto; }
+  .stbody { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height:0; }
+  .sname { font-size:19px; font-weight:900; color:var(--t,#3d6fa8); }
+  .ssub { font-size:10.5px; color:#6f7890; font-variant-numeric:tabular-nums; }
+  .squip { font-size:9.5px; color:#9aa2b4; font-style:italic; }
+  .sfoot { display:flex; align-items:stretch; background:rgba(244,246,244,.95); border-radius:10px; padding:5px 4px; margin-top:8px; }
+  .sf { flex:1; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .sf span { font-size:9px; color:#8a948c; }
+  .sf strong { font-size:11.5px; color:#3a4148; }
+  .ssep { width:1px; background:#dde3de; margin:1px 2px; }
+  .sbar { display:flex; align-items:center; gap:7px; margin-top:8px; }
+  .sbar .track { flex:1; height:7px; border-radius:999px; background:#e7ebf2; overflow:hidden; }
+  .sbar .fill { width:60%; height:100%; border-radius:999px; background:#5b7fd8; }
+  .sbar .pct { font-size:10px; font-weight:700; color:#5b7fd8; }
+  .spill { margin-top:8px; display:flex; gap:6px; background:rgba(255,255,255,.92); border-radius:12px; padding:5px 9px; font-size:9.5px; color:#5a6470; line-height:1.5; }
+
+  /* ================= 状态选择弹窗 ================= */
+  .picker-wrap { position:relative; }
+  .picker {
+    position:absolute; left:50%; bottom:-12px; transform:translateX(-50%);
+    width:400px; background:#fff; border-radius:18px; box-shadow:0 10px 32px rgba(80,60,90,.25);
+    padding:12px; z-index:20;
+  }
+  .picker h4 { font-size:13px; color:#3f4552; margin-bottom:9px; text-align:center; }
+  .pgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+  .pitem { border:1.5px solid #f0e6ee; border-radius:12px; padding:8px 2px; text-align:center; cursor:pointer; }
+  .pitem .e { font-size:20px; }
+  .pitem .n { font-size:10.5px; color:#5a6470; margin-top:2px; font-weight:600; }
+  .pitem.on { border-color:#f27d9d; background:#fff0f5; }
+  .pauto { margin-top:9px; width:100%; border:none; border-radius:999px; padding:7px; font-size:11.5px; font-weight:700; color:#fff; background:linear-gradient(90deg,#f27d9d,#f2a3b8); cursor:pointer; }
+  .phint { margin-top:6px; font-size:9.5px; color:#b0a8b8; text-align:center; }
+</style>
+</head>
+<body>
+
+  <!-- ① 奶牛萌卡:新气泡样式 + 今日状态模块 -->
+  <div>
+    <div class="label">① 奶牛萌卡 · 新气泡样式(右侧不再空)+「今日状态」替换「今日已赚」<small>示例状态:疯狂搬砖</small></div>
+    <div class="candy">
+      <div class="hero">
+        <div class="cow">🐮</div>
+        <div class="bubble">
+          <div class="bt">牛马寄语 <span class="h">❤</span></div>
+          <div class="bq">每一分钟的坚持，<br>都在悄悄垫高你想要的生活。<br>别小看今天的自己，你已经很棒了。🌟</div>
+          <div class="bdeco"><span>✨</span><span>💫</span><span>❤️</span></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card earn">
+          <div class="chead">
+            <span class="cico blue">📋</span>
+            <span class="ctitle">今日状态</span>
+            <span class="cdate">10月21日 周三</span>
+          </div>
+          <div class="st-body">
+            <div class="st-avatar" style="--c:#e3f0ff">💼</div>
+            <div class="st-info">
+              <div class="st-name" style="--t:#3d6fa8">疯狂搬砖</div>
+              <div class="st-sub">已专注 <b>1</b> 小时 <b>23</b> 分 · 距午休还有 <b>47</b> 分</div>
+              <div class="st-quip">“ 键盘敲出火星子 ”</div>
+            </div>
+          </div>
+        </div>
+        <div class="card down">
+          <div class="chead">
+            <span class="cico pink">⏰</span>
+            <span class="ctitle">下班倒计时</span>
+            <span class="cdate">今日 18:00</span>
+          </div>
+          <div class="ring">
+            <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#f8e0e8" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="#f27d9d" stroke-width="9" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="126" transform="rotate(-90 60 60)"/></svg>
+            <div class="ring-c"><span class="b">💼</span><strong>03:11:09</strong><span class="n">加油！❤<br>马上下班啦！</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="pills">
+        <span class="pill"><i class="pi" style="background:#6c8fd8">✓</i>好好工作</span>
+        <span class="pill"><i class="pi" style="background:#f27d9d">❤</i>按时下班</span>
+        <span class="pill"><i class="pi" style="background:#3cb878">✓</i>好好生活</span>
+        <span class="pill"><i class="pi" style="background:#f2b64c">★</i>保持开心</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 小马宽屏:今日状态 -->
+  <div>
+    <div class="label">② 小马宽屏 · 「今日状态」替换「今日已赚」<small>示例状态:电量耗尽</small></div>
+    <div class="wide">
+      <div class="wq">
+        <div class="in">
+          <div class="h">❝ 牛马寄语</div>
+          <div class="t">每一分钟的坚持，都在悄悄垫高你想要的生活。</div>
+        </div>
+        <div class="wdoodle">加油！<br>打工人！</div>
+        <div class="horse">🐴</div>
+      </div>
+      <div class="wcol">
+        <div class="wcard earn">
+          <span class="wico" style="--c:#ffe9e3">🔋</span>
+          <div>
+            <div class="wt">今日状态</div>
+            <div class="wname" style="--t:#c96f5a">电量耗尽</div>
+            <div class="wsub">已硬撑 2 小时 18 分 · “ 眼睛已离家出走 ”</div>
+          </div>
+          <div class="wnote">又是努力打工<br>的一天!</div>
+        </div>
+        <div class="wcard down">
+          <span class="wico" style="--c:#e3ecff">⏰</span>
+          <div>
+            <div class="wt">下班倒计时</div>
+            <div style="display:flex;align-items:flex-start;gap:5px;margin-top:2px">
+              <strong style="font-size:21px;color:#22344c">03 : 11 : 09</strong>
+            </div>
+            <div style="display:flex;gap:12px;font-size:9px;color:#8296ac"><span>小时</span><span>分钟</span><span>秒</span></div>
+          </div>
+          <div class="wnote">坚持一下~<br>下班见自由!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 暖阳三栏:今日状态 -->
+  <div>
+    <div class="label">③ 暖阳三栏 · 「今日状态」替换「今日已赚」<small>示例状态:冲刺下班(底部工作时长/时薪保留,可再议)</small></div>
+    <div class="sunset">
+      <div class="scol q">
+        <div class="shead">☀️ <b style="font-size:13px;color:#4a3a28">牛马寄语</b><span style="margin-left:auto;font-size:9px;color:#b09a7c">10月21日 周三</span></div>
+        <div style="margin-top:9px;font-size:12px;line-height:1.7;color:#6b5a44">每一分钟的坚持，<br>都在悄悄垫高你想要的生活。💪</div>
+        <div style="margin-top:auto;font-size:40px;text-align:center;line-height:1;padding-bottom:4px">🐮</div>
+      </div>
+      <div class="scol">
+        <div class="shead"><span class="sico" style="--c:#e3f0ff">📋</span>今日状态</div>
+        <div class="stbody">
+          <div style="font-size:30px;line-height:1">🔋</div>
+          <div class="sname" style="--t:#c96f5a">电量耗尽</div>
+          <div class="ssub">已硬撑 2 小时 18 分</div>
+          <div class="squip">“ 需要输入奶茶能量 ”</div>
+        </div>
+        <div class="sfoot">
+          <div class="sf"><span>今日工作时长</span><strong>⏱ 4.8 h</strong></div>
+          <div class="ssep"></div>
+          <div class="sf"><span>时薪（约）</span><strong>📈 ¥ 46.15</strong></div>
+        </div>
+      </div>
+      <div class="scol">
+        <div class="shead"><span class="sico" style="--c:#e3ecff">⏰</span>下班倒计时</div>
+        <div class="stbody">
+          <div style="font-size:24px;font-weight:900;color:#1f2c3e;letter-spacing:.02em">03 : 11 : 09</div>
+          <div style="display:flex;gap:14px;font-size:9px;color:#9aa2aa"><span>小时</span><span>分钟</span><span>秒</span></div>
+        </div>
+        <div class="sbar"><div class="track"><div class="fill"></div></div><span class="pct">60%</span></div>
+        <div class="spill">☕ 再坚持一下，就能见到自由的晚霞了！</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 状态选择弹窗(点击状态模块弹出) -->
+  <div>
+    <div class="label">④ 点击「今日状态」弹出的状态选择弹窗<small>手动固定状态 + 恢复自动切换</small></div>
+    <div class="picker-wrap">
+      <div class="candy" style="opacity:.45">
+        <div class="hero"><div class="cow">🐮</div></div>
+      </div>
+      <div class="picker">
+        <h4>选择当前状态</h4>
+        <div class="pgrid">
+          <div class="pitem"><div class="e">🌱</div><div class="n">刚出土</div></div>
+          <div class="pitem"><div class="e">💼</div><div class="n">疯狂搬砖</div></div>
+          <div class="pitem"><div class="e">🍚</div><div class="n">等饭中</div></div>
+          <div class="pitem"><div class="e">😴</div><div class="n">午休回血</div></div>
+          <div class="pitem"><div class="e">🔋</div><div class="n">电量耗尽</div></div>
+          <div class="pitem"><div class="e">💭</div><div class="n">带薪发呆</div></div>
+          <div class="pitem"><div class="e">🚀</div><div class="n">冲刺下班</div></div>
+          <div class="pitem"><div class="e">🌙</div><div class="n">下班自由</div></div>
+        </div>
+        <button class="pauto">↻ 恢复自动切换</button>
+        <div class="phint">选定后组件固定为该状态(重启保留);点击「恢复自动切换」回到按时间自动判定</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

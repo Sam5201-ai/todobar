@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>万年历 · UI 重设计预览（TickTask 0.2.x）</title>
+<style>
+  /* ========== 设计令牌 ========== */
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --ink: #1a1c22;
+    --ink-2: #565b63;
+    --muted: #8a8f98;
+    --line: rgba(24, 26, 32, 0.08);
+    --blue: #1d7ef0;
+    --blue-deep: #1565d8;
+    --blue-soft: rgba(29, 126, 240, 0.08);
+    --blue-ring: rgba(29, 126, 240, 0.35);
+    --red: #e5484d;
+    --red-soft: rgba(229, 72, 77, 0.10);
+    --green: #16a34a;
+    --green-soft: rgba(22, 163, 74, 0.10);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245, 158, 11, 0.12);
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 14px;
+    --shadow-card: 0 1px 3px rgba(18, 22, 33, 0.05), 0 4px 14px rgba(18, 22, 33, 0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 48px;
+    gap: 14px;
+  }
+
+  .caption {
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+  }
+  .caption b { color: var(--ink-2); }
+
+  /* ========== 应用窗口框架 ========== */
+  .phone {
+    width: 400px;
+    max-width: 100%;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(18, 22, 33, 0.10);
+    overflow: hidden;
+  }
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .app-header .back {
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    color: var(--ink-2);
+    background: transparent;
+  }
+  .app-header h1 {
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .page { padding: 12px 14px 20px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ========== 工具栏 ========== */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    background: #f3f4f6;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 2px;
+  }
+  .seg .nav {
+    width: 22px; height: 24px;
+    display: grid; place-items: center;
+    border: none; background: transparent;
+    border-radius: 7px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .seg .nav:hover { background: #e9ebef; color: var(--blue); }
+  .seg .val {
+    height: 24px;
+    border: none; background: transparent;
+    font-size: 12px; font-weight: 600;
+    color: var(--ink);
+    padding: 0 2px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .today-btn {
+    margin-left: auto;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--blue);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--blue);
+    font-size: 11.5px;
+    font-weight: 600;
+    font-family: inherit;
+    white-space: nowrap;   /* 锁定单行 */
+    line-height: 1;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .today-btn:hover { background: var(--blue-soft); }
+
+  /* ========== 日历面板（恢复经典样式） ========== */
+  .cal-panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+    padding: 12px 10px 10px;
+  }
+  .cal-title {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .week-row, .day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .week-row {
+    margin-bottom: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .week-cell {
+    text-align: center;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .week-cell.is-weekend { color: var(--red); }
+
+  .cell {
+    position: relative;
+    height: 54px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .cell:hover { background: #f2f4f7; }
+  .cell.blank { cursor: default; }
+
+  .cell .num {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .cell .sub {
+    font-size: 10px;
+    line-height: 1.2;
+    max-width: 96%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+  }
+  .cell.rest .num { color: var(--red); }
+  .cell .sub.festival { color: var(--red); font-weight: 600; }
+  .cell .sub.term { color: var(--green); font-weight: 600; }
+
+  .cell .badge {
+    position: absolute;
+    top: 3px; right: 4px;
+    font-style: normal;
+    font-size: 8.5px;
+    line-height: 1;
+    padding: 2px 3.5px;
+    border-radius: 4px;
+    font-weight: 700;
+    background: var(--red-soft);
+    color: var(--red);
+  }
+  .cell .badge.work { background: var(--blue-soft); color: var(--blue); }
+
+  .cell.today:not(.selected) {
+    border-color: var(--blue);
+    background: var(--blue-soft);
+  }
+  .cell.selected {
+    background: var(--blue);
+    box-shadow: 0 3px 10px var(--blue-ring);
+  }
+  .cell.selected .num,
+  .cell.selected .sub { color: #fff; }
+  .cell.selected .badge { background: rgba(255,255,255,0.22); color: #fff; }
+
+  /* ========== 详情区（同步润色，结构不变） ========== */
+  .detail-banner {
+    background: var(--blue-soft);
+    color: var(--blue-deep);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 10px;
+    text-align: center;
+  }
+
+  .big-card {
+    background: linear-gradient(160deg, var(--blue-soft), rgba(29, 126, 240, 0.02));
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .big-head { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .big-num { font-size: 52px; font-weight: 800; line-height: 1; color: var(--blue); }
+  .big-lunar { font-size: 16px; font-weight: 700; }
+  .big-ganzhi { font-size: 12px; color: var(--ink-2); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-card);
+    padding: 11px 12px;
+  }
+  .tag-row { display: flex; align-items: flex-start; gap: 8px; }
+  .tag-row + .tag-row { margin-top: 8px; }
+  .tag-label {
+    flex: 0 0 auto;
+    font-style: normal;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 6px;
+    padding: 3px 7px;
+    margin-top: 1px;
+  }
+  .tag-label.good { background: var(--green); }
+  .tag-label.bad { background: var(--red); }
+  .tag-label.info { background: var(--blue); }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .tag {
+    font-size: 11.5px;
+    line-height: 1.6;
+    padding: 1px 8px;
+    border-radius: 999px;
+  }
+  .tag.good { color: var(--green); background: var(--green-soft); }
+  .tag.bad { color: var(--red); background: var(--red-soft); }
+  .tag.info { color: var(--blue); background: var(--blue-soft); }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .info-item { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .info-item.wide { grid-column: span 2; }
+  .info-label {
+    flex: 0 0 auto;
+    font-style: normal;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--blue);
+    border-radius: 5px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .info-value { font-size: 12px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<p class="caption"><b>万年历页 · UI 重设计预览</b>（功能不变，仅样式优化）<br>
+日历面板恢复经典样式：无边框干净网格 · 蓝底选中 · 红休日/红节日 · 绿节气 · 「回到今天」单行小字</p>
+
+<div class="phone">
+  <header class="app-header">
+    <span class="back">←</span>
+    <h1>万年历</h1>
+  </header>
+
+  <div class="page">
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <div class="seg">
+        <button class="nav" aria-label="上一年">‹</button>
+        <select class="val" aria-label="选择年份"><option>2026年</option></select>
+        <button class="nav" aria-label="下一年">›</button>
+      </div>
+      <div class="seg">
+        <button class="nav" aria-label="上一月">‹</button>
+        <select class="val" aria-label="选择月份"><option>10月</option></select>
+        <button class="nav" aria-label="下一月">›</button>
+      </div>
+      <button class="today-btn">回到今天</button>
+    </div>
+
+    <!-- 日历面板 -->
+    <section class="cal-panel" aria-label="2026年10月万年历">
+      <div class="cal-title">2026年10月</div>
+      <div class="week-row">
+        <div class="week-cell">一</div>
+        <div class="week-cell">二</div>
+        <div class="week-cell">三</div>
+        <div class="week-cell">四</div>
+        <div class="week-cell">五</div>
+        <div class="week-cell is-weekend">六</div>
+        <div class="week-cell is-weekend">日</div>
+      </div>
+      <div class="day-grid">
+        <div class="cell blank"></div>
+        <div class="cell blank"></div>
+        <div class="cell blank"></div>
+
+        <button class="cell rest"><i class="badge">休</i><span class="num">1</span><span class="sub festival">国庆节</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">2</span><span class="sub">廿二</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">3</span><span class="sub">廿三</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">4</span><span class="sub">廿四</span></button>
+
+        <button class="cell rest"><i class="badge">休</i><span class="num">5</span><span class="sub festival">世界……</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">6</span><span class="sub">廿六</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">7</span><span class="sub">廿七</span></button>
+        <button class="cell"><span class="num">8</span><span class="sub term">寒露</span></button>
+        <button class="cell"><span class="num">9</span><span class="sub">廿九</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">10</span><span class="sub">九月</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">11</span><span class="sub">初二</span></button>
+
+        <button class="cell"><span class="num">12</span><span class="sub">初三</span></button>
+        <button class="cell"><span class="num">13</span><span class="sub">初四</span></button>
+        <button class="cell"><span class="num">14</span><span class="sub">初五</span></button>
+        <button class="cell"><span class="num">15</span><span class="sub">初六</span></button>
+        <button class="cell rest selected" aria-pressed="true"><i class="badge">休</i><span class="num">16</span><span class="sub festival">粮食日</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">17</span><span class="sub">初八</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">18</span><span class="sub festival">重阳节</span></button>
+
+        <button class="cell"><span class="num">19</span><span class="sub">初十</span></button>
+        <button class="cell"><span class="num">20</span><span class="sub">十一</span></button>
+        <button class="cell"><span class="num">21</span><span class="sub">十二</span></button>
+        <button class="cell"><span class="num">22</span><span class="sub">十三</span></button>
+        <button class="cell"><span class="num">23</span><span class="sub">十四</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">24</span><span class="sub term">霜降</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">25</span><span class="sub">十六</span></button>
+
+        <button class="cell"><span class="num">26</span><span class="sub">十七</span></button>
+        <button class="cell"><span class="num">27</span><span class="sub">十八</span></button>
+        <button class="cell"><span class="num">28</span><span class="sub">十九</span></button>
+        <button class="cell"><span class="num">29</span><span class="sub">二十</span></button>
+        <button class="cell"><span class="num">30</span><span class="sub">廿一</span></button>
+        <button class="cell rest"><i class="badge">休</i><span class="num">31</span><span class="sub festival">万圣节</span></button>
+      </div>
+    </section>
+
+    <!-- 详情 -->
+    <div class="detail-banner">2026年10月16日 详细信息 · 今天</div>
+
+    <section class="big-card">
+      <div class="big-head">2026年 10月（大）星期五</div>
+      <div class="big-num">16</div>
+      <div class="big-lunar">九月初七</div>
+      <div class="big-ganzhi">丙午年【马年】 戊戌月 癸亥日</div>
+    </section>
+
+    <section class="card">
+      <div class="tag-row">
+        <i class="tag-label info">节日</i>
+        <div class="tags"><span class="tag info">世界粮食日</span></div>
+      </div>
+      <div class="tag-row">
+        <i class="tag-label good">宜</i>
+        <div class="tags">
+          <span class="tag good">祭祀</span><span class="tag good">开光</span><span class="tag good">出行</span>
+          <span class="tag good">解除</span><span class="tag good">理发</span><span class="tag good">伐木</span>
+          <span class="tag good">出火</span><span class="tag good">拆卸</span><span class="tag good">上梁</span>
+          <span class="tag good">合脊</span><span class="tag good">安床</span><span class="tag good">造畜稠</span>
+        </div>
+      </div>
+      <div class="tag-row">
+        <i class="tag-label bad">忌</i>
+        <div class="tags">
+          <span class="tag bad">嫁娶</span><span class="tag bad">安葬</span><span class="tag bad">行丧</span>
+          <span class="tag bad">词讼</span><span class="tag bad">造桥</span><span class="tag bad">作灶</span>
+          <span class="tag bad">破土</span><span class="tag bad">动土</span>
+        </div>
+      </div>
+      <div class="tag-row">
+        <i class="tag-label good">吉神宜趋</i>
+        <div class="tags">
+          <span class="tag good">四相</span><span class="tag good">相日</span><span class="tag good">吉期</span>
+          <span class="tag good">五富</span><span class="tag good">敬安</span><span class="tag good">玉堂</span>
+        </div>
+      </div>
+      <div class="tag-row">
+        <i class="tag-label bad">凶神宜忌</i>
+        <div class="tags">
+          <span class="tag bad">劫煞</span><span class="tag bad">五虚</span><span class="tag bad">土符</span>
+          <span class="tag bad">重日</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card info-grid">
+      <div class="info-item"><i class="info-label">生肖</i><span class="info-value">马</span></div>
+      <div class="info-item"><i class="info-label">星座</i><span class="info-value">天秤座</span></div>
+      <div class="info-item"><i class="info-label">冲</i><span class="info-value">冲蛇(丁巳)煞西</span></div>
+      <div class="info-item"><i class="info-label">煞</i><span class="info-value">煞西</span></div>
+      <div class="info-item wide"><i class="info-label">彭祖百忌</i><span class="info-value">癸不词讼理弱敌强 亥不嫁娶不利新郎</span></div>
+      <div class="info-item"><i class="info-label">胎神占方</i><span class="info-value">占房床外东南</span></div>
+      <div class="info-item"><i class="info-label">年五行</i><span class="info-value">天河水</span></div>
+      <div class="info-item"><i class="info-label">月五行</i><span class="info-value">平地木</span></div>
+      <div class="info-item"><i class="info-label">日五行</i><span class="info-value">大海水</span></div>
+      <div class="info-item"><i class="info-label">季节</i><span class="info-value">秋季</span></div>
+      <div class="info-item wide"><i class="info-label">星宿</i><span class="info-value">张宿（张月鹿）· 吉</span></div>
+      <div class="info-item wide"><i class="info-label">节气</i><span class="info-value">寒露 (10月8日) · 下个节气：霜降 (10月24日)</span></div>
+      <div class="info-item"><i class="info-label">儒略日</i><span class="info-value">2461335</span></div>
+      <div class="info-item"><i class="info-label">佛历年</i><span class="info-value">2570</span></div>
+      <div class="info-item"><i class="info-label">伊斯兰历</i><span class="info-value">1448-04-28</span></div>
+      <div class="info-item"><i class="info-label">六曜</i><span class="info-value">先负</span></div>
+      <div class="info-item"><i class="info-label">十二神</i><span class="info-value">平执位</span></div>
+      <div class="info-item"><i class="info-label">喜神方位</i><span class="info-value">东南</span></div>
+      <div class="info-item"><i class="info-label">财神方位</i><span class="info-value">正南</span></div>
+      <div class="info-item wide"><i class="info-label">日禄</i><span class="info-value">子命互禄 壬命进禄</span></div>
+      <div class="info-item"><i class="info-label">数九</i><span class="info-value">-</span></div>
+      <div class="info-item"><i class="info-label">三伏</i><span class="info-value">-</span></div>
+    </section>
+  </div>
+</div>
+
+<p class="caption">
+主要变化：① 日历面板改为<b>整体一张卡</b>，日期格去掉描边小卡片，恢复干净的经典网格；<br>
+② 选中日 = <b>蓝底白字圆角块</b>（带柔和投影），今天未选中 = 蓝描边；③ 休/班角标缩小贴角，不再挤压内容；<br>
+④ 「回到今天」字号 12→11.5px、高度 28→26px、<b>锁定单行</b>；⑤ 详情区保持原结构，仅统一圆角/留白/卡片阴影。
+</p>
+
+</body>
+</html>

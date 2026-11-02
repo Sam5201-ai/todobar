@@ -1,0 +1,20 @@
+// vitest.config.ts
+import { defineConfig } from "file:///D:/Wordbuddy/2026-10-09-10-11-34/todobar/sync-worker/node_modules/vitest/dist/config.js";
+var vitest_config_default = defineConfig({
+  optimizeDeps: {
+    exclude: ["node:sqlite"]
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+    server: {
+      deps: {
+        external: ["node:sqlite"]
+      }
+    }
+  }
+});
+export {
+  vitest_config_default as default
+};
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidml0ZXN0LmNvbmZpZy50cyJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY29uc3QgX192aXRlX2luamVjdGVkX29yaWdpbmFsX2Rpcm5hbWUgPSBcIkQ6XFxcXFdvcmRidWRkeVxcXFwyMDI2LTEwLTA5LTEwLTExLTM0XFxcXHRvZG9iYXJcXFxcc3luYy13b3JrZXJcIjtjb25zdCBfX3ZpdGVfaW5qZWN0ZWRfb3JpZ2luYWxfZmlsZW5hbWUgPSBcIkQ6XFxcXFdvcmRidWRkeVxcXFwyMDI2LTEwLTA5LTEwLTExLTM0XFxcXHRvZG9iYXJcXFxcc3luYy13b3JrZXJcXFxcdml0ZXN0LmNvbmZpZy50c1wiO2NvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9pbXBvcnRfbWV0YV91cmwgPSBcImZpbGU6Ly8vRDovV29yZGJ1ZGR5LzIwMjYtMTAtMDktMTAtMTEtMzQvdG9kb2Jhci9zeW5jLXdvcmtlci92aXRlc3QuY29uZmlnLnRzXCI7aW1wb3J0IHsgZGVmaW5lQ29uZmlnIH0gZnJvbSAndml0ZXN0L2NvbmZpZydcblxuZXhwb3J0IGRlZmF1bHQgZGVmaW5lQ29uZmlnKHtcbiAgb3B0aW1pemVEZXBzOiB7XG4gICAgZXhjbHVkZTogWydub2RlOnNxbGl0ZSddLFxuICB9LFxuICB0ZXN0OiB7XG4gICAgZW52aXJvbm1lbnQ6ICdub2RlJyxcbiAgICBpbmNsdWRlOiBbJ3NyYy8qKi8qLnRlc3QudHMnXSxcbiAgICBzZXJ2ZXI6IHtcbiAgICAgIGRlcHM6IHtcbiAgICAgICAgZXh0ZXJuYWw6IFsnbm9kZTpzcWxpdGUnXSxcbiAgICAgIH0sXG4gICAgfSxcbiAgfSxcbn0pXG4iXSwKICAibWFwcGluZ3MiOiAiO0FBQTRWLFNBQVMsb0JBQW9CO0FBRXpYLElBQU8sd0JBQVEsYUFBYTtBQUFBLEVBQzFCLGNBQWM7QUFBQSxJQUNaLFNBQVMsQ0FBQyxhQUFhO0FBQUEsRUFDekI7QUFBQSxFQUNBLE1BQU07QUFBQSxJQUNKLGFBQWE7QUFBQSxJQUNiLFNBQVMsQ0FBQyxrQkFBa0I7QUFBQSxJQUM1QixRQUFRO0FBQUEsTUFDTixNQUFNO0FBQUEsUUFDSixVQUFVLENBQUMsYUFBYTtBQUFBLE1BQzFCO0FBQUEsSUFDRjtBQUFBLEVBQ0Y7QUFDRixDQUFDOyIsCiAgIm5hbWVzIjogW10KfQo=

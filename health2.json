@@ -1,0 +1,1 @@
+{"ok":true,"time":"2026-10-28T06:44:58.372Z","tables":["_cf_KV","_meta","activation_codes","admin_sessions","analytics_events","birthdays","d1_migrations","email_codes","feedback","feedback_replies","identity_links","release_notes","sessions","settings","site_downloads","sqlite_sequence","tasks","users"],"failures":[]}

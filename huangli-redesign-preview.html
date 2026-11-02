@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>万年历 · 视觉重设计预览（仅 UI，功能未变）</title>
+<style>
+  :root {
+    --ink: #111318;
+    --muted: #69707a;
+    --line: rgba(24, 26, 32, 0.12);
+    --sidebar-solid-bg: #fafaf9;
+    --sidebar-bg: rgba(250, 250, 249, 0.92);
+    --control-bg: #f3f4f4;
+    --task-bg: #fff;
+    --task-border: rgba(24, 26, 32, 0.095);
+    --surface-hover: #f0f2f4;
+    --row-shadow-hover: 0 10px 26px rgba(24, 26, 32, 0.075);
+    /* 万年历语义色（与桌面端 App 同源） */
+    --hl-good: #16a34a;
+    --hl-bad: #e5484d;
+    --hl-info: #1d7ef0;
+    --hl-amber: #f59e0b;
+    --hl-good-soft: rgba(22, 163, 74, 0.10);
+    --hl-bad-soft: rgba(229, 72, 77, 0.10);
+    --hl-info-soft: rgba(29, 126, 240, 0.10);
+    --hl-amber-soft: rgba(245, 158, 11, 0.14);
+    --hl-weekend-soft: rgba(229, 72, 77, 0.05);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 28px 16px;
+    background:
+      radial-gradient(circle at 18% 16%, rgba(24, 26, 32, 0.05), transparent 28%),
+      linear-gradient(145deg, #f7f7f6 0%, #eff1f2 48%, #e6e9ec 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+  }
+  .phone {
+    width: 380px;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(24, 26, 32, 0.12);
+    overflow: hidden;
+  }
+  .hl-appbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+    font-weight: 700; font-size: 15px;
+  }
+  .hl-appbar .x { color: var(--muted); font-size: 18px; }
+
+  .huangli-view {
+    display: flex; flex-direction: column; gap: 12px; padding: 0 14px 16px;
+  }
+
+  /* 工具栏 */
+  .hl-toolbar {
+    position: sticky; top: 0; z-index: 6;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 2px;
+    background: color-mix(in srgb, var(--sidebar-solid-bg) 86%, transparent);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .hl-nav-group {
+    display: flex; align-items: center; gap: 2px;
+    background: var(--control-bg); border: 1px solid var(--task-border);
+    border-radius: 9px; padding: 2px;
+  }
+  .hl-nav-btn {
+    display: grid; place-items: center; width: 24px; height: 24px;
+    border: none; border-radius: 7px; background: transparent;
+    color: var(--ink); cursor: pointer; padding: 0;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .hl-nav-btn:hover { background: var(--surface-hover); color: var(--hl-info); }
+  .hl-select {
+    height: 26px; border: none; background: transparent; color: var(--ink);
+    font-size: 12px; font-weight: 600; padding: 0 4px; cursor: pointer; border-radius: 6px;
+  }
+  .hl-select:hover { background: var(--surface-hover); }
+  .hl-today-btn {
+    margin-left: auto; height: 28px; padding: 0 12px;
+    border: 1px solid var(--hl-info); border-radius: 9px;
+    background: transparent; color: var(--hl-info);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: background 120ms ease;
+  }
+  .hl-today-btn:hover { background: var(--hl-info-soft); }
+
+  /* 月历 */
+  .hl-grid-title {
+    font-size: 14px; font-weight: 700; color: var(--ink);
+    text-align: center; letter-spacing: 0.04em; padding: 2px 0;
+  }
+  .hl-week-row, .hl-day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .hl-week-cell { text-align: center; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+  .hl-week-cell.is-weekend { color: var(--hl-bad); }
+  .hl-cell {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-height: 58px; padding: 7px 2px 5px;
+    border: 1px solid var(--task-border); border-radius: 10px;
+    background: var(--task-bg); cursor: pointer; overflow: hidden;
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+  .hl-cell:hover { border-color: var(--hl-info); box-shadow: var(--row-shadow-hover); transform: translateY(-1px); }
+  .hl-cell.is-weekend, .hl-cell.is-legal { background: var(--hl-weekend-soft); }
+  .hl-cell.is-blank { background: transparent; border-color: transparent; cursor: default; }
+  .hl-cell.is-blank:hover { transform: none; box-shadow: none; border-color: transparent; }
+  .hl-cell.is-today { border-color: var(--hl-amber); background: var(--hl-amber-soft); }
+  .hl-cell.is-selected { border-color: var(--hl-info); background: var(--hl-info-soft); box-shadow: 0 0 0 2px rgba(29,126,240,0.35) inset; }
+  .hl-day-num { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+  .hl-day-num.is-red { color: var(--hl-bad); }
+  .hl-sub { font-size: 10px; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hl-sub.type-festival { color: var(--hl-bad); font-weight: 600; }
+  .hl-sub.type-term { color: var(--hl-good); font-weight: 600; }
+  .hl-sub.type-lunar { color: var(--muted); }
+  .hl-badge {
+    position: absolute; top: 4px; right: 4px; font-style: normal; font-size: 9px;
+    line-height: 1; padding: 2px 4px; border-radius: 5px; font-weight: 600;
+  }
+  .hl-badge.is-rest { background: var(--hl-good-soft); color: var(--hl-good); }
+  .hl-badge.is-legal { background: var(--hl-good-soft); color: var(--hl-good); font-weight: 700; }
+  .hl-badge.is-work { background: var(--hl-bad-soft); color: var(--hl-bad); font-weight: 700; }
+
+  /* 详情 */
+  .hl-detail { display: flex; flex-direction: column; gap: 12px; }
+  .hl-detail-banner {
+    background: var(--control-bg); color: var(--ink); font-size: 12.5px; font-weight: 600;
+    padding: 8px 12px; border-radius: 10px; border: 1px solid var(--task-border); text-align: center;
+  }
+  .hl-big-card {
+    background: linear-gradient(135deg, var(--hl-info-soft), rgba(29,126,240,0.02));
+    border: 1px solid var(--task-border); border-radius: 14px; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 14px 14px;
+  }
+  .hl-big-head { width: 100%; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0; background: transparent; }
+  .hl-big-num { margin-top: 2px; display: grid; place-items: center; font-size: 52px; font-weight: 800; line-height: 1; color: var(--hl-info); }
+  .hl-big-lunar { margin-top: 2px; font-size: 16px; font-weight: 700; color: var(--ink); }
+  .hl-big-ganzhi { margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .hl-tags-block { display: flex; flex-direction: column; gap: 8px; background: var(--task-bg); border: 1px solid var(--task-border); border-radius: 12px; padding: 11px 12px; }
+  .hl-tag-row { display: flex; align-items: flex-start; gap: 8px; }
+  .hl-tag-label { flex: 0 0 auto; font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; border-radius: 6px; padding: 3px 7px; margin-top: 1px; }
+  .hl-tag-label.tone-good { background: var(--hl-good); }
+  .hl-tag-label.tone-bad { background: var(--hl-bad); }
+  .hl-tag-label.tone-info { background: var(--hl-info); }
+  .hl-tags { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; line-height: 1.5; }
+  .hl-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; line-height: 1.6; }
+  .hl-tag.tone-good { color: var(--hl-good); background: var(--hl-good-soft); }
+  .hl-tag.tone-bad { color: var(--hl-bad); background: var(--hl-bad-soft); }
+  .hl-tag.tone-info { color: var(--hl-info); background: var(--hl-info-soft); }
+  .hl-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: var(--task-bg); border: 1px solid var(--task-border); border-radius: 12px; padding: 11px 12px; }
+  .hl-info-item { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .hl-info-item.is-wide { grid-column: span 2; }
+  .hl-info-label { flex: 0 0 auto; font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; background: var(--hl-info); border-radius: 5px; padding: 2px 6px; margin-top: 1px; white-space: nowrap; }
+  .hl-info-value { font-size: 12px; line-height: 1.5; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+
+  .caption { margin: 18px auto 0; max-width: 380px; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="hl-appbar"><span>万年历</span><span class="x">×</span></div>
+    <div class="huangli-view">
+      <!-- 工具栏 -->
+      <div class="hl-toolbar">
+        <div class="hl-nav-group">
+          <button class="hl-nav-btn">‹</button>
+          <select class="hl-select"><option>2026年</option></select>
+          <button class="hl-nav-btn">›</button>
+        </div>
+        <div class="hl-nav-group">
+          <button class="hl-nav-btn">‹</button>
+          <select class="hl-select"><option>1月</option></select>
+          <button class="hl-nav-btn">›</button>
+        </div>
+        <button class="hl-today-btn">回到今天</button>
+      </div>
+
+      <!-- 月历 -->
+      <div class="hl-grid-title">2026年1月</div>
+      <div class="hl-week-row">
+        <div class="hl-week-cell">一</div><div class="hl-week-cell">二</div><div class="hl-week-cell">三</div>
+        <div class="hl-week-cell">四</div><div class="hl-week-cell">五</div>
+        <div class="hl-week-cell is-weekend">六</div><div class="hl-week-cell is-weekend">日</div>
+      </div>
+      <div class="hl-day-grid">
+        <div class="hl-cell is-blank"></div>
+        <div class="hl-cell"><strong class="hl-day-num">1</strong><span class="hl-sub type-festival">元旦</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">2</strong><span class="hl-sub type-lunar">十三</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">3</strong><span class="hl-sub type-lunar">十四</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">4</strong><span class="hl-sub type-lunar">十五</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">5</strong><span class="hl-sub type-term">小寒</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">6</strong><span class="hl-sub type-lunar">十七</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">7</strong><span class="hl-sub type-lunar">十八</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">8</strong><span class="hl-sub type-lunar">十九</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">9</strong><span class="hl-sub type-lunar">二十</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">10</strong><span class="hl-sub type-lunar">廿一</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">11</strong><span class="hl-sub type-lunar">廿二</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">12</strong><span class="hl-sub type-lunar">廿三</span></div>
+        <div class="hl-cell is-weekend is-today"><i class="hl-badge is-legal">休</i><strong class="hl-day-num">13</strong><span class="hl-sub type-lunar">廿四</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">14</strong><span class="hl-sub type-lunar">廿五</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">15</strong><span class="hl-sub type-lunar">廿六</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">16</strong><span class="hl-sub type-lunar">廿七</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">17</strong><span class="hl-sub type-lunar">廿八</span></div>
+        <div class="hl-cell is-selected"><i class="hl-badge is-rest">休</i><strong class="hl-day-num">18</strong><span class="hl-sub type-lunar">廿九</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">19</strong><span class="hl-sub type-lunar">三十</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">20</strong><span class="hl-sub type-lunar">正月</span></div>
+        <div class="hl-cell"><i class="hl-badge is-work">班</i><strong class="hl-day-num">21</strong><span class="hl-sub type-lunar">初二</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">22</strong><span class="hl-sub type-lunar">初三</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">23</strong><span class="hl-sub type-lunar">初四</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">24</strong><span class="hl-sub type-lunar">初五</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">25</strong><span class="hl-sub type-lunar">初六</span></div>
+        <div class="hl-cell is-weekend"><strong class="hl-day-num">26</strong><span class="hl-sub type-lunar">初七</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">27</strong><span class="hl-sub type-lunar">初八</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">28</strong><span class="hl-sub type-lunar">初九</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">29</strong><span class="hl-sub type-lunar">初十</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">30</strong><span class="hl-sub type-lunar">十一</span></div>
+        <div class="hl-cell"><strong class="hl-day-num">31</strong><span class="hl-sub type-lunar">十二</span></div>
+      </div>
+
+      <!-- 选中日期详情 -->
+      <div class="hl-detail">
+        <div class="hl-detail-banner">2026年1月18日 详细信息 · 今天</div>
+        <div class="hl-big-card">
+          <div class="hl-big-head">2026年 1月（大）星期日</div>
+          <div class="hl-big-num">18</div>
+          <div class="hl-big-lunar">腊月廿九</div>
+          <div class="hl-big-ganzhi">乙巳年【蛇年】 己丑月 丙申日</div>
+        </div>
+        <div class="hl-tags-block">
+          <div class="hl-tag-row"><i class="hl-tag-label tone-info">节日</i><div class="hl-tags"><span class="hl-tag tone-info">无</span></div></div>
+          <div class="hl-tag-row"><i class="hl-tag-label tone-good">宜</i><div class="hl-tags"><span class="hl-tag tone-good">嫁娶</span><span class="hl-tag tone-good">出行</span><span class="hl-tag tone-good">求医</span><span class="hl-tag tone-good">治病</span></div></div>
+          <div class="hl-tag-row"><i class="hl-tag-label tone-bad">忌</i><div class="hl-tags"><span class="hl-tag tone-bad">动土</span><span class="hl-tag tone-bad">安葬</span></div></div>
+          <div class="hl-tag-row"><i class="hl-tag-label tone-good">吉神宜趋</i><div class="hl-tags"><span class="hl-tag tone-good">月德</span><span class="hl-tag tone-good">天恩</span></div></div>
+          <div class="hl-tag-row"><i class="hl-tag-label tone-bad">凶神宜忌</i><div class="hl-tags"><span class="hl-tag tone-bad">月厌</span><span class="hl-tag tone-bad">地火</span></div></div>
+        </div>
+        <div class="hl-info-grid">
+          <div class="hl-info-item"><i class="hl-info-label">生肖</i><span class="hl-info-value">蛇</span></div>
+          <div class="hl-info-item"><i class="hl-info-label">星座</i><span class="hl-info-value">摩羯座</span></div>
+          <div class="hl-info-item"><i class="hl-info-label">冲</i><span class="hl-info-value">冲虎(庚寅)煞南</span></div>
+          <div class="hl-info-item"><i class="hl-info-label">煞</i><span class="hl-info-value">煞南</span></div>
+          <div class="hl-info-item"><i class="hl-info-label">年五行</i><span class="hl-info-value">覆灯火</span></div>
+          <div class="hl-info-item"><i class="hl-info-label">日五行</i><span class="hl-info-value">山下火</span></div>
+          <div class="hl-info-item is-wide"><i class="hl-info-label">彭祖百忌</i><span class="hl-info-value">丙不修灶必见灾殃，申不安床鬼祟入房</span></div>
+          <div class="hl-info-item is-wide"><i class="hl-info-label">节气</i><span class="hl-info-value">小寒(1月5日) · 大寒(1月20日)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">预览仅展示新视觉风格（示例数据）；实际万年历功能与数据计算完全不变。</p>
+</body>
+</html>
