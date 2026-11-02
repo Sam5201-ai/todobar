@@ -29,6 +29,11 @@ import {
   type DeviceInfo,
 } from './account'
 import { AUTH_BASE } from './account'
+import { openUrl } from '@tauri-apps/plugin-opener'
+
+// 会员购买:链动小铺激活码商品页(系统浏览器打开,capabilities 已白名单该域名)
+const PURCHASE_URL = 'https://wzyp.cn/item/w5s7m5'
+const MARQUEE_TEXT = '永久会员￥29.9，一次买断，持续更新，不限设备数量'
 
 type ModalView = 'auth' | 'password' | 'devices' | null
 
@@ -167,6 +172,7 @@ export function AccountSetting({
   const [nickDraft, setNickDraft] = useState('')
   const [codeDraft, setCodeDraft] = useState('')
   const [showLogout, setShowLogout] = useState(false)
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   // 令牌失效(云端 401:密码修改/设备被解绑/会话过期)时,账号区立即回到未登录态,
@@ -309,6 +315,22 @@ export function AccountSetting({
 
   return (
     <>
+      {/* 会员购买横幅:仅非会员(含试用中/未登录)显示,会员状态不渲染 */}
+      {!account?.activated ? (
+        <button
+          type="button"
+          className="vip-marquee"
+          aria-label="了解永久会员"
+          onClick={() => setPurchaseOpen(true)}
+        >
+          <span className="vip-marquee-track">
+            <span className="vip-marquee-text">{MARQUEE_TEXT}</span>
+            <span className="vip-marquee-text" aria-hidden="true">
+              {MARQUEE_TEXT}
+            </span>
+          </span>
+        </button>
+      ) : null}
       <div className="settings-group account-hero">
         <input
           ref={avatarInputRef}
@@ -401,6 +423,14 @@ export function AccountSetting({
                   disabled={busy || !codeDraft.trim()}
                 >
                   兑换
+                </button>
+                <button
+                  type="button"
+                  className="account-redeem-buy"
+                  onClick={() => setPurchaseOpen(true)}
+                  disabled={busy}
+                >
+                  购买激活码
                 </button>
               </div>
             )}
@@ -516,7 +546,122 @@ export function AccountSetting({
           }}
         />
       ) : null}
+
+      {/* 会员购买底部弹窗:横幅与「购买激活码」按钮共用;会员升级后自动消失 */}
+      {purchaseOpen && !account?.activated ? (
+        <PurchaseSheet onClose={() => setPurchaseOpen(false)} />
+      ) : null}
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 会员购买底部弹窗:价格 + 权益 + 激活步骤;「立即购买」在系统浏览器打开
+// 链动小铺商品页(弹窗保持打开,用户买完回来直接兑换)。关闭动画与通用
+// sheet 一致:is-closing + 190ms 后卸载。
+// ---------------------------------------------------------------------------
+
+const VIP_BENEFITS = [
+  '全功能永久解锁,无任何限制',
+  '一次买断,永久有效,无订阅费用',
+  '后续版本持续免费更新',
+  '不限设备数量,多设备云同步',
+]
+
+const VIP_STEPS = [
+  '点击「立即购买」,在链动小铺中完成下单',
+  '支付后在链动小铺获取激活码',
+  '回到本页,把激活码粘贴到兑换框,点击「兑换」即升级会员',
+]
+
+function PurchaseSheet({ onClose }: { onClose: () => void }) {
+  const [closing, setClosing] = useState(false)
+  const closingRef = useRef(false)
+  const [opening, setOpening] = useState(false)
+  const [err, setErr] = useState('')
+
+  function requestClose() {
+    if (closingRef.current) return
+    closingRef.current = true
+    setClosing(true)
+    window.setTimeout(onClose, 190)
+  }
+
+  async function handleBuy() {
+    if (opening) return
+    setErr('')
+    setOpening(true)
+    try {
+      await openUrl(PURCHASE_URL)
+    } catch (e) {
+      setErr(`打开浏览器失败: ${(e as Error).message}`)
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  return (
+    <div
+      className={`sheet-backdrop ${closing ? 'is-closing' : ''}`}
+      onClick={requestClose}
+      role="presentation"
+    >
+      <div
+        className={`sheet vip-sheet ${closing ? 'is-closing' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="升级永久会员"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <button type="button" className="vip-sheet-close" onClick={requestClose} aria-label="关闭">
+          ✕
+        </button>
+        <div className="sheet-title">升级永久会员</div>
+
+        <div className="vip-price">
+          <span className="vip-price-num">￥29.9</span>
+          <span className="vip-price-note">永久买断 · 无订阅</span>
+        </div>
+
+        <div className="vip-benefits">
+          {VIP_BENEFITS.map((b) => (
+            <div key={b} className="vip-benefit-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              <span>{b}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="vip-steps">
+          <div className="vip-steps-title">如何激活</div>
+          {VIP_STEPS.map((s, i) => (
+            <div key={s} className="vip-step">
+              <span className="vip-step-num">{i + 1}</span>
+              <span>{s}</span>
+            </div>
+          ))}
+        </div>
+
+        {err ? <div className="vip-sheet-err">{err}</div> : null}
+
+        <button type="button" className="vip-buy-btn" onClick={() => void handleBuy()} disabled={opening}>
+          {opening ? '正在打开…' : '立即购买'}
+        </button>
+      </div>
+    </div>
   )
 }
 

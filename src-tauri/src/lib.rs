@@ -1734,6 +1734,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // [0.4.10] 提权自检必须最先执行:安装器完成页以提权上下文启动应用时,
             // 提权实例会锁死 WebView2 数据目录,导致后续所有普通实例假死。

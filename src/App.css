@@ -5406,6 +5406,200 @@ body.is-row-dragging * {
   cursor: default;
 }
 
+/* 购买激活码(兑换按钮右侧):金色次要强调,与蓝色主按钮区分层级 */
+.account-redeem-buy {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9a6a1f;
+  background: rgba(240, 212, 154, 0.25);
+  border: 1px solid rgba(154, 106, 31, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+
+.account-redeem-buy:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.account-redeem-buy:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
+ * 会员购买横幅(账户卡片上方,非会员可见):金色底 + 无缝滚动文案
+ * ------------------------------------------------------------------------- */
+.vip-marquee {
+  width: 100%;
+  overflow: hidden;
+  padding: 7px 0;
+  border: 1px solid rgba(196, 145, 55, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f7e6bd 0%, #f0d49a 50%, #f7e6bd 100%);
+  cursor: pointer;
+}
+
+.vip-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: vip-marquee-scroll 14s linear infinite;
+}
+
+.vip-marquee:hover .vip-marquee-track {
+  animation-play-state: paused;
+}
+
+.vip-marquee-text {
+  padding-right: 48px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7a4c12;
+  white-space: nowrap;
+}
+
+@keyframes vip-marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 会员购买底部弹窗(横幅与「购买激活码」按钮共用):价格 + 权益 + 激活步骤
+ * ------------------------------------------------------------------------- */
+.vip-sheet {
+  position: relative; /* 供右上角关闭按钮绝对定位 */
+  gap: 12px;
+}
+
+.vip-sheet-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.vip-sheet-close:hover {
+  color: var(--ink);
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.vip-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0 0;
+}
+
+.vip-price-num {
+  font-size: 30px;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.vip-price-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.vip-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(245, 196, 97, 0.12);
+  border: 1px solid rgba(196, 145, 55, 0.3);
+}
+
+.vip-benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.vip-benefit-item svg {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.vip-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 0 2px;
+}
+
+.vip-steps-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.vip-step {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.vip-step-num {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #d97706;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vip-sheet-err {
+  font-size: 11.5px;
+  color: #dc2626;
+}
+
+.vip-buy-btn {
+  padding: 10px 0;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.vip-buy-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vip-buy-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .account-actions {
   display: flex;
   gap: 6px;
@@ -5473,7 +5667,9 @@ body.is-row-dragging * {
 }
 
 .account-modal-overlay {
-  position: fixed;
+  /* absolute(非 fixed):定位基准是设置页面板(.page-panel),与添加事项等
+     底部弹窗同基准,避免弹窗居中时伸进窗口左侧的边缘把手区 */
+  position: absolute;
   top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
   z-index: 90;
   background: rgba(0, 0, 0, 0.45);
@@ -5489,7 +5685,8 @@ body.is-row-dragging * {
 }
 
 .account-modal {
-  width: min(320px, calc(100vw - 40px));
+  /* 相对遮罩(=设置页面板)取宽,而非 100vw:窄面板下不贴边、不侵入把手区 */
+  width: min(320px, calc(100% - 28px));
   max-height: min(560px, calc(100vh - 60px));
   overflow-y: auto;
   border-radius: 16px;

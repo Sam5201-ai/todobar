@@ -21,6 +21,13 @@
     "sql:allow-select",
     "sql:allow-close",
     "notification:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://wzyp.cn/**" },
+        { "url": "https://wzyp.cn/*" }
+      ]
+    }
   ]
 }

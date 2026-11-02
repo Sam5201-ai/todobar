@@ -76,6 +76,14 @@ function serveStatic(req, res, pathname) {
 }
 
 async function proxyApi(req, res, pathname, search) {
+  // 只对读请求重试。POST/PUT/DELETE 是非幂等的,超时重试会重复写库
+  // (批量生成激活码就因此一次点击写了两批:124 + 120 条)。
+  const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+  const maxAttempts = isWrite ? 1 : 2
+  // 读请求 25s:Worker 新版本部署后首个请求需逐条执行全量建表(60+ 次 D1 往返)。
+  // 写请求 55s:批量写 5000 条激活码需数秒,给足余量但仍在托管网关 60s 之内。
+  const timeoutMs = isWrite ? 55000 : 25000
+
   const send = (upstream, payload) => {
     // 透传真实客户端 IP 给 Worker(否则 Worker 只看到 server.js 出口 IP,
     // 所有站点访客共享一个 IP,限流会被误伤、归因也无法做)
@@ -99,10 +107,8 @@ async function proxyApi(req, res, pathname, search) {
       headers,
       body: payload,
       redirect: 'follow',
-      // 单次请求 25s 超时:Worker 新版本部署后的首个请求需逐条执行全量建表
-      // (60+ 次 D1 往返),10s 会直接触发 502「upstream unreachable」;
-      // 后续冷启动走版本标记快速通道仅需 1 次往返,25s 只作为网络抖动余量。
-      signal: AbortSignal.timeout(25000),
+      // 超时:读 25s(Worker 冷启动建表余量),写 55s(批量写激活码)
+      signal: AbortSignal.timeout(timeoutMs),
     })
   }
 
@@ -112,8 +118,8 @@ async function proxyApi(req, res, pathname, search) {
     const payload = chunks.length ? Buffer.concat(chunks) : undefined
     let lastErr = null
     for (const upstream of UPSTREAMS) {
-      // 每个上游最多尝试 2 次(网络瞬断时自动重试),仍失败则换下一个上游
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      // 读请求最多尝试 2 次(网络瞬断时自动重试),写请求只发一次
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           const resp = await send(upstream, payload)
           // 404 视为该上游未挂载该路由,跳过并尝试下一个上游。
@@ -134,9 +140,11 @@ async function proxyApi(req, res, pathname, search) {
           return res.end(body)
         } catch (e) {
           lastErr = e
-          if (attempt < 2) await new Promise((r) => setTimeout(r, 300))
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 300))
         }
       }
+      // 写请求只打一个上游:超时/失败后换上游等于再写一次库,宁可返回 502 让用户确认
+      if (isWrite) break
     }
     res.writeHead(502, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' })
     res.end(JSON.stringify({ error: 'upstream unreachable', detail: String(lastErr) }))

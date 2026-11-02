@@ -206,23 +206,35 @@ export function randomCodeSegment(length: number): string {
   return out
 }
 
+// 批量写库批大小:单次 db.batch() 100 条。逐条 await 每条要走一次 D1 往返
+// (~230ms),200 条就要 40s+,会撞网关超时;批量后 5000 条也能在数秒内完成。
+const WRITE_CHUNK = 100
+
+const INSERT_CODE_SQL = `INSERT INTO activation_codes (code, batch, note, status, created_at)
+   VALUES (?, ?, ?, 'unissued', ?)`
+
 export async function createActivationCodes(
   db: D1Database,
   codes: Array<{ code: string; batch: string; note: string; createdAt: string }>,
 ): Promise<number> {
   let created = 0
-  for (const c of codes) {
+  for (let i = 0; i < codes.length; i += WRITE_CHUNK) {
+    const part = codes.slice(i, i + WRITE_CHUNK)
     try {
-      await db
-        .prepare(
-          `INSERT INTO activation_codes (code, batch, note, status, created_at)
-           VALUES (?, ?, ?, 'unissued', ?)`,
-        )
-        .bind(c.code, c.batch, c.note, c.createdAt)
-        .run()
-      created += 1
+      const results = await db.batch(
+        part.map((c) => db.prepare(INSERT_CODE_SQL).bind(c.code, c.batch, c.note, c.createdAt)),
+      )
+      created += results.filter((r) => r.success).length
     } catch {
-      // 主键冲突(重号):跳过,由调用方补生成
+      // 整批失败(batch 是事务,任一重号都会回滚)→ 退回逐条,保留"重号跳过"语义
+      for (const c of part) {
+        try {
+          await db.prepare(INSERT_CODE_SQL).bind(c.code, c.batch, c.note, c.createdAt).run()
+          created += 1
+        } catch {
+          // 主键冲突(重号):跳过,由调用方补生成
+        }
+      }
     }
   }
   return created
@@ -312,29 +324,39 @@ export async function issueActivationCodes(
   codes: string[],
   issuedAt: string,
 ): Promise<number> {
+  const SQL = `UPDATE activation_codes SET status = 'issued', issued_at = ?
+         WHERE code = ? AND status = 'unissued'`
   let n = 0
-  for (const code of codes) {
-    const r = await db
-      .prepare(
-        `UPDATE activation_codes SET status = 'issued', issued_at = ?
-         WHERE code = ? AND status = 'unissued'`,
-      )
-      .bind(issuedAt, code)
-      .run()
-    n += Number((r.meta as { changes?: number }).changes ?? 0)
+  for (let i = 0; i < codes.length; i += WRITE_CHUNK) {
+    const part = codes.slice(i, i + WRITE_CHUNK)
+    try {
+      const results = await db.batch(part.map((code) => db.prepare(SQL).bind(issuedAt, code)))
+      for (const r of results) n += Number((r.meta as { changes?: number }).changes ?? 0)
+    } catch {
+      for (const code of part) {
+        const r = await db.prepare(SQL).bind(issuedAt, code).run()
+        n += Number((r.meta as { changes?: number }).changes ?? 0)
+      }
+    }
   }
   return n
 }
 
 /** 删除激活码(仅允许删除未使用的)。 */
 export async function deleteActivationCodes(db: D1Database, codes: string[]): Promise<number> {
+  const SQL = `DELETE FROM activation_codes WHERE code = ? AND status != 'used'`
   let n = 0
-  for (const code of codes) {
-    const r = await db
-      .prepare(`DELETE FROM activation_codes WHERE code = ? AND status != 'used'`)
-      .bind(code)
-      .run()
-    n += Number((r.meta as { changes?: number }).changes ?? 0)
+  for (let i = 0; i < codes.length; i += WRITE_CHUNK) {
+    const part = codes.slice(i, i + WRITE_CHUNK)
+    try {
+      const results = await db.batch(part.map((code) => db.prepare(SQL).bind(code)))
+      for (const r of results) n += Number((r.meta as { changes?: number }).changes ?? 0)
+    } catch {
+      for (const code of part) {
+        const r = await db.prepare(SQL).bind(code).run()
+        n += Number((r.meta as { changes?: number }).changes ?? 0)
+      }
+    }
   }
   return n
 }

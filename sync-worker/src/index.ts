@@ -1055,7 +1055,8 @@ app.post('/api/admin/codes', async (c) => {
   } catch {
     return c.json({ error: 'invalid json' }, 400)
   }
-  const count = int(body.count, 1, 200, 10)
+  // 单次最多 5000 个:前端已显式校验,这里仍保留服务端上限兜底
+  const count = int(body.count, 1, 5000, 10)
   const prefix = (str(body.prefix).slice(0, 8) || 'TK').toUpperCase()
   const length = int(body.length, 4, 24, 10)
   const note = str(body.note).slice(0, 200)
@@ -1083,7 +1084,7 @@ app.post('/api/admin/codes/issue', async (c) => {
     return c.json({ error: 'invalid json' }, 400)
   }
   const codes = Array.isArray(body.codes)
-    ? body.codes.filter((x): x is string => typeof x === 'string').slice(0, 500)
+    ? body.codes.filter((x): x is string => typeof x === 'string').slice(0, 5000)
     : []
   if (codes.length === 0) return c.json({ error: '缺少激活码' }, 400)
   const n = await issueActivationCodes(c.env.DB, codes, nowIso())
@@ -1098,7 +1099,7 @@ app.post('/api/admin/codes/delete', async (c) => {
     return c.json({ error: 'invalid json' }, 400)
   }
   const codes = Array.isArray(body.codes)
-    ? body.codes.filter((x): x is string => typeof x === 'string').slice(0, 500)
+    ? body.codes.filter((x): x is string => typeof x === 'string').slice(0, 5000)
     : []
   if (codes.length === 0) return c.json({ error: '缺少激活码' }, 400)
   const n = await deleteActivationCodes(c.env.DB, codes)
