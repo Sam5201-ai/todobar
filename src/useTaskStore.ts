@@ -20,7 +20,7 @@ import {
   type Task,
   type TaskList,
 } from './types'
-import { parseInstanceId } from './recurrence'
+import { normalizeRecurrenceRemind, occurrenceRemindAt, parseInstanceId, ymd } from './recurrence'
 import { SyncEngine } from './sync/engine'
 import { createHttpSyncClient, wireToTask, wireToBirthday } from './sync/client'
 // 同步地址与令牌在系统层面写死:地址固定为账号体系同源域名,令牌即登录会话令牌。
@@ -258,6 +258,12 @@ export function useTaskStore() {
       repo.getSyncState(),
       repo.getAllBirthdays(),
     ])
+    // 旧数据归一化:重复模板上的绝对 remindAt → 系列默认时刻(发生日各自套用),
+    // 变更过的模板回写本地库,打开即修复历史脏数据。
+    const migrated = raw.filter((t) => normalizeRecurrenceRemind(t))
+    if (migrated.length > 0) {
+      await Promise.all(migrated.map((t) => repo.saveTask(t).catch(() => {})))
+    }
     setAllRaw(raw)
     setTasks(raw.filter((t) => !t.deletedAt))
     setLists(listsResult.sort((a, b) => a.position - b.position))
@@ -630,7 +636,10 @@ export function useTaskStore() {
           priority: tpl.priority,
           isImportant: tpl.isImportant,
           isPinned: tpl.isPinned,
-          remindAt: tpl.remindAt ?? null,
+          // 拆出的独立任务带上该发生日生效的提醒时间(单日例外优先,否则该日+系列时刻)。
+          remindAt: tpl.recurrence
+            ? occurrenceRemindAt(tpl.recurrence, dateKey)
+            : (tpl.remindAt ?? null),
           done: (tpl.completedDates ?? []).includes(dateKey),
         })
         await repo
@@ -685,12 +694,43 @@ export function useTaskStore() {
   )
 
   const setRemindAt = useCallback(
-    (id: string, value: string | null) => {
+    (id: string, value: string | null, occurrenceKey?: string | null) => {
       // 会员闸门:受限用户不能「新增/修改」提醒时间,但允许清除已有提醒
       // (历史数据保留原则:可删不可增,避免用户被卡在已设提醒里)。
       if (value !== null && !hasFullAccess()) return
-      const t = tasks.find((x) => x.id === id)
-      if (t) updateTask({ ...t, remindAt: value })
+      // 重复事项(模板或虚拟实例):提醒按「系列默认时刻 + 按日例外」表达,
+      // 每个发生日套用自己的日期 + 时刻,而不是把绝对时间复制给所有日期。
+      const inst = parseInstanceId(id)
+      const target = tasks.find((x) => x.id === (inst ? inst.templateId : id))
+      if (!target) return
+      const isTemplate = Boolean(target.recurrence) && !target.dueDate && !target.seriesId
+      if (isTemplate && target.recurrence) {
+        const dateKey = inst?.dateKey ?? occurrenceKey ?? null
+        if (value === null) {
+          // 清除:整个系列一起取消(默认时刻与所有单日例外)。
+          updateTask({ ...target, remindAt: null, recurrence: { ...target.recurrence, remindTime: null, remindOverrides: undefined } })
+          return
+        }
+        const d = new Date(value)
+        const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        const pickedKey = ymd(d)
+        const overrides = { ...target.recurrence.remindOverrides }
+        if (dateKey && pickedKey !== dateKey) {
+          // 用户把提醒改到了非发生日的其他日期:时刻仍作为系列默认,
+          // 该发生日单独按所选完整时间记录为例外。
+          overrides[dateKey] = value
+        } else if (dateKey) {
+          // 所选日期就是发生日:清掉该日旧例外,让系列默认时刻生效。
+          delete overrides[dateKey]
+        }
+        updateTask({
+          ...target,
+          remindAt: null,
+          recurrence: { ...target.recurrence, remindTime: time, remindOverrides: overrides },
+        })
+        return
+      }
+      updateTask({ ...target, remindAt: value })
     },
     [tasks, updateTask],
   )

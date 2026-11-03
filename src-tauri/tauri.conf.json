@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Tacco",
-  "version": "0.4.59",
+  "version": "0.4.60",
   "identifier": "dev.todobar.desktop",
   "build": {
     "frontendDist": "../dist",

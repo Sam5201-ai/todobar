@@ -1,5 +1,5 @@
 {
-  "version": "0.4.59",
-  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.59",
-  "notes": "0.4.59 更新：新增会员购买入口（设置页滚动横幅与「购买激活码」按钮，一键直达购买页）；优化弹窗宽度与关闭体验。"
+  "version": "0.4.60",
+  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.60",
+  "notes": "0.4.60 更新：①产品正式更名为 Tacco（应用名、下载页、后台品牌字全部同步，内部数据目录/账号体系保持兼容，老用户升级零丢失）；②重复任务提醒时间优化（每个发生日各自套用系列默认时刻，支持单日例外，修复历史模板提醒串日问题）；③修复下载站多入口（todobar-app 与 sync.tuanzhang.site）截图缓存一致性。"
 }

@@ -50,6 +50,34 @@ export function occurrenceDates(rec: Recurrence, start: Date, end: Date): Date[]
   return out
 }
 
+/**
+ * 发生日的生效提醒时间:单日例外优先(含显式 null=该日不提醒),
+ * 否则套用系列默认时刻——「该发生日自己的日期 + remindTime」。
+ * 返回本地时间字符串(YYYY-MM-DDTHH:MM:00),new Date() 按本地时区解析。
+ */
+export function occurrenceRemindAt(rec: Recurrence, dateKey: string): string | null {
+  const override = rec.remindOverrides?.[dateKey]
+  if (override !== undefined) return override
+  if (!rec.remindTime) return null
+  return `${dateKey}T${rec.remindTime}:00`
+}
+
+/**
+ * 旧数据归一化:历史版本把某个发生日的绝对提醒时间直接写在模板 remindAt 上,
+ * 导致所有未来发生日都挂着同一个过期日期。这里把它的本地时分转为系列默认
+ * remindTime 并清掉 remindAt(原地修改;返回是否发生变更,由调用方落库)。
+ */
+export function normalizeRecurrenceRemind(t: Task): boolean {
+  if (t.deletedAt || !t.recurrence || t.dueDate || t.seriesId) return false
+  if (!t.remindAt || t.recurrence.remindTime) return false
+  const d = new Date(t.remindAt)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  t.recurrence = { ...t.recurrence, remindTime: `${hh}:${mm}` }
+  t.remindAt = null
+  return true
+}
+
 /** 判断任务是否为重复模板(带规则且未落具体日期)。 */
 export function isTemplate(t: Task): boolean {
   return Boolean(t.recurrence) && !t.dueDate && !t.seriesId
@@ -79,6 +107,8 @@ export function expandRecurrences(tasks: Task[], start: Date, end: Date): Task[]
             ...t,
             id: `${t.id}@${key}`,
             dueDate: key,
+            // 提醒时间按发生日计算:单日例外优先,否则「该日 + 系列默认时刻」。
+            remindAt: occurrenceRemindAt(t.recurrence, key),
             recurrence: null,
             seriesId: t.id,
             seriesRecurrence: t.recurrence ?? null,

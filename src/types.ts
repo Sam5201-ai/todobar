@@ -23,6 +23,16 @@ export interface Recurrence {
   until?: string | null
   /** 开启后,发生日若落在法定节假日则跳过(不生成该日待办)。 */
   skipHolidays?: boolean
+  /**
+   * 系列默认提醒时刻「HH:MM」(本地时分)。每个发生日套用「自己的日期 + 该时刻」,
+   * 而不是把某个发生日的绝对时间复制给所有日期。
+   */
+  remindTime?: string | null
+  /**
+   * 按发生日的提醒例外:YYYY-MM-DD → 绝对 ISO 时间;null 表示该日明确不提醒。
+   * 仅当用户把某天的提醒改到非发生日等其他日期时写入,优先于 remindTime。
+   */
+  remindOverrides?: Record<string, string | null>
 }
 
 export interface Task {

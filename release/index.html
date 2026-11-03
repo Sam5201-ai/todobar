@@ -1,1367 +1,1367 @@
-<!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
-<head>
-<meta charset="UTF-8" />
-<meta name="baidu-site-verification" content="codeva-b6YByVpS4S" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Tacco - 贴在屏幕边缘的极简待办栏 | Windows 桌面端下载</title>
-<meta name="description" content="Tacco 是一款贴边悬浮的极简待办栏：日/周/月视图、生日与纪念日提醒、内置计算器、云同步，支持自定义字体与背景。免费下载 Windows 安装包。" />
-<meta property="og:title" content="Tacco - 贴在屏幕边缘的极简待办栏" />
-<meta property="og:description" content="日/周/月待办、提醒、计算器、云同步，深度自定义字体与背景。免费下载 Windows 桌面端。" />
-<meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary_large_image" />
-<link rel="icon" type="image/png" href="./favicon.png" />
-<style>
-/* ==========================================================
-   Tacco 下载页 v2 · 原型
-   改版要点：
-   1. 8 大功能 → 每功能一页 · 3D 翻转滑动轮播（可拖拽/键盘/自动播放）
-   2. 去掉「版本更新」区块
-   3. Hero 保留贴边显示器动画；功能速览 chips 已移除（首页不重复罗列 8 大功能，保持干净）
-   ========================================================== */
-:root {
-  --primary: #1d7ef0;
-  --primary-dark: #1565c8;
-  --accent: #f59e0b;
-  --bg: #f7f9fc;
-  --bg-soft: #ffffff;
-  --card: #ffffff;
-  --text: #0f172a;
-  --muted: #5b6b83;
-  --faint: #94a3b8;
-  --border: rgba(15, 23, 42, .09);
-  --shadow-lg: 0 24px 60px -18px rgba(15, 23, 42, .25);
-  --nav-bg: rgba(255, 255, 255, .82);
-}
-[data-theme="dark"] {
-  --bg: #060a14;
-  --bg-soft: #0b1120;
-  --card: #0e1526;
-  --text: #e8eefb;
-  --muted: #9aa8bf;
-  --faint: #64748b;
-  --border: rgba(148, 163, 184, .14);
-  --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, .7);
-  --nav-bg: rgba(6, 10, 20, .82);
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
-body {
-  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
-  background: var(--bg); color: var(--text); line-height: 1.6;
-  overflow-x: hidden;
-}
-img { display: block; max-width: 100%; }
-a { color: inherit; text-decoration: none; }
-button { font-family: inherit; cursor: pointer; }
-
-.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
-
-/* ============ 导航 ============ */
-.nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: var(--nav-bg); backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-}
-.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -.02em; }
-.brand img { width: 36px; height: 36px; border-radius: 11px; box-shadow: 0 4px 14px rgba(29,126,240,.35); }
-.nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 500; color: var(--muted); }
-.nav-links a { transition: color .2s; }
-.nav-links a:hover { color: var(--primary); }
-.nav-right { display: flex; align-items: center; gap: 10px; }
-.theme-btn {
-  width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border);
-  background: transparent; color: var(--muted); font-size: 17px; line-height: 1;
-  transition: background .2s;
-}
-.theme-btn:hover { background: rgba(148,163,184,.15); }
-.btn-primary {
-  display: inline-flex; align-items: center; gap: 9px;
-  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
-  color: #fff; font-weight: 700; border: none; border-radius: 14px;
-  padding: 11px 22px; font-size: 14px;
-  box-shadow: 0 10px 26px -8px rgba(29,126,240,.55);
-  transition: transform .18s, box-shadow .18s;
-}
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -8px rgba(29,126,240,.6); }
-@media (max-width: 860px) { .nav-links { display: none; } }
-
-/* ============ Hero ============ */
-.hero {
-  position: relative; overflow: hidden;
-  padding: 120px 0 64px;
-  background:
-    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.13), transparent 70%),
-    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.10), transparent 70%);
-}
-[data-theme="dark"] .hero {
-  background:
-    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.20), transparent 70%),
-    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.08), transparent 70%);
-}
-.hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
-.hero-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 12.5px; font-weight: 700; color: var(--primary);
-  border: 1px solid rgba(29,126,240,.25); background: rgba(29,126,240,.07);
-  padding: 6px 14px; border-radius: 999px;
-}
-.hero-badge .dot { position: relative; width: 8px; height: 8px; }
-.hero-badge .dot::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--primary);
-  animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite;
-}
-@keyframes ping { 75%,100% { transform: scale(2.4); opacity: 0; } }
-.hero h1 { font-size: clamp(34px, 4.6vw, 52px); font-weight: 900; line-height: 1.18; letter-spacing: -.02em; margin-top: 22px; }
-.hero h1 .grad {
-  background: linear-gradient(92deg, #2e8df6, var(--primary) 40%, var(--accent));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.hero .lead { margin-top: 18px; font-size: 16.5px; color: var(--muted); max-width: 540px; }
-.hero .lead b { color: var(--text); }
-.hero-cta { display: flex; align-items: center; gap: 20px; margin-top: 32px; flex-wrap: wrap; }
-.btn-download {
-  display: inline-flex; align-items: center; gap: 10px;
-  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
-  color: #fff; font-weight: 800; font-size: 16px; border: none; border-radius: 16px;
-  padding: 16px 30px;
-  box-shadow: 0 14px 34px -10px rgba(29,126,240,.6);
-  transition: transform .18s, box-shadow .18s;
-}
-.btn-download:hover { transform: translateY(-2px); box-shadow: 0 20px 42px -10px rgba(29,126,240,.65); }
-.hero-meta { margin-top: 14px; font-size: 12.5px; color: var(--faint); }
-/* 手动选择其它平台 */
-.alt-dl { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 12.5px; }
-.alt-dl .alt-label { color: var(--faint); }
-.alt-dl a {
-  position: relative;
-  color: var(--muted); font-weight: 700; text-decoration: none;
-  border-bottom: 1px dashed var(--border); padding-bottom: 1px; cursor: pointer;
-  transition: color .2s, border-color .2s;
-}
-.alt-dl a + a::before { content: none; }
-.alt-dl a:not(:last-child)::after {
-  content: "·"; position: absolute; right: -11px; color: var(--faint); font-weight: 400;
-}
-.alt-dl a:hover { color: var(--primary); border-color: var(--primary); }
-.alt-dl a.current { color: var(--primary); border-color: transparent; }
-.alt-dl a.current::after { content: " ·当前"; font-size: 10.5px; opacity: .8; }
-
-/* Hero 显示器动画（沿用 v1 思路，节奏微调） */
-.monitor { position: relative; }
-.monitor::before {
-  content: ""; position: absolute; inset: -24px; z-index: -1; border-radius: 44px;
-  background: linear-gradient(135deg, rgba(29,126,240,.22), rgba(245,158,11,.14));
-  filter: blur(34px);
-}
-.screen {
-  border-radius: 22px; background: #101319; padding: 10px;
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(15,23,42,.08);
-}
-.screen-inner { position: relative; aspect-ratio: 3/2; border-radius: 14px; overflow: hidden; }
-.screen-inner > img.wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.desktop-icon {
-  position: absolute; left: 12px; top: 12px; z-index: 5;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  color: #fff; width: 60px; text-align: center;
-}
-.desktop-icon img { width: 40px; height: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
-.desktop-icon span { font-size: 10px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-.demo-panel {
-  position: absolute; right: 0; top: 0; z-index: 10; height: calc(100% - 40px);
-  transform: translateX(103%);
-  animation: dock 13s ease-in-out infinite; will-change: transform;
-}
-/* 贴边把手：对齐线上真实把手——白色圆角小凸台 + 左侧收起箭头 */
-.panel-handle {
-  position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
-  width: 20px; height: 44px; border-radius: 11px 0 0 11px;
-  background: #fff; color: #7a8494;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: -2px 2px 8px rgba(15,23,42,.18), inset 0 0 0 1px rgba(15,23,42,.05);
-}
-.panel-handle svg { width: 11px; height: 11px; display: block; }
-@keyframes dock {
-  0%, 8%   { transform: translateX(103%); }
-  22%, 58% { transform: translateX(0); }
-  74%, 100%{ transform: translateX(103%); }
-}
-.demo-panel img { height: 100%; width: auto; border-radius: 12px 0 0 12px; box-shadow: -14px 8px 40px rgba(0,0,0,.4); }
-.taskbar {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; height: 40px;
-  display: flex; align-items: center; padding: 0 14px;
-  background: rgba(255,255,255,.72); backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255,255,255,.5);
-}
-.taskbar .ticons { display: flex; align-items: center; gap: 14px; color: #475569; font-size: 15px; }
-.taskbar .clock { margin-left: auto; text-align: right; color: #475569; font-size: 10px; line-height: 1.25; font-weight: 700; }
-.monitor-stand { margin: 0 auto; height: 44px; width: 96px; background: linear-gradient(#cbd5e1, #94a3b8); clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%); }
-.monitor-base { margin: 0 auto; height: 9px; width: 200px; border-radius: 50%; background: linear-gradient(#cbd5e1, #64748b); box-shadow: 0 10px 22px rgba(15,23,42,.3); }
-@media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } .hero { padding-top: 100px; } }
-
-/* ============ 功能轮播（核心区块） ============ */
-.fx-section { padding: 88px 0 72px; position: relative; }
-.fx-head { text-align: center; margin-bottom: 44px; }
-.fx-kicker-line {
-  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
-  letter-spacing: .18em; color: var(--primary); text-transform: uppercase;
-}
-.fx-kicker-line::before, .fx-kicker-line::after { content: ""; width: 26px; height: 2px; background: linear-gradient(90deg, transparent, var(--primary)); border-radius: 2px; }
-.fx-kicker-line::after { background: linear-gradient(90deg, var(--primary), transparent); }
-.fx-head h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 900; letter-spacing: -.02em; margin-top: 14px; }
-.fx-head p { margin-top: 12px; color: var(--muted); font-size: 15.5px; }
-
-.fx-stage-wrap { position: relative; }
-.fx-stage {
-  position: relative; height: 560px; perspective: 1500px; perspective-origin: 50% 42%;
-  touch-action: pan-y; cursor: grab;
-}
-.fx-stage.dragging { cursor: grabbing; }
-.fx-slide {
-  position: absolute; left: 50%; top: 0; width: min(1180px, 94vw); height: 100%;
-  transform-style: preserve-3d; will-change: transform, opacity;
-  transition: transform .75s cubic-bezier(.22,.85,.3,1.02), opacity .55s ease, filter .55s ease;
-}
-.fx-stage.dragging .fx-slide { transition: none; }
-.fx-card {
-  height: 100%; border-radius: 28px; display: grid;
-  grid-template-columns: 1fr 552px; overflow: hidden;
-  background: var(--card); border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  position: relative;
-}
-.fx-card::before {
-  content: ""; position: absolute; inset: 0; border-radius: 28px; pointer-events: none;
-  background: radial-gradient(520px 260px at 88% 0%, var(--accent-soft), transparent 72%);
-}
-/* 左栏：文案 */
-.fx-info { padding: 40px 44px 40px 46px; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 2; }
-.fx-info > * { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
-.fx-slide.is-active .fx-info > * { opacity: 1; transform: none; }
-.fx-slide.is-active .fx-info > *:nth-child(1) { transition-delay: .12s; }
-.fx-slide.is-active .fx-info > *:nth-child(2) { transition-delay: .20s; }
-.fx-slide.is-active .fx-info > *:nth-child(3) { transition-delay: .28s; }
-.fx-slide.is-active .fx-info > *:nth-child(4) { transition-delay: .36s; }
-.fx-slide.is-active .fx-info > *:nth-child(5) { transition-delay: .44s; }
-.fx-slide.is-active .fx-info > *:nth-child(6) { transition-delay: .52s; }
-
-.fx-tag {
-  display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
-  background: var(--accent-soft); color: var(--accent-strong);
-  font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
-  padding: 7px 14px; border-radius: 999px;
-}
-.fx-tag .num { font-size: 11px; opacity: .75; letter-spacing: .12em; }
-.fx-tag svg { width: 16px; height: 16px; }
-.fx-pro {
-  margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
-  background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff;
-  padding: 3px 9px; border-radius: 999px;
-}
-.fx-title { font-size: 30px; font-weight: 900; letter-spacing: -.02em; line-height: 1.25; margin-top: 18px; }
-.fx-slogan {
-  margin-top: 8px; font-size: 15px; font-weight: 800;
-  background: linear-gradient(92deg, var(--accent-strong), var(--accent-strong-2));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.fx-desc { margin-top: 14px; font-size: 14.5px; color: var(--muted); line-height: 1.75; }
-.fx-points { list-style: none; margin-top: 18px; display: grid; gap: 9px; }
-.fx-points li {
-  display: flex; gap: 10px; font-size: 13.8px; color: var(--muted); line-height: 1.5;
-}
-.fx-points li::before {
-  content: "✓"; flex: none; width: 20px; height: 20px; margin-top: 1px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--accent-soft); color: var(--accent-strong);
-  border-radius: 7px; font-size: 12px; font-weight: 900;
-}
-.fx-tip {
-  margin-top: 20px; font-size: 12.8px; color: var(--faint);
-  padding: 10px 14px; border-radius: 12px;
-  background: rgba(148,163,184,.09); border: 1px dashed var(--border);
-}
-.fx-tip b { color: var(--muted); }
-
-/* 右栏：截图展示 */
-.fx-shot {
-  position: relative; display: flex; align-items: center; justify-content: center;
-  padding: 24px; overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(148,163,184,.06), transparent 40%),
-    radial-gradient(420px 300px at 50% 88%, var(--accent-soft), transparent 75%);
-}
-/* 截图框：宽度由 --shot-w 决定，高度按 --ar 等比推出（绝不拉伸变形） */
-.fx-shot-frame {
-  position: relative;
-  width: min(var(--shot-w, 430px), 100%);
-  aspect-ratio: var(--ar, 430/576);
-  height: auto; flex: none;
-  border-radius: 18px; overflow: hidden;
-  border: 1px solid var(--border);
-  box-shadow: 0 26px 52px -20px rgba(15,23,42,.42), 0 0 0 5px rgba(255,255,255,.55);
-  background: #fff;
-}
-[data-theme="dark"] .fx-shot-frame { box-shadow: 0 26px 52px -20px rgba(0,0,0,.8), 0 0 0 5px rgba(255,255,255,.05); background: #0b1120; }
-.fx-shot-frame img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
-/* 竖向长截图只取上半部分，底部柔和收尾，避免生硬裁断（完整截图不加此遮罩） */
-.fx-shot-frame.crop::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 58px;
-  background: linear-gradient(180deg, transparent, rgba(255,255,255,.9));
-  pointer-events: none;
-}
-[data-theme="dark"] .fx-shot-frame.crop::after { background: linear-gradient(180deg, transparent, rgba(11,17,32,.9)); }
-/* GIF 徽标：提示此处在正式版将替换为 GIF 动图 */
-.gif-badge {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
-  background: rgba(10, 15, 28, .78); color: #fff; backdrop-filter: blur(6px);
-  font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.18); z-index: 3;
-}
-.gif-badge .play {
-  width: 18px; height: 18px; border-radius: 50%; flex: none;
-  background: linear-gradient(135deg, #2e8df6, #1d7ef0);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.gif-badge .play::before {
-  content: ""; border-left: 6px solid #fff; border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent; margin-left: 2px;
-}
-/* ===== 界面示意：这三项暂无真机截图，用 HTML 按真实界面还原（矢量呈现，最清晰） ===== */
-.fx-shot-frame.mock { background: #fff; }
-.shot-ui { height: 100%; display: flex; flex-direction: column; background: linear-gradient(180deg,#fff,#f7f5ff); color: #1f2937; font-size: 11.5px; line-height: 1.5; }
-.shot-ui .ui-bar { display: flex; align-items: center; gap: 7px; padding: 10px 13px; background: #fff; border-bottom: 1px solid rgba(15,23,42,.07); }
-.shot-ui .ui-title { font-weight: 800; font-size: 12.5px; color: #0f172a; }
-.shot-ui .ui-badge { margin-left: auto; font-size: 9.5px; font-weight: 800; color: #64748b; background: #f1f5f9; border-radius: 6px; padding: 2px 6px; }
-.shot-ui .ui-body { flex: 1; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; overflow: hidden; }
-.ui-search { display: flex; align-items: center; gap: 6px; background: #f1f4f9; border-radius: 9px; padding: 6px 9px; color: #9aa8bf; font-size: 10.5px; }
-.ui-row { display: flex; gap: 8px; align-items: flex-start; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; padding: 8px 9px; box-shadow: 0 2px 6px rgba(15,23,42,.045); }
-.ui-row .k { flex: none; width: 19px; height: 19px; border-radius: 6px; background: #eef2f8; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #64748b; }
-.ui-row .t { flex: 1; min-width: 0; }
-.ui-row .t b { display: block; font-size: 11px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ui-row .t span { font-size: 10px; color: #9aa8bf; }
-.ui-row .hint { flex: none; font-size: 9px; font-weight: 800; color: #2563eb; background: #e8f0fe; border-radius: 5px; padding: 2px 5px; }
-.ui-row.skipped { background: #fafbfd; border-style: dashed; color: #9aa8bf; }
-.ui-row.skipped b { color: #9aa8bf; font-weight: 700; }
-/* 便利签 */
-.ui-notes { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 7px; height: 100%; }
-.ui-note { border-radius: 11px; padding: 9px 10px; font-size: 10.5px; line-height: 1.6; box-shadow: 0 3px 9px rgba(15,23,42,.07); display: flex; flex-direction: column; }
-.ui-note b { display: block; font-size: 10.5px; margin-bottom: 3px; }
-.ui-note .pin { float: right; font-size: 9px; opacity: .65; }
-.ui-note .ck { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
-.ui-note .ck i { width: 8px; height: 8px; border-radius: 2.5px; border: 1.4px solid rgba(15,23,42,.35); display: inline-block; }
-.ui-note .ck.done { text-decoration: line-through; opacity: .5; }
-.ui-note .ck.done i { background: #2563eb; border-color: #2563eb; }
-/* 截图贴图 */
-.ui-desk { position: relative; flex: 1; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg,#dbeafe,#ede9fe 55%,#fce7f3); }
-.ui-sel { position: absolute; left: 14%; top: 18%; width: 56%; height: 40%; border: 1.6px dashed #2563eb; background: rgba(37,99,235,.07); border-radius: 3px; }
-.ui-sel::before { content: "1280 × 640"; position: absolute; top: -19px; left: -1px; font-size: 9px; font-weight: 800; color: #fff; background: #2563eb; border-radius: 5px 5px 0 0; padding: 2px 6px; }
-.ui-toolbar { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; background: rgba(15,23,42,.82); backdrop-filter: blur(4px); padding: 5px 7px; border-radius: 9px; }
-.ui-toolbar span { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: #fff; font-size: 9.5px; background: rgba(255,255,255,.14); }
-.ui-pin { position: absolute; right: 9%; bottom: 14%; width: 40%; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 22px -8px rgba(15,23,42,.5), 0 0 0 3px #fff; background: #fff; }
-.ui-pin .ph { height: 44px; background: linear-gradient(135deg,#93c5fd,#c4b5fd); }
-.ui-pin .pt { font-size: 8.5px; font-weight: 700; color: #475569; padding: 3px 5px; display: flex; align-items: center; gap: 3px; }
-/* 漂浮标注气泡（示意截图里的重点） */
-.float-chip {
-  position: absolute; z-index: 4; display: inline-flex; align-items: center; gap: 7px;
-  background: var(--card); border: 1px solid var(--border);
-  box-shadow: 0 12px 28px -10px rgba(15,23,42,.3);
-  font-size: 12px; font-weight: 700; color: var(--muted);
-  padding: 8px 13px; border-radius: 12px;
-  animation: floaty 4.5s ease-in-out infinite;
-}
-.float-chip .fc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-strong); flex: none; }
-@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-.float-chip.fc1 { top: 16%; right: 12%; animation-delay: .3s; }
-.float-chip.fc2 { bottom: 18%; left: 10%; }
-
-/* 左右箭头 */
-.fx-arrow {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 30;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: var(--card); border: 1px solid var(--border); color: var(--muted);
-  font-size: 20px; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 10px 26px -10px rgba(15,23,42,.3);
-  transition: all .2s;
-}
-.fx-arrow:hover { color: #fff; background: var(--primary); border-color: var(--primary); transform: translateY(-50%) scale(1.08); }
-.fx-arrow.prev { left: -8px; }
-.fx-arrow.next { right: -8px; }
-@media (min-width: 1400px) { .fx-arrow.prev { left: -34px; } .fx-arrow.next { right: -34px; } }
-
-/* 自动播放进度条 */
-.fx-progress { height: 4px; border-radius: 99px; background: rgba(148,163,184,.22); margin: 26px auto 0; max-width: 240px; overflow: hidden; }
-.fx-progress span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--primary), var(--accent)); }
-.fx-progress span.run { animation: fxprogress 9s linear forwards; }
-@keyframes fxprogress { from { width: 0; } to { width: 100%; } }
-.fx-progress.paused span { animation-play-state: paused; }
-
-
-/* 功能切换胶囊栏（轮播下方的 8 个功能选项） */
-.fx-pills {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
-  margin-top: 24px;
-}
-.fx-pill {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border-radius: 999px;
-  font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1;
-  color: var(--muted); background: var(--card);
-  border: 1px solid var(--border); cursor: pointer;
-  transition: color .22s, background .22s, border-color .22s, transform .22s, box-shadow .22s;
-}
-.fx-pill .p-ico { width: 15px; height: 15px; flex: none; display: block; }
-.fx-pill:hover {
-  color: var(--primary); border-color: rgba(29,126,240,.42);
-  transform: translateY(-2px); box-shadow: 0 10px 20px -12px rgba(29,126,240,.55);
-}
-.fx-pill.active {
-  color: #fff; border-color: transparent;
-  background: linear-gradient(135deg, var(--primary), #38bdf8);
-  box-shadow: 0 12px 24px -12px rgba(29,126,240,.8);
-}
-.fx-pill.active .p-ico { opacity: .95; }
-
-.fx-hint { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--faint); }
-.fx-hint kbd {
-  font-family: inherit; font-size: 11px; font-weight: 800; padding: 2px 7px;
-  border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--muted);
-  box-shadow: 0 2px 0 var(--border);
-}
-
-/* 轮播响应式 */
-@media (max-width: 1020px) {
-  .fx-stage { height: 640px; }
-  .fx-card { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
-  .fx-info { padding: 28px 26px 8px; }
-  .fx-title { font-size: 24px; }
-  .fx-shot { padding: 12px 26px 26px; min-height: 420px; }
-  .fx-slide:not(.is-active) { opacity: 0 !important; pointer-events: none; }
-}
-@media (max-width: 560px) {
-  .fx-stage { height: 720px; }
-  /* 胶囊栏窄屏改为横向滑动，避免换行成三排占高度 */
-  .fx-pills {
-    flex-wrap: nowrap; justify-content: flex-start;
-    overflow-x: auto; padding: 2px 2px 8px;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
-    mask-image: linear-gradient(90deg, #000 92%, transparent);
-  }
-  .fx-pills::-webkit-scrollbar { display: none; }
-  .fx-pill { flex: none; }
-}
-
-/* ============ 下载安装 ============ */
-.install { padding: 84px 0; background: linear-gradient(180deg, rgba(29,126,240,.06), transparent); }
-.install-card {
-  max-width: 900px; margin: 0 auto; text-align: center;
-  background: var(--card); border: 1px solid rgba(29,126,240,.16);
-  border-radius: 30px; padding: 52px 44px 44px; box-shadow: var(--shadow-lg);
-}
-.install-card img.applogo { width: 68px; height: 68px; border-radius: 20px; margin: 0 auto; box-shadow: 0 12px 30px -8px rgba(29,126,240,.45); }
-.install-card h2 { font-size: 30px; font-weight: 900; margin-top: 16px; letter-spacing: -.02em; }
-.install-card .ver { color: var(--muted); margin-top: 8px; font-size: 14px; }
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; text-align: left; }
-.step { position: relative; background: rgba(148,163,184,.08); border-radius: 18px; padding: 22px 20px 18px; }
-.step .s-no {
-  position: absolute; top: -13px; left: 18px; width: 27px; height: 27px;
-  background: var(--primary); color: #fff; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900;
-  box-shadow: 0 6px 14px -4px rgba(29,126,240,.6);
-}
-.step h3 { font-size: 15.5px; font-weight: 800; }
-.step p { font-size: 13px; color: var(--muted); margin-top: 7px; line-height: 1.7; }
-.smartscreen {
-  margin-top: 30px; display: flex; gap: 11px; text-align: left;
-  background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35);
-  border-radius: 16px; padding: 16px 18px; font-size: 13px; line-height: 1.75; color: #92600a;
-}
-[data-theme="dark"] .smartscreen { color: #fcd34d; }
-@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
-
-/* ============ FAQ ============ */
-.faq { padding: 84px 0; }
-.faq h2 { text-align: center; font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
-.faq-list { max-width: 760px; margin: 36px auto 0; display: grid; gap: 14px; }
-details.faq-item {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 18px; padding: 19px 22px;
-}
-details.faq-item summary {
-  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-  font-weight: 800; font-size: 15px;
-}
-details.faq-item summary::-webkit-details-marker { display: none; }
-details.faq-item summary .chev { transition: transform .25s; color: var(--faint); font-size: 13px; }
-details.faq-item[open] summary .chev { transform: rotate(180deg); }
-details.faq-item p { margin-top: 12px; font-size: 14px; color: var(--muted); line-height: 1.8; }
-details.faq-item code {
-  background: rgba(148,163,184,.16); border-radius: 5px; padding: 1px 5px;
-  font-size: 12.5px; font-family: ui-monospace, Consolas, monospace; color: var(--text);
-}
-
-/* ============ 页脚 ============ */
-footer { border-top: 1px solid var(--border); padding: 40px 0 44px; text-align: center; }
-footer .f-brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; }
-footer .f-brand img { width: 28px; height: 28px; border-radius: 9px; }
-footer .f-slogan { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
-footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
-
-/* 每个功能的主题色（通过 --accent-strong 等变量注入 slide） */
-@media (prefers-reduced-motion: reduce) {
-  .demo-panel { animation: none; transform: translateX(0); }
-  .fx-slide { transition: opacity .3s; }
-  .float-chip { animation: none; }
-}
-</style>
-</head>
-<body>
-
-<!-- ================= 导航 ================= -->
-<header class="nav">
-  <div class="wrap nav-inner">
-    <a href="#top" class="brand">
-      <img src="./assets/logo.webp?v=0.4.59" alt="Tacco 图标" />
-      <span>Tacco</span>
-    </a>
-    <nav class="nav-links" aria-label="主导航">
-      <a href="#features">功能亮点</a>
-      <a href="#install">安装指南</a>
-      <a href="#faq">常见问题</a>
-    </nav>
-    <div class="nav-right">
-      <button class="theme-btn" id="themeToggle" aria-label="切换深浅色">🌙</button>
-      <a href="#install" class="btn-primary">免费下载</a>
-    </div>
-  </div>
-</header>
-
-<!-- ================= Hero ================= -->
-<section class="hero" id="top">
-  <div class="wrap hero-grid">
-    <div>
-      <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.59 · Windows 版</span></span>
-      <h1>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
-      <p class="lead">
-        Tacco 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
-        鼠标一划即出、用完自动收回。而且它不止是待办——<b>8 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
-      </p>
-      <div class="hero-cta">
-        <a href="#install" class="btn-download" id="mainDownload">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          <span id="mainDownloadText">下载安装包</span>
-        </a>
-      </div>
-      <p class="hero-meta" id="heroMeta">正在识别你的系统…</p>
-      <div class="alt-dl" id="altDl">
-        <span class="alt-label">不是这台电脑？</span>
-        <a data-dl="win">Windows 版</a>
-        <a data-dl="mac-arm">macOS · Apple 芯片</a>
-        <a data-dl="mac-intel">macOS · Intel</a>
-      </div>
-    </div>
-
-    <div class="monitor">
-      <div class="screen">
-        <div class="screen-inner">
-          <img class="wallpaper" src="./assets/wallpaper.webp?v=0.4.59" alt="" />
-          <div class="desktop-icon"><img src="./assets/logo.webp?v=0.4.59" alt="" /><span>Tacco</span></div>
-          <div class="demo-panel">
-            <span class="panel-handle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-6 7 6 7"/></svg></span>
-            <img src="./assets/panel-crop.webp?v=0.4.59" alt="Tacco 待办栏贴边展开演示" />
-          </div>
-          <div class="taskbar">
-            <div class="ticons">
-              <span>⊞</span><span>🔍</span><span>📁</span><span>🌐</span>
-              <img src="./assets/logo.webp?v=0.4.59" alt="" style="width:17px;height:17px;border-radius:4px" />
-            </div>
-            <div class="clock">16:40<br />2026/10/26</div>
-          </div>
-        </div>
-      </div>
-      <div class="monitor-stand"></div>
-      <div class="monitor-base"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 功能轮播（核心区块） ================= -->
-<section class="fx-section" id="features">
-  <div class="wrap">
-    <div class="fx-head">
-      <span class="fx-kicker-line">Features</span>
-      <h2>8 大功能，逐一看过再下载</h2>
-      <p>每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
-    </div>
-
-    <div class="fx-stage-wrap">
-      <button class="fx-arrow prev" id="fxPrev" aria-label="上一个功能">‹</button>
-      <button class="fx-arrow next" id="fxNext" aria-label="下一个功能">›</button>
-
-      <div class="fx-stage" id="fxStage">
-
-        <!-- 01 待办事项 -->
-        <article class="fx-slide" style="--accent-strong:#1d7ef0;--accent-strong-2:#38bdf8;--accent-soft:rgba(29,126,240,.10);--p:#1d7ef0">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">01 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
-                待办事项
-              </div>
-              <h3 class="fx-title">贴在屏幕边缘的待办清单</h3>
-              <p class="fx-slogan">一划即出，用完自动收回，抬眼就能看见今天该做什么</p>
-              <p class="fx-desc">Tacco 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。</p>
-              <ul class="fx-points">
-                <li>日 / 周 / 月三视图，置顶、子任务自由组合</li>
-                <li>重复事项一键跳过法定节假日（数据自动更新）</li>
-                <li>提醒精确到分钟，弹窗 + 声音，再忙也不错过</li>
-                <li>勾选即完成，今日进度条一目了然</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame crop">
-                <img src="./assets/shot-01-todo.webp?v=0.4.59" alt="待办事项首页截图" loading="lazy" />
-              </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>⏰ 到点提醒弹窗</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>今日进度条</span>
-            </div>
-          </div>
-        </article>
-
-        <!-- 02 生日/纪念日 -->
-        <article class="fx-slide" style="--accent-strong:#ec4899;--accent-strong-2:#f472b6;--accent-soft:rgba(236,72,153,.10);--p:#ec4899">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">02 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v8m-4-4h8M20 12a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
-                生日 / 纪念日
-              </div>
-              <h3 class="fx-title">重要的人，一天都不会忘</h3>
-              <p class="fx-slogan">公历农历都能记，提前提醒，倒计时高亮</p>
-              <p class="fx-desc">把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。</p>
-              <ul class="fx-points">
-                <li>公历 / 农历双历记录，农历生日自动算</li>
-                <li>提前 N 天开始提醒，当天只提醒一次不打扰</li>
-                <li>「还有 X 天」倒计时高亮，最近的日子置顶</li>
-                <li>与待办栏同屏显示，不用来回切换应用</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame crop">
-                <img src="./assets/shot-02-birthday.webp?v=0.4.59" alt="生日与纪念日记录截图" loading="lazy" />
-              </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>🎂 倒计时高亮</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>农历 / 公历切换</span>
-            </div>
-          </div>
-        </article>
-
-        <!-- 03 计算器 -->
-        <article class="fx-slide" style="--accent-strong:#8b5cf6;--accent-strong-2:#a78bfa;--accent-soft:rgba(139,92,246,.10);--p:#8b5cf6">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">03 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h6"/></svg>
-                计算器
-              </div>
-              <h3 class="fx-title">顺手一按，什么都能算</h3>
-              <p class="fx-slogan">四则运算、日期差、汇率换算，一页全搞定</p>
-              <p class="fx-desc">不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。</p>
-              <ul class="fx-points">
-                <li>基础四则运算，支持键盘连续输入</li>
-                <li>日期差 / 工作日 / 年龄计算</li>
-                <li>长度、重量、温度等单位换算</li>
-                <li>多币种实时汇率换算（联网自动更新）</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>算年假还剩几天、倒推项目工期、海外购物折算人民币。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame crop">
-                <img src="./assets/shot-03-calculator.webp?v=0.4.59" alt="内置计算器截图" loading="lazy" />
-              </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>💱 实时汇率</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>键盘直达</span>
-            </div>
-          </div>
-        </article>
-
-        <!-- 04 万年历 -->
-        <article class="fx-slide" style="--accent-strong:#f59e0b;--accent-strong-2:#fbbf24;--accent-soft:rgba(245,158,11,.11);--p:#f59e0b">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">04 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg>
-                万年历
-              </div>
-              <h3 class="fx-title">农历、节气、宜忌，一查便知</h3>
-              <p class="fx-slogan">法定节假日休/班标记清晰，安排假期不踩坑</p>
-              <p class="fx-desc">内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。</p>
-              <ul class="fx-points">
-                <li>农历、节气、传统节日完整显示</li>
-                <li>法定节假日「休 / 班」角标，调休不搞混</li>
-                <li>每日宜忌详情，选日子有依据</li>
-                <li>「回到今天」一键返回，任意年月快速跳转</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>安排小长假出行、查农历生日、看黄历挑好日子。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame crop">
-                <img src="./assets/shot-04-huangli.webp?v=0.4.59" alt="万年历截图" loading="lazy" />
-              </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>🗓 休/班角标</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>每日宜忌</span>
-            </div>
-          </div>
-        </article>
-
-        <!-- 05 牛马计薪器 -->
-        <article class="fx-slide" style="--accent-strong:#10b981;--accent-strong-2:#34d399;--accent-soft:rgba(16,185,129,.10);--p:#10b981">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">05 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7.5c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5-4 1-4 2.5 1.8 2.5 4 2.5 4-1 4-2.5"/></svg>
-                牛马计薪器
-              </div>
-              <h3 class="fx-title">每一秒搬砖，都看得见钱</h3>
-              <p class="fx-slogan">今日已赚实时滚动，下班倒计时精确到秒</p>
-              <p class="fx-desc">填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。</p>
-              <ul class="fx-points">
-                <li>今日已赚 / 日薪 / 时薪实时更新</li>
-                <li>下班 + 发薪双倒计时，精确到秒</li>
-                <li>8 种今日状态按时段自动轮换，可手动切换</li>
-                <li>专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>工作再苦，看着「已赚」数字往上跳，也能笑出声。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame crop">
-                <img src="./assets/shot-05-salary.webp?v=0.4.59" alt="牛马计薪器截图" loading="lazy" />
-              </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>💰 今日已赚实时滚动</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>🖥 桌面组件</span>
-            </div>
-          </div>
-        </article>
-
-        <!-- 06 截图/贴图 -->
-        <article class="fx-slide" style="--accent-strong:#f43f5e;--accent-strong-2:#fb7185;--accent-soft:rgba(244,63,94,.10);--p:#f43f5e">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">06 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h.9a2 2 0 001.7-.94l.54-.9A2 2 0 019.8 4.2h4.4a2 2 0 011.66.94l.54.9A2 2 0 0018.1 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13.5" r="3.6"/></svg>
-                截图 / 贴图
-              </div>
-              <h3 class="fx-title">截完就贴，钉在桌面上</h3>
-              <p class="fx-slogan">参考图钉在屏幕一角，写文档对资料不再来回切窗口</p>
-              <p class="fx-desc">快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。</p>
-              <ul class="fx-points">
-                <li>窗口 / 区域截图，选区可拖动微调</li>
-                <li>标注工具栏：箭头、画笔、矩形、文字、马赛克等</li>
-                <li>一键贴图钉在桌面：滚轮缩放、透明度可调</li>
-                <li>鼠标穿透模式：贴图不挡下面的操作</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:1020/913">
-                <img src="./assets/shot-06-screenshot.webp?v=0.4.59" alt="Tacco 截图：圈选区域后带标注工具条，可直接贴图或保存" loading="lazy" />
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- 07 便利签 -->
-        <article class="fx-slide" style="--accent-strong:#eab308;--accent-strong-2:#facc15;--accent-soft:rgba(234,179,8,.12);--p:#eab308">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">07 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4A5.5 5.5 0 0121 9.5c0 1.33-.47 2.55-1.26 3.5H21l-4.3 4.3a2.4 2.4 0 01-3.4-3.4L16 12h-1.26A5.5 5.5 0 0115.5 4z"/><path d="M4 14a2 2 0 012-2h7a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6z"/></svg>
-                便利签
-              </div>
-              <h3 class="fx-title">灵感随手贴，关机也不丢</h3>
-              <p class="fx-slogan">Alt+N 一键贴一张便签到桌面，重启自动贴回原位</p>
-              <p class="fx-desc">想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。</p>
-              <ul class="fx-points">
-                <li>快捷键一键新建（默认 Alt+N），最多同屏 12 张</li>
-                <li>6 色换肤 + 透明度滑条自定义</li>
-                <li>勾选划线、一键「转待办」进今日清单</li>
-                <li>重启自动恢复原位，多显示器也能回到原屏</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:714/603">
-                <img src="./assets/shot-07-notes.webp?v=0.4.59" alt="Tacco 便利签：桌面上并排贴着的黄色与绿色便签" loading="lazy" />
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- 08 剪贴板 -->
-        <article class="fx-slide" style="--accent-strong:#06b6d4;--accent-strong-2:#22d3ee;--accent-soft:rgba(6,182,212,.10);--p:#06b6d4">
-          <div class="fx-card">
-            <div class="fx-info">
-              <div class="fx-tag"><span class="num">08 / 08</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9.5 4a1.5 1.5 0 013 0M9 11h6M9 14.5h6M9 18h3"/></svg>
-                剪贴板
-              </div>
-              <h3 class="fx-title">复制过的，都帮你留着</h3>
-              <p class="fx-slogan">历史自动记录，键盘选条目，一次带走十几段内容</p>
-              <p class="fx-desc">Tacco 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。</p>
-              <ul class="fx-points">
-                <li>复制历史自动记录，浮窗快捷键随时唤出</li>
-                <li>↑↓ 选择 · Enter 复制 · 数字键 1-9 快选</li>
-                <li>关键词搜索，秒找三天前复制的内容</li>
-                <li>密码管理器内容自动识别跳过，隐私不落盘</li>
-              </ul>
-              <p class="fx-tip"><b>适合场景：</b>汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。</p>
-            </div>
-            <div class="fx-shot">
-              <div class="fx-shot-frame full" style="--shot-w:432px;--ar:665/861">
-                <img src="./assets/shot-08-clipboard.webp?v=0.4.59" alt="Tacco 剪贴板历史：搜索框、多条复制记录与快捷回贴编号" loading="lazy" />
-              </div>
-            </div>
-          </div>
-        </article>
-
-      </div>
-
-      <!-- 自动播放进度条 -->
-      <div class="fx-progress" id="fxProgress"><span></span></div>
-
-      <div class="fx-pills" id="fxPills">
-        <button class="fx-pill active" data-goto="0" aria-label="待办事项"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h6"/><path d="M3 5l1.6 1.6L7.4 3.7"/><path d="M3 12l1.6 1.6L7.4 10.7"/><path d="M3 19l1.6 1.6L7.4 17.7"/></svg><span>待办事项</span></button>
-        <button class="fx-pill" data-goto="1" aria-label="生日纪念日"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M4 20v-6.5a2 2 0 012-2h12a2 2 0 012 2V20"/><path d="M8 11.5V9m4 2.5V7.5m4 4V9"/><path d="M8 6.2a1 1 0 100-2 1 1 0 000 2zm4-2a1 1 0 100-2 1 1 0 000 2zm4 2a1 1 0 100-2 1 1 0 000 2z"/></svg><span>生日纪念日</span></button>
-        <button class="fx-pill" data-goto="2" aria-label="计算器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h.01M9 18.5h6"/></svg><span>计算器</span></button>
-        <button class="fx-pill" data-goto="3" aria-label="万年历"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg><span>万年历</span></button>
-        <button class="fx-pill" data-goto="4" aria-label="牛马计薪器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.3"/><path d="M6.5 7V5.6A1.6 1.6 0 018.1 4H16"/></svg><span>牛马计薪器</span></button>
-        <button class="fx-pill" data-goto="5" aria-label="截图贴图"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14a1 1 0 001 1h13"/><path d="M17 21V7a1 1 0 00-1-1H3"/><circle cx="13.5" cy="10.5" r="1.5"/></svg><span>截图贴图</span></button>
-        <button class="fx-pill" data-goto="6" aria-label="便利签"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h7.5"/><path d="M20 13.5l-6.5 6.5v-4.5a2 2 0 012-2H20z"/><path d="M8 9h8M8 12.5h5"/></svg><span>便利签</span></button>
-        <button class="fx-pill" data-goto="7" aria-label="剪贴板"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9.5 4.5V3.6A1.6 1.6 0 0111.1 2h1.8a1.6 1.6 0 011.6 1.6v.9z"/><path d="M9 11h6M9 15h6"/></svg><span>剪贴板</span></button>
-      </div>
-      <p class="fx-hint">点击下方功能名 / 鼠标拖拽 / <kbd>←</kbd><kbd>→</kbd> 方向键 / 点两侧卡片均可切换 · 悬停暂停自动播放</p>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 下载安装 ================= -->
-<section class="install" id="install">
-  <div class="wrap">
-    <div class="install-card">
-      <img class="applogo" src="./assets/logo.webp?v=0.4.59" alt="Tacco 图标" />
-      <h2 id="installTitle">下载并安装到电脑</h2>
-      <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.58 · 免费下载</p>
-      <div class="hero-cta" style="justify-content:center;margin-top:28px;">
-        <a href="./Tacco-setup.exe" class="btn-download" id="installDownload">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          <span id="installDownloadText">下载 Tacco-setup.exe</span>
-        </a>
-      </div>
-      <div class="alt-dl" style="justify-content:center;margin-top:12px;" id="installAlt">
-        <span class="alt-label">其它平台：</span>
-        <a data-dl="win">Windows 版</a>
-        <a data-dl="mac-arm">macOS · Apple 芯片</a>
-        <a data-dl="mac-intel">macOS · Intel</a>
-      </div>
-      <div class="steps" id="installSteps">
-        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。</p></div>
-      </div>
-      <div class="smartscreen" id="installNote">
-        <span style="font-size:17px;line-height:1.4;">⚠️</span>
-        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= FAQ ================= -->
-<section class="faq" id="faq">
-  <div class="wrap">
-    <h2>常见问题</h2>
-    <div class="faq-list">
-      <details class="faq-item" open>
-        <summary>Tacco 是免费的吗？<span class="chev">▾</span></summary>
-        <p>Tacco 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。</p>
-      </details>
-      <details class="faq-item">
-        <summary>我的数据存在哪里？安全吗？<span class="chev">▾</span></summary>
-        <p>数据默认保存在你自己的电脑上（本地优先）；开启云同步后才会加密传输到你自己的云端服务，不上传给任何第三方。剪贴板历史中的密码内容也会自动识别并跳过记录。</p>
-      </details>
-      <details class="faq-item">
-        <summary>支持哪些系统？<span class="chev">▾</span></summary>
-        <p>目前正式支持 <b>Windows 10 / 11（64 位）</b>，安装包约 17 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。<b>macOS 版正在内测</b>，暂未开放下载。</p>
-      </details>
-      <details class="faq-item">
-        <summary>Mac 版什么时候能用？<span class="chev">▾</span></summary>
-        <p>macOS 版已完成基础适配，目前处于内测阶段（截图贴图、剪贴板历史等系统级能力仍在适配），<b>暂不开放下载</b>。内测完成后会在本页开放入口，并同步更新下载链接。现阶段建议先在 Windows 上体验完整功能。</p>
-      </details>
-      <details class="faq-item">
-        <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
-        <p>不会。Tacco 只在需要时渲染一条细边和一个小面板，空闲时几乎不占用 CPU，内存占用也远低于常驻的聊天软件。</p>
-      </details>
-    </div>
-  </div>
-</section>
-
-<!-- ================= 页脚 ================= -->
-<footer>
-  <div class="wrap">
-    <a href="#top" class="f-brand"><img src="./assets/logo.webp?v=0.4.59" alt="Tacco" /><span>Tacco</span></a>
-    <p class="f-slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
-    <p class="f-copy">© <span id="fYear">2026</span> Tacco. All rights reserved.</p>
-  </div>
-</footer>
-
-<script>
-/* ============ 深浅色切换 ============ */
-const root = document.documentElement;
-const saved = localStorage.getItem('todobar-site-theme');
-const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-root.dataset.theme = dark ? 'dark' : 'light';
-document.getElementById('themeToggle').textContent = dark ? '☀️' : '🌙';
-document.getElementById('themeToggle').addEventListener('click', () => {
-  const d = root.dataset.theme === 'dark' ? 'light' : 'dark';
-  root.dataset.theme = d;
-  localStorage.setItem('todobar-site-theme', d);
-  document.getElementById('themeToggle').textContent = d === 'dark' ? '☀️' : '🌙';
-});
-
-/* ============ 按设备自动匹配安装包 ============ */
-(function () {
-  /* 当前安装包版本:优先读同源 version.json(与实际安装包一致),失败则用内置兜底值。
-     dmg 文件名按 version.json 的版本号动态拼接。
-     说明:dmg 自托管在本下载站(与安装包同目录),文件名按 VER 动态拼接。
-     若改回指向 GitHub Release 直链,把 DMG_BASE 改为 'https://github.com/Sam5201-ai/todobar/releases/download/v'+VER+'/' 即可。 */
-  let VER = '0.4.59';
-  let currentKey = null;
-  const DMG_BASE = './';
-
-  /* ============ Mac 开放开关 ============
-     当前阶段只验证 Windows 端付费意愿,macOS 版内测中、不对外提供下载。
-     内测完成要开放 Mac 时,把 MAC_OPEN 改成 true 即可:
-     下载配置(mac-arm / mac-intel)、安装步骤、放行提示、FAQ 都已就绪,
-     打开后会自动恢复「按设备匹配 macOS 安装包」与平台切换条。 */
-  const MAC_OPEN = false;
-  const IS_MAC = /Macintosh|Mac OS X/i.test(navigator.userAgent || '');
-
-  function dlMap() {
-    const dmgArm = 'Tacco_' + VER + '_aarch64.dmg';
-    const dmgX64 = 'Tacco_' + VER + '_x64.dmg';
-    return {
-      win: {
-        label: '下载 Windows 安装包',
-        btn: '下载 Tacco-setup.exe',
-        meta: 'Windows 10 / 11 · 64 位 · 约 40 MB · 免费下载 · 无需管理员权限',
-        ver: 'Windows 10 / 11 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载',
-        /* ?v= 让每个版本的下载 URL 唯一,避免浏览器/边缘缓存返回旧安装包 */
-        href: './Tacco-setup.exe?v=' + VER,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">⚠️</span>
-        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>`
-      },
-      'mac-arm': {
-        label: '下载 macOS 版（Apple 芯片）',
-        btn: '下载 ' + dmgArm,
-        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 18 MB · Beta 测试中',
-        ver: 'macOS 12+ · Apple 芯片 · 约 18 MB · v' + VER + ' Beta · 免费下载',
-        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgArm 并放好 dmg */
-        href: DMG_BASE + dmgArm,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgArm}</b>（Apple 芯片版）。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
-        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
-      },
-      'mac-intel': {
-        label: '下载 macOS 版（Intel）',
-        btn: '下载 ' + dmgX64,
-        meta: 'macOS 12+ · Intel 处理器 · 约 18 MB · Beta 测试中',
-        ver: 'macOS 12+ · Intel · 约 18 MB · v' + VER + ' Beta · 免费下载',
-        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgX64 并放好 dmg */
-        href: DMG_BASE + dmgX64,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgX64}</b>（Intel 版）。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
-        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。</span>`
-      }
-    };
-  }
-
-  /* 自动判断:仅 Windows 提供下载;macOS 视 MAC_OPEN 决定给不给 dmg */
-  function detect() {
-    if (IS_MAC) return MAC_OPEN ? 'mac-arm' : 'win';
-    return 'win';
-  }
-
-  /* macOS 访客(MAC 未开放时):把主按钮从「下载 exe」改成「内测中」并说明,
-     避免 Mac 用户点了下载到一个自己跑不起来的安装包。 */
-  function applyMacClosed() {
-    const md = document.getElementById('mainDownload');
-    if (md) {
-      md.removeAttribute('download');
-      md.setAttribute('href', '#faq');
-    }
-    const t = document.getElementById('mainDownloadText');
-    if (t) t.textContent = 'macOS 版内测中';
-    const hm = document.getElementById('heroMeta');
-    if (hm) {
-      hm.textContent = '检测到你正在使用 macOS：Mac 版正在内测，暂未开放下载，开放后会在本页公布。';
-    }
-    const iv = document.getElementById('installVer');
-    if (iv) iv.textContent = '当前仅提供 Windows 版 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载';
-  }
-
-  function paintBadge() {
-    const badge = document.getElementById('osBadge');
-    if (badge) {
-      badge.textContent =
-        'v' + VER + (MAC_OPEN ? ' · Windows 已发布 · macOS Beta' : ' · Windows 版');
-    }
-  }
-
-  function apply(key) {
-    const d = dlMap()[key]; if (!d) return;
-    currentKey = key;
-    document.documentElement.dataset.os = key === 'win' ? 'win' : 'mac';
-    document.getElementById('mainDownloadText').textContent = d.label;
-    document.getElementById('heroMeta').textContent = d.meta;
-    document.getElementById('installVer').textContent = d.ver;
-    document.getElementById('installDownloadText').textContent = d.btn;
-    /* 主按钮/安装区按钮指向真实安装包(下载而非跳转) */
-    const md = document.getElementById('mainDownload');
-    md.setAttribute('href', d.href);
-    md.setAttribute('download', '');
-    const idl = document.getElementById('installDownload');
-    idl.setAttribute('href', d.href);
-    idl.setAttribute('download', '');
-    idl.removeAttribute('onclick');
-    document.getElementById('installSteps').innerHTML = d.steps;
-    document.getElementById('installNote').innerHTML = d.note;
-    document.querySelectorAll('.alt-dl a').forEach(a => {
-      a.classList.toggle('current', a.dataset.dl === key);
-    });
-    /* 重新量一次轮播高度（安装区文字变化不影响，但保持一致性） */
-    if (window.__fxFit) window.__fxFit();
-    if (IS_MAC && !MAC_OPEN) applyMacClosed();
-    /* 重新做一次下载链接改写:埋点脚本的 /download 中转会被上面的 href 重置覆盖 */
-    if (window.__rewriteDownloads) window.__rewriteDownloads();
-  }
-
-  document.querySelectorAll('.alt-dl a').forEach(a => {
-    a.addEventListener('click', (e) => { e.preventDefault(); apply(a.dataset.dl); });
-  });
-
-  /* Mac 入口关闭时:隐藏 macOS 下载链接与「不是这台电脑？」切换条
-     (只剩 Windows 一个选项,切换条没有意义) */
-  if (!MAC_OPEN) {
-    document.querySelectorAll('.alt-dl a[data-dl^="mac-"]').forEach(a => {
-      a.style.display = 'none';
-    });
-    if (!document.querySelector('.alt-dl a[data-dl^="mac-"]:not([style*="display: none"])')) {
-      document.querySelectorAll('.alt-dl').forEach(el => { el.style.display = 'none'; });
-    }
-  }
-
-  apply(detect());
-  paintBadge();
-
-  /* version.json 到达后刷新版本号与下载链接(与线上安装包严格一致) */
-  fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((data) => {
-      const v = data && data.version;
-      if (!v) return;
-      VER = String(v).replace(/^v/, '');
-      paintBadge();
-      if (currentKey) apply(currentKey);
-    })
-    .catch(() => { /* 保留页面内置版本号 */ });
-})();
-
-/* ============ 功能轮播 ============ */
-(function () {
-  const stage = document.getElementById('fxStage');
-  const slides = Array.from(stage.querySelectorAll('.fx-slide'));
-  const pills = Array.from(document.querySelectorAll('.fx-pill'));
-  const progressWrap = document.getElementById('fxProgress');
-  const progress = progressWrap.querySelector('span');
-  const AUTO_MS = 9000;
-  let active = 0;
-  let autoTimer = null;
-  let dragging = false, dragX = 0, dragDX = 0, dragPointer = null;
-
-  function layout() {
-    const w = stage.clientWidth;
-    slides.forEach((s, i) => {
-      const off = i - active;
-      const ax = Math.abs(off);
-      let tf, op, filter, z;
-      if (ax > 2.4) { tf = 'translateX(-50%) scale(.4)'; op = 0; z = 1; filter = 'brightness(.6)'; }
-      else {
-        const x = off * Math.min(w * 0.46, 560) + (dragging ? dragDX * .25 : 0);
-        const rot = -off * 17 - (dragging ? dragDX * 0.012 : 0);
-        const sc = Math.max(1 - ax * 0.16, 0.62);
-        op = ax === 0 ? 1 : (ax <= 1 ? 0.9 : 0.45);
-        filter = ax === 0 ? 'none' : `brightness(${1 - ax * 0.18}) saturate(.9)`;
-        z = 100 - Math.round(ax * 10);
-        tf = `translateX(calc(-50% + ${x}px)) rotateY(${rot}deg) scale(${sc})`;
-      }
-      s.style.transform = tf;
-      s.style.opacity = op;
-      s.style.zIndex = z;
-      s.style.filter = filter;
-      s.style.pointerEvents = ax <= 1 ? 'auto' : 'none';
-      s.classList.toggle('is-active', i === active);
-    });
-    pills.forEach((p, pi) => p.classList.toggle('active', pi === active));
-  }
-
-  /* 自适应高度：按最高的左栏文案撑开舞台，避免长短不一的卡片被裁切 */
-  function fitStage() {
-    if (matchMedia('(max-width: 1020px)').matches) { stage.style.height = ''; return; }
-    const prevH = stage.style.height;
-    stage.style.height = '1500px';
-    let max = 0;
-    slides.forEach(s => {
-      const info = s.querySelector('.fx-info');
-      if (!info) return;
-      const oldH = info.style.height, oldA = info.style.alignSelf;
-      /* grid item 默认 stretch，必须临时取消拉伸才能量到内容自然高度 */
-      info.style.alignSelf = 'start';
-      info.style.height = 'auto';
-      max = Math.max(max, info.offsetHeight);
-      info.style.height = oldH;
-      info.style.alignSelf = oldA;
-    });
-    stage.style.height = prevH;
-    if (!max) return;
-    /* 右侧截图也要留出高度：竖版截图框 424×556 + 上下 padding，舞台最低 640 */
-    stage.style.height = Math.max(640, Math.min(max + 16, 860)) + 'px';
-  }
-  window.__fxFit = fitStage;
-
-  function go(i, user) {
-    active = ((i % slides.length) + slides.length) % slides.length;
-    layout();
-    restartProgress();
-    if (user) restartAuto();
-  }
-
-  /* 自动播放 + 进度条 */
-  function restartProgress() {
-    progress.classList.remove('run');
-    void progress.offsetWidth; /* 重置动画 */
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) progress.classList.add('run');
-  }
-  function restartAuto() {
-    clearInterval(autoTimer);
-    autoTimer = setInterval(() => go(active + 1), AUTO_MS);
-  }
-  function pauseAuto() { clearInterval(autoTimer); autoTimer = null; progressWrap.classList.add('paused'); }
-  function resumeAuto() { if (!autoTimer) restartAuto(); progressWrap.classList.remove('paused'); }
-
-  /* 交互绑定 */
-  document.getElementById('fxPrev').addEventListener('click', () => go(active - 1, true));
-  document.getElementById('fxNext').addEventListener('click', () => go(active + 1, true));
-  /* 点击两侧的相邻卡片切换 */
-  slides.forEach((s, i) => s.addEventListener('click', (e) => {
-    if (dragging || Math.abs(dragDX) > 6) return;
-    if (i !== active) { e.preventDefault(); go(i, true); }
-  }));
-  /* 点击胶囊直接跳到对应功能 */
-  pills.forEach((p, pi) => p.addEventListener('click', () => go(pi, true)));
-  /* 键盘 */
-  addEventListener('keydown', (e) => {
-    const rect = stage.getBoundingClientRect();
-    if (rect.top > innerHeight || rect.bottom < 0) return;
-    if (e.key === 'ArrowLeft') go(active - 1, true);
-    if (e.key === 'ArrowRight') go(active + 1, true);
-  });
-  /* 拖拽 / 触摸滑动 */
-  stage.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    dragging = true; dragX = e.clientX; dragDX = 0;
-    stage.classList.add('dragging');
-    stage.setPointerCapture(e.pointerId);
-    pauseAuto();
-  });
-  stage.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    dragDX = e.clientX - dragX;
-    layout();
-  });
-  const endDrag = () => {
-    if (!dragging) return;
-    stage.classList.remove('dragging');
-    if (dragDX < -60) go(active + 1, true);
-    else if (dragDX > 60) go(active - 1, true);
-    else { dragDX = 0; layout(); }
-    dragging = false; dragDX = 0;
-    resumeAuto();
-  };
-  stage.addEventListener('pointerup', endDrag);
-  stage.addEventListener('pointercancel', endDrag);
-  /* 悬停暂停自动播放 */
-  stage.addEventListener('mouseenter', pauseAuto);
-  stage.addEventListener('mouseleave', () => { if (!dragging) resumeAuto(); });
-  addEventListener('resize', () => { fitStage(); layout(); });
-
-  /* 启动 */
-  fitStage();
-  go(0);
-  /* 字体加载完成后重新量一次，避免字体度量变化导致再次裁切 */
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => { fitStage(); layout(); });
-  }
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) restartAuto();
-})();
-</script>
-<script>
-  // ===== 数据埋点 v2:设备指纹 + Cookie 双写 + 会话去重 + 下载中转(失败静默) =====
-  ;(function () {
-    const TRACK_URL = '/api/track'
-
-    // 设备指纹:canvas/webgl/硬件特征哈希,清缓存/重装后同机仍稳定(零第三方依赖)
-    function fingerprint() {
-      try {
-        const c = document.createElement('canvas')
-        const x = c.getContext('2d')
-        x.textBaseline = 'top'
-        x.font = "14px 'Arial'"
-        x.fillStyle = '#f60'
-        x.fillRect(125, 1, 62, 20)
-        x.fillStyle = '#069'
-        x.fillText('Tacco', 2, 15)
-        x.fillStyle = 'rgba(102,204,0,0.7)'
-        x.fillText('Tacco', 4, 17)
-        const ch = c.toDataURL().slice(-64)
-        let gl = null
-        try {
-          gl = document.createElement('webgl') || document.createElement('experimental-webgl')
-        } catch (e) {}
-        let wg = ''
-        if (gl) {
-          const d = gl.getExtension('WEBGL_debug_renderer_info')
-          if (d) wg = gl.getParameter(d.UNMASKED_RENDERER_WEBGL) + '|' + gl.getParameter(d.UNMASKED_VENDOR_WEBGL)
-        }
-        const parts = [
-          ch,
-          wg,
-          navigator.hardwareConcurrency || '',
-          navigator.deviceMemory || '',
-          screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
-          new Date().getTimezoneOffset(),
-          (navigator.languages || []).join(','),
-          navigator.platform || '',
-          navigator.userAgent,
-        ]
-        let h = 2166136261
-        const s = parts.join('###')
-        for (let i = 0; i < s.length; i++) {
-          h ^= s.charCodeAt(i)
-          h = Math.imul(h, 16777619)
-        }
-        return ('0000000' + (h >>> 0).toString(16)).slice(-8)
-      } catch (e) {
-        return 'fp-' + Math.random().toString(36).slice(2, 10)
-      }
-    }
-
-    // 稳定设备 ID:持久 ID(localStorage + Cookie 双写)优先,缺失时用指纹兜底
-    function visitorId() {
-      try {
-        let vid = localStorage.getItem('todobar-site-vid')
-        if (!vid) {
-          vid = 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
-          localStorage.setItem('todobar-site-vid', vid)
-        }
-        const exp = new Date(Date.now() + 365 * 864e5).toUTCString()
-        document.cookie = 'todobar-site-vid=' + encodeURIComponent(vid) + ';path=/;max-age=31536000;SameSite=Lax'
-        return vid
-      } catch (e) {
-        return 'anon-' + Math.random().toString(36).slice(2, 12)
-      }
-    }
-
-    const vid = visitorId()
-    const device = fingerprint()
-
-    function track(events) {
-      try {
-        const payload = JSON.stringify({ source: 'site', events })
-        if (navigator.sendBeacon) {
-          const ok = navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }))
-          if (ok) return
-        }
-        fetch(TRACK_URL, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        }).catch(() => {})
-      } catch (e) { /* 埋点失败绝不影响页面体验 */ }
-    }
-
-    // 会话 ID:同一次进入只上报 1 条 site_visit(进入次数,不随页内点击累加)
-    function sessionId() {
-      try {
-        let sid = sessionStorage.getItem('todobar-site-sid')
-        if (!sid) {
-          sid = 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
-          sessionStorage.setItem('todobar-site-sid', sid)
-        }
-        return sid
-      } catch (e) {
-        return null
-      }
-    }
-
-    // 页面访问(设备去重 UV) + 进入会话(进入次数)
-    track([
-      { event: 'pageview', page: 'download', visitor: vid, device },
-      { event: 'site_visit', page: 'download', visitor: vid, device, sess: sessionId() },
-    ])
-
-    // 下载链接改写:点击前指向 /download 中转(带设备 + 缓存击穿参数)
-    function rewriteDownloads() {
-      document.querySelectorAll('a[download], a[href$=".exe"], a[href$=".dmg"]').forEach((a) => {
-        try {
-          const href = a.getAttribute('href') || ''
-          if (!href || href.indexOf('/download/') === 0) return
-          const u = new URL(href, location.href)
-          u.pathname = '/download' + u.pathname
-          u.searchParams.set('d', device)
-          a.setAttribute('href', u.pathname + u.search)
-        } catch (e) {}
-      })
-    }
-    rewriteDownloads()
-    /* 暴露给安装包匹配脚本:版本号异步刷新会重设 href,需要再改写一次,
-       否则这部分下载会绕过 /download 中转、丢失归因。 */
-    window.__rewriteDownloads = rewriteDownloads
-
-    // 下载点击:记录下载设备数(去重)。链接已改写走 /download 中转,由 server.js 记录归因
-    document.addEventListener('click', (e) => {
-      const t = e.target
-      const a = t && t.closest ? t.closest('a[download], a[href$=".exe"], a[href$=".dmg"]') : null
-      if (!a) return
-      track([{ event: 'download_click', page: 'download', visitor: vid, device, meta: (a.getAttribute('href') || '').slice(0, 120) }])
-    })
-  })()
-  // 版权年份
-  document.getElementById('fYear').textContent = new Date().getFullYear()
-</script>
-</body>
-</html>
-
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="baidu-site-verification" content="codeva-b6YByVpS4S" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tacco - 贴在屏幕边缘的极简待办栏 | Windows 桌面端下载</title>
+<meta name="description" content="Tacco 是一款贴边悬浮的极简待办栏：日/周/月视图、生日与纪念日提醒、内置计算器、云同步，支持自定义字体与背景。免费下载 Windows 安装包。" />
+<meta property="og:title" content="Tacco - 贴在屏幕边缘的极简待办栏" />
+<meta property="og:description" content="日/周/月待办、提醒、计算器、云同步，深度自定义字体与背景。免费下载 Windows 桌面端。" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/png" href="./favicon.png" />
+<style>
+/* ==========================================================
+   Tacco 下载页 v2 · 原型
+   改版要点：
+   1. 8 大功能 → 每功能一页 · 3D 翻转滑动轮播（可拖拽/键盘/自动播放）
+   2. 去掉「版本更新」区块
+   3. Hero 保留贴边显示器动画；功能速览 chips 已移除（首页不重复罗列 8 大功能，保持干净）
+   ========================================================== */
+:root {
+  --primary: #1d7ef0;
+  --primary-dark: #1565c8;
+  --accent: #f59e0b;
+  --bg: #f7f9fc;
+  --bg-soft: #ffffff;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #5b6b83;
+  --faint: #94a3b8;
+  --border: rgba(15, 23, 42, .09);
+  --shadow-lg: 0 24px 60px -18px rgba(15, 23, 42, .25);
+  --nav-bg: rgba(255, 255, 255, .82);
+}
+[data-theme="dark"] {
+  --bg: #060a14;
+  --bg-soft: #0b1120;
+  --card: #0e1526;
+  --text: #e8eefb;
+  --muted: #9aa8bf;
+  --faint: #64748b;
+  --border: rgba(148, 163, 184, .14);
+  --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, .7);
+  --nav-bg: rgba(6, 10, 20, .82);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6;
+  overflow-x: hidden;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+/* ============ 导航 ============ */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--nav-bg); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -.02em; }
+.brand img { width: 36px; height: 36px; border-radius: 11px; box-shadow: 0 4px 14px rgba(29,126,240,.35); }
+.nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.nav-links a { transition: color .2s; }
+.nav-links a:hover { color: var(--primary); }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 17px; line-height: 1;
+  transition: background .2s;
+}
+.theme-btn:hover { background: rgba(148,163,184,.15); }
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
+  color: #fff; font-weight: 700; border: none; border-radius: 14px;
+  padding: 11px 22px; font-size: 14px;
+  box-shadow: 0 10px 26px -8px rgba(29,126,240,.55);
+  transition: transform .18s, box-shadow .18s;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -8px rgba(29,126,240,.6); }
+@media (max-width: 860px) { .nav-links { display: none; } }
+
+/* ============ Hero ============ */
+.hero {
+  position: relative; overflow: hidden;
+  padding: 120px 0 64px;
+  background:
+    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.13), transparent 70%),
+    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.10), transparent 70%);
+}
+[data-theme="dark"] .hero {
+  background:
+    radial-gradient(640px 320px at 78% 6%, rgba(29,126,240,.20), transparent 70%),
+    radial-gradient(520px 300px at 8% 92%, rgba(245,158,11,.08), transparent 70%);
+}
+.hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 700; color: var(--primary);
+  border: 1px solid rgba(29,126,240,.25); background: rgba(29,126,240,.07);
+  padding: 6px 14px; border-radius: 999px;
+}
+.hero-badge .dot { position: relative; width: 8px; height: 8px; }
+.hero-badge .dot::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--primary);
+  animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes ping { 75%,100% { transform: scale(2.4); opacity: 0; } }
+.hero h1 { font-size: clamp(34px, 4.6vw, 52px); font-weight: 900; line-height: 1.18; letter-spacing: -.02em; margin-top: 22px; }
+.hero h1 .grad {
+  background: linear-gradient(92deg, #2e8df6, var(--primary) 40%, var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero .lead { margin-top: 18px; font-size: 16.5px; color: var(--muted); max-width: 540px; }
+.hero .lead b { color: var(--text); }
+.hero-cta { display: flex; align-items: center; gap: 20px; margin-top: 32px; flex-wrap: wrap; }
+.btn-download {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
+  color: #fff; font-weight: 800; font-size: 16px; border: none; border-radius: 16px;
+  padding: 16px 30px;
+  box-shadow: 0 14px 34px -10px rgba(29,126,240,.6);
+  transition: transform .18s, box-shadow .18s;
+}
+.btn-download:hover { transform: translateY(-2px); box-shadow: 0 20px 42px -10px rgba(29,126,240,.65); }
+.hero-meta { margin-top: 14px; font-size: 12.5px; color: var(--faint); }
+/* 手动选择其它平台 */
+.alt-dl { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 12.5px; }
+.alt-dl .alt-label { color: var(--faint); }
+.alt-dl a {
+  position: relative;
+  color: var(--muted); font-weight: 700; text-decoration: none;
+  border-bottom: 1px dashed var(--border); padding-bottom: 1px; cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.alt-dl a + a::before { content: none; }
+.alt-dl a:not(:last-child)::after {
+  content: "·"; position: absolute; right: -11px; color: var(--faint); font-weight: 400;
+}
+.alt-dl a:hover { color: var(--primary); border-color: var(--primary); }
+.alt-dl a.current { color: var(--primary); border-color: transparent; }
+.alt-dl a.current::after { content: " ·当前"; font-size: 10.5px; opacity: .8; }
+
+/* Hero 显示器动画（沿用 v1 思路，节奏微调） */
+.monitor { position: relative; }
+.monitor::before {
+  content: ""; position: absolute; inset: -24px; z-index: -1; border-radius: 44px;
+  background: linear-gradient(135deg, rgba(29,126,240,.22), rgba(245,158,11,.14));
+  filter: blur(34px);
+}
+.screen {
+  border-radius: 22px; background: #101319; padding: 10px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(15,23,42,.08);
+}
+.screen-inner { position: relative; aspect-ratio: 3/2; border-radius: 14px; overflow: hidden; }
+.screen-inner > img.wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.desktop-icon {
+  position: absolute; left: 12px; top: 12px; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: #fff; width: 60px; text-align: center;
+}
+.desktop-icon img { width: 40px; height: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.desktop-icon span { font-size: 10px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+.demo-panel {
+  position: absolute; right: 0; top: 0; z-index: 10; height: calc(100% - 40px);
+  transform: translateX(103%);
+  animation: dock 13s ease-in-out infinite; will-change: transform;
+}
+/* 贴边把手：对齐线上真实把手——白色圆角小凸台 + 左侧收起箭头 */
+.panel-handle {
+  position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 44px; border-radius: 11px 0 0 11px;
+  background: #fff; color: #7a8494;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: -2px 2px 8px rgba(15,23,42,.18), inset 0 0 0 1px rgba(15,23,42,.05);
+}
+.panel-handle svg { width: 11px; height: 11px; display: block; }
+@keyframes dock {
+  0%, 8%   { transform: translateX(103%); }
+  22%, 58% { transform: translateX(0); }
+  74%, 100%{ transform: translateX(103%); }
+}
+.demo-panel img { height: 100%; width: auto; border-radius: 12px 0 0 12px; box-shadow: -14px 8px 40px rgba(0,0,0,.4); }
+.taskbar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; height: 40px;
+  display: flex; align-items: center; padding: 0 14px;
+  background: rgba(255,255,255,.72); backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255,255,255,.5);
+}
+.taskbar .ticons { display: flex; align-items: center; gap: 14px; color: #475569; font-size: 15px; }
+.taskbar .clock { margin-left: auto; text-align: right; color: #475569; font-size: 10px; line-height: 1.25; font-weight: 700; }
+.monitor-stand { margin: 0 auto; height: 44px; width: 96px; background: linear-gradient(#cbd5e1, #94a3b8); clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%); }
+.monitor-base { margin: 0 auto; height: 9px; width: 200px; border-radius: 50%; background: linear-gradient(#cbd5e1, #64748b); box-shadow: 0 10px 22px rgba(15,23,42,.3); }
+@media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } .hero { padding-top: 100px; } }
+
+/* ============ 功能轮播（核心区块） ============ */
+.fx-section { padding: 88px 0 72px; position: relative; }
+.fx-head { text-align: center; margin-bottom: 44px; }
+.fx-kicker-line {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
+  letter-spacing: .18em; color: var(--primary); text-transform: uppercase;
+}
+.fx-kicker-line::before, .fx-kicker-line::after { content: ""; width: 26px; height: 2px; background: linear-gradient(90deg, transparent, var(--primary)); border-radius: 2px; }
+.fx-kicker-line::after { background: linear-gradient(90deg, var(--primary), transparent); }
+.fx-head h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 900; letter-spacing: -.02em; margin-top: 14px; }
+.fx-head p { margin-top: 12px; color: var(--muted); font-size: 15.5px; }
+
+.fx-stage-wrap { position: relative; }
+.fx-stage {
+  position: relative; height: 560px; perspective: 1500px; perspective-origin: 50% 42%;
+  touch-action: pan-y; cursor: grab;
+}
+.fx-stage.dragging { cursor: grabbing; }
+.fx-slide {
+  position: absolute; left: 50%; top: 0; width: min(1180px, 94vw); height: 100%;
+  transform-style: preserve-3d; will-change: transform, opacity;
+  transition: transform .75s cubic-bezier(.22,.85,.3,1.02), opacity .55s ease, filter .55s ease;
+}
+.fx-stage.dragging .fx-slide { transition: none; }
+.fx-card {
+  height: 100%; border-radius: 28px; display: grid;
+  grid-template-columns: 1fr 552px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+.fx-card::before {
+  content: ""; position: absolute; inset: 0; border-radius: 28px; pointer-events: none;
+  background: radial-gradient(520px 260px at 88% 0%, var(--accent-soft), transparent 72%);
+}
+/* 左栏：文案 */
+.fx-info { padding: 40px 44px 40px 46px; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 2; }
+.fx-info > * { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
+.fx-slide.is-active .fx-info > * { opacity: 1; transform: none; }
+.fx-slide.is-active .fx-info > *:nth-child(1) { transition-delay: .12s; }
+.fx-slide.is-active .fx-info > *:nth-child(2) { transition-delay: .20s; }
+.fx-slide.is-active .fx-info > *:nth-child(3) { transition-delay: .28s; }
+.fx-slide.is-active .fx-info > *:nth-child(4) { transition-delay: .36s; }
+.fx-slide.is-active .fx-info > *:nth-child(5) { transition-delay: .44s; }
+.fx-slide.is-active .fx-info > *:nth-child(6) { transition-delay: .52s; }
+
+.fx-tag {
+  display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+  background: var(--accent-soft); color: var(--accent-strong);
+  font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+  padding: 7px 14px; border-radius: 999px;
+}
+.fx-tag .num { font-size: 11px; opacity: .75; letter-spacing: .12em; }
+.fx-tag svg { width: 16px; height: 16px; }
+.fx-pro {
+  margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff;
+  padding: 3px 9px; border-radius: 999px;
+}
+.fx-title { font-size: 30px; font-weight: 900; letter-spacing: -.02em; line-height: 1.25; margin-top: 18px; }
+.fx-slogan {
+  margin-top: 8px; font-size: 15px; font-weight: 800;
+  background: linear-gradient(92deg, var(--accent-strong), var(--accent-strong-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.fx-desc { margin-top: 14px; font-size: 14.5px; color: var(--muted); line-height: 1.75; }
+.fx-points { list-style: none; margin-top: 18px; display: grid; gap: 9px; }
+.fx-points li {
+  display: flex; gap: 10px; font-size: 13.8px; color: var(--muted); line-height: 1.5;
+}
+.fx-points li::before {
+  content: "✓"; flex: none; width: 20px; height: 20px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent-strong);
+  border-radius: 7px; font-size: 12px; font-weight: 900;
+}
+.fx-tip {
+  margin-top: 20px; font-size: 12.8px; color: var(--faint);
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(148,163,184,.09); border: 1px dashed var(--border);
+}
+.fx-tip b { color: var(--muted); }
+
+/* 右栏：截图展示 */
+.fx-shot {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  padding: 24px; overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(148,163,184,.06), transparent 40%),
+    radial-gradient(420px 300px at 50% 88%, var(--accent-soft), transparent 75%);
+}
+/* 截图框：宽度由 --shot-w 决定，高度按 --ar 等比推出（绝不拉伸变形） */
+.fx-shot-frame {
+  position: relative;
+  width: min(var(--shot-w, 430px), 100%);
+  aspect-ratio: var(--ar, 430/576);
+  height: auto; flex: none;
+  border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 26px 52px -20px rgba(15,23,42,.42), 0 0 0 5px rgba(255,255,255,.55);
+  background: #fff;
+}
+[data-theme="dark"] .fx-shot-frame { box-shadow: 0 26px 52px -20px rgba(0,0,0,.8), 0 0 0 5px rgba(255,255,255,.05); background: #0b1120; }
+.fx-shot-frame img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+/* 竖向长截图只取上半部分，底部柔和收尾，避免生硬裁断（完整截图不加此遮罩） */
+.fx-shot-frame.crop::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 58px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.9));
+  pointer-events: none;
+}
+[data-theme="dark"] .fx-shot-frame.crop::after { background: linear-gradient(180deg, transparent, rgba(11,17,32,.9)); }
+/* GIF 徽标：提示此处在正式版将替换为 GIF 动图 */
+.gif-badge {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  background: rgba(10, 15, 28, .78); color: #fff; backdrop-filter: blur(6px);
+  font-size: 11.5px; font-weight: 700; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); z-index: 3;
+}
+.gif-badge .play {
+  width: 18px; height: 18px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, #2e8df6, #1d7ef0);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.gif-badge .play::before {
+  content: ""; border-left: 6px solid #fff; border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent; margin-left: 2px;
+}
+/* ===== 界面示意：这三项暂无真机截图，用 HTML 按真实界面还原（矢量呈现，最清晰） ===== */
+.fx-shot-frame.mock { background: #fff; }
+.shot-ui { height: 100%; display: flex; flex-direction: column; background: linear-gradient(180deg,#fff,#f7f5ff); color: #1f2937; font-size: 11.5px; line-height: 1.5; }
+.shot-ui .ui-bar { display: flex; align-items: center; gap: 7px; padding: 10px 13px; background: #fff; border-bottom: 1px solid rgba(15,23,42,.07); }
+.shot-ui .ui-title { font-weight: 800; font-size: 12.5px; color: #0f172a; }
+.shot-ui .ui-badge { margin-left: auto; font-size: 9.5px; font-weight: 800; color: #64748b; background: #f1f5f9; border-radius: 6px; padding: 2px 6px; }
+.shot-ui .ui-body { flex: 1; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; overflow: hidden; }
+.ui-search { display: flex; align-items: center; gap: 6px; background: #f1f4f9; border-radius: 9px; padding: 6px 9px; color: #9aa8bf; font-size: 10.5px; }
+.ui-row { display: flex; gap: 8px; align-items: flex-start; background: #fff; border: 1px solid rgba(15,23,42,.07); border-radius: 11px; padding: 8px 9px; box-shadow: 0 2px 6px rgba(15,23,42,.045); }
+.ui-row .k { flex: none; width: 19px; height: 19px; border-radius: 6px; background: #eef2f8; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #64748b; }
+.ui-row .t { flex: 1; min-width: 0; }
+.ui-row .t b { display: block; font-size: 11px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-row .t span { font-size: 10px; color: #9aa8bf; }
+.ui-row .hint { flex: none; font-size: 9px; font-weight: 800; color: #2563eb; background: #e8f0fe; border-radius: 5px; padding: 2px 5px; }
+.ui-row.skipped { background: #fafbfd; border-style: dashed; color: #9aa8bf; }
+.ui-row.skipped b { color: #9aa8bf; font-weight: 700; }
+/* 便利签 */
+.ui-notes { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 7px; height: 100%; }
+.ui-note { border-radius: 11px; padding: 9px 10px; font-size: 10.5px; line-height: 1.6; box-shadow: 0 3px 9px rgba(15,23,42,.07); display: flex; flex-direction: column; }
+.ui-note b { display: block; font-size: 10.5px; margin-bottom: 3px; }
+.ui-note .pin { float: right; font-size: 9px; opacity: .65; }
+.ui-note .ck { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.ui-note .ck i { width: 8px; height: 8px; border-radius: 2.5px; border: 1.4px solid rgba(15,23,42,.35); display: inline-block; }
+.ui-note .ck.done { text-decoration: line-through; opacity: .5; }
+.ui-note .ck.done i { background: #2563eb; border-color: #2563eb; }
+/* 截图贴图 */
+.ui-desk { position: relative; flex: 1; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg,#dbeafe,#ede9fe 55%,#fce7f3); }
+.ui-sel { position: absolute; left: 14%; top: 18%; width: 56%; height: 40%; border: 1.6px dashed #2563eb; background: rgba(37,99,235,.07); border-radius: 3px; }
+.ui-sel::before { content: "1280 × 640"; position: absolute; top: -19px; left: -1px; font-size: 9px; font-weight: 800; color: #fff; background: #2563eb; border-radius: 5px 5px 0 0; padding: 2px 6px; }
+.ui-toolbar { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; background: rgba(15,23,42,.82); backdrop-filter: blur(4px); padding: 5px 7px; border-radius: 9px; }
+.ui-toolbar span { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: #fff; font-size: 9.5px; background: rgba(255,255,255,.14); }
+.ui-pin { position: absolute; right: 9%; bottom: 14%; width: 40%; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 22px -8px rgba(15,23,42,.5), 0 0 0 3px #fff; background: #fff; }
+.ui-pin .ph { height: 44px; background: linear-gradient(135deg,#93c5fd,#c4b5fd); }
+.ui-pin .pt { font-size: 8.5px; font-weight: 700; color: #475569; padding: 3px 5px; display: flex; align-items: center; gap: 3px; }
+/* 漂浮标注气泡（示意截图里的重点） */
+.float-chip {
+  position: absolute; z-index: 4; display: inline-flex; align-items: center; gap: 7px;
+  background: var(--card); border: 1px solid var(--border);
+  box-shadow: 0 12px 28px -10px rgba(15,23,42,.3);
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  padding: 8px 13px; border-radius: 12px;
+  animation: floaty 4.5s ease-in-out infinite;
+}
+.float-chip .fc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-strong); flex: none; }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.float-chip.fc1 { top: 16%; right: 12%; animation-delay: .3s; }
+.float-chip.fc2 { bottom: 18%; left: 10%; }
+
+/* 左右箭头 */
+.fx-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 30;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--border); color: var(--muted);
+  font-size: 20px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 26px -10px rgba(15,23,42,.3);
+  transition: all .2s;
+}
+.fx-arrow:hover { color: #fff; background: var(--primary); border-color: var(--primary); transform: translateY(-50%) scale(1.08); }
+.fx-arrow.prev { left: -8px; }
+.fx-arrow.next { right: -8px; }
+@media (min-width: 1400px) { .fx-arrow.prev { left: -34px; } .fx-arrow.next { right: -34px; } }
+
+/* 自动播放进度条 */
+.fx-progress { height: 4px; border-radius: 99px; background: rgba(148,163,184,.22); margin: 26px auto 0; max-width: 240px; overflow: hidden; }
+.fx-progress span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--primary), var(--accent)); }
+.fx-progress span.run { animation: fxprogress 9s linear forwards; }
+@keyframes fxprogress { from { width: 0; } to { width: 100%; } }
+.fx-progress.paused span { animation-play-state: paused; }
+
+
+/* 功能切换胶囊栏（轮播下方的 8 个功能选项） */
+.fx-pills {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  margin-top: 24px;
+}
+.fx-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 999px;
+  font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+  color: var(--muted); background: var(--card);
+  border: 1px solid var(--border); cursor: pointer;
+  transition: color .22s, background .22s, border-color .22s, transform .22s, box-shadow .22s;
+}
+.fx-pill .p-ico { width: 15px; height: 15px; flex: none; display: block; }
+.fx-pill:hover {
+  color: var(--primary); border-color: rgba(29,126,240,.42);
+  transform: translateY(-2px); box-shadow: 0 10px 20px -12px rgba(29,126,240,.55);
+}
+.fx-pill.active {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, var(--primary), #38bdf8);
+  box-shadow: 0 12px 24px -12px rgba(29,126,240,.8);
+}
+.fx-pill.active .p-ico { opacity: .95; }
+
+.fx-hint { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--faint); }
+.fx-hint kbd {
+  font-family: inherit; font-size: 11px; font-weight: 800; padding: 2px 7px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--muted);
+  box-shadow: 0 2px 0 var(--border);
+}
+
+/* 轮播响应式 */
+@media (max-width: 1020px) {
+  .fx-stage { height: 640px; }
+  .fx-card { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
+  .fx-info { padding: 28px 26px 8px; }
+  .fx-title { font-size: 24px; }
+  .fx-shot { padding: 12px 26px 26px; min-height: 420px; }
+  .fx-slide:not(.is-active) { opacity: 0 !important; pointer-events: none; }
+}
+@media (max-width: 560px) {
+  .fx-stage { height: 720px; }
+  /* 胶囊栏窄屏改为横向滑动，避免换行成三排占高度 */
+  .fx-pills {
+    flex-wrap: nowrap; justify-content: flex-start;
+    overflow-x: auto; padding: 2px 2px 8px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
+  }
+  .fx-pills::-webkit-scrollbar { display: none; }
+  .fx-pill { flex: none; }
+}
+
+/* ============ 下载安装 ============ */
+.install { padding: 84px 0; background: linear-gradient(180deg, rgba(29,126,240,.06), transparent); }
+.install-card {
+  max-width: 900px; margin: 0 auto; text-align: center;
+  background: var(--card); border: 1px solid rgba(29,126,240,.16);
+  border-radius: 30px; padding: 52px 44px 44px; box-shadow: var(--shadow-lg);
+}
+.install-card img.applogo { width: 68px; height: 68px; border-radius: 20px; margin: 0 auto; box-shadow: 0 12px 30px -8px rgba(29,126,240,.45); }
+.install-card h2 { font-size: 30px; font-weight: 900; margin-top: 16px; letter-spacing: -.02em; }
+.install-card .ver { color: var(--muted); margin-top: 8px; font-size: 14px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; text-align: left; }
+.step { position: relative; background: rgba(148,163,184,.08); border-radius: 18px; padding: 22px 20px 18px; }
+.step .s-no {
+  position: absolute; top: -13px; left: 18px; width: 27px; height: 27px;
+  background: var(--primary); color: #fff; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900;
+  box-shadow: 0 6px 14px -4px rgba(29,126,240,.6);
+}
+.step h3 { font-size: 15.5px; font-weight: 800; }
+.step p { font-size: 13px; color: var(--muted); margin-top: 7px; line-height: 1.7; }
+.smartscreen {
+  margin-top: 30px; display: flex; gap: 11px; text-align: left;
+  background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35);
+  border-radius: 16px; padding: 16px 18px; font-size: 13px; line-height: 1.75; color: #92600a;
+}
+[data-theme="dark"] .smartscreen { color: #fcd34d; }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+
+/* ============ FAQ ============ */
+.faq { padding: 84px 0; }
+.faq h2 { text-align: center; font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
+.faq-list { max-width: 760px; margin: 36px auto 0; display: grid; gap: 14px; }
+details.faq-item {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 18px; padding: 19px 22px;
+}
+details.faq-item summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+  font-weight: 800; font-size: 15px;
+}
+details.faq-item summary::-webkit-details-marker { display: none; }
+details.faq-item summary .chev { transition: transform .25s; color: var(--faint); font-size: 13px; }
+details.faq-item[open] summary .chev { transform: rotate(180deg); }
+details.faq-item p { margin-top: 12px; font-size: 14px; color: var(--muted); line-height: 1.8; }
+details.faq-item code {
+  background: rgba(148,163,184,.16); border-radius: 5px; padding: 1px 5px;
+  font-size: 12.5px; font-family: ui-monospace, Consolas, monospace; color: var(--text);
+}
+
+/* ============ 页脚 ============ */
+footer { border-top: 1px solid var(--border); padding: 40px 0 44px; text-align: center; }
+footer .f-brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; }
+footer .f-brand img { width: 28px; height: 28px; border-radius: 9px; }
+footer .f-slogan { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
+
+/* 每个功能的主题色（通过 --accent-strong 等变量注入 slide） */
+@media (prefers-reduced-motion: reduce) {
+  .demo-panel { animation: none; transform: translateX(0); }
+  .fx-slide { transition: opacity .3s; }
+  .float-chip { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================= 导航 ================= -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand">
+      <img src="./assets/logo.webp?v=0.4.60" alt="Tacco 图标" />
+      <span>Tacco</span>
+    </a>
+    <nav class="nav-links" aria-label="主导航">
+      <a href="#features">功能亮点</a>
+      <a href="#install">安装指南</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <div class="nav-right">
+      <button class="theme-btn" id="themeToggle" aria-label="切换深浅色">🌙</button>
+      <a href="#install" class="btn-primary">免费下载</a>
+    </div>
+  </div>
+</header>
+
+<!-- ================= Hero ================= -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.59 · Windows 版</span></span>
+      <h1>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
+      <p class="lead">
+        Tacco 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
+        鼠标一划即出、用完自动收回。而且它不止是待办——<b>8 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
+      </p>
+      <div class="hero-cta">
+        <a href="#install" class="btn-download" id="mainDownload">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span id="mainDownloadText">下载安装包</span>
+        </a>
+      </div>
+      <p class="hero-meta" id="heroMeta">正在识别你的系统…</p>
+      <div class="alt-dl" id="altDl">
+        <span class="alt-label">不是这台电脑？</span>
+        <a data-dl="win">Windows 版</a>
+        <a data-dl="mac-arm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel">macOS · Intel</a>
+      </div>
+    </div>
+
+    <div class="monitor">
+      <div class="screen">
+        <div class="screen-inner">
+          <img class="wallpaper" src="./assets/wallpaper.webp?v=0.4.60" alt="" />
+          <div class="desktop-icon"><img src="./assets/logo.webp?v=0.4.60" alt="" /><span>Tacco</span></div>
+          <div class="demo-panel">
+            <span class="panel-handle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-6 7 6 7"/></svg></span>
+            <img src="./assets/panel-crop.webp?v=0.4.60" alt="Tacco 待办栏贴边展开演示" />
+          </div>
+          <div class="taskbar">
+            <div class="ticons">
+              <span>⊞</span><span>🔍</span><span>📁</span><span>🌐</span>
+              <img src="./assets/logo.webp?v=0.4.60" alt="" style="width:17px;height:17px;border-radius:4px" />
+            </div>
+            <div class="clock">16:40<br />2026/10/26</div>
+          </div>
+        </div>
+      </div>
+      <div class="monitor-stand"></div>
+      <div class="monitor-base"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 功能轮播（核心区块） ================= -->
+<section class="fx-section" id="features">
+  <div class="wrap">
+    <div class="fx-head">
+      <span class="fx-kicker-line">Features</span>
+      <h2>8 大功能，逐一看过再下载</h2>
+      <p>每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
+    </div>
+
+    <div class="fx-stage-wrap">
+      <button class="fx-arrow prev" id="fxPrev" aria-label="上一个功能">‹</button>
+      <button class="fx-arrow next" id="fxNext" aria-label="下一个功能">›</button>
+
+      <div class="fx-stage" id="fxStage">
+
+        <!-- 01 待办事项 -->
+        <article class="fx-slide" style="--accent-strong:#1d7ef0;--accent-strong-2:#38bdf8;--accent-soft:rgba(29,126,240,.10);--p:#1d7ef0">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">01 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
+                待办事项
+              </div>
+              <h3 class="fx-title">贴在屏幕边缘的待办清单</h3>
+              <p class="fx-slogan">一划即出，用完自动收回，抬眼就能看见今天该做什么</p>
+              <p class="fx-desc">Tacco 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。</p>
+              <ul class="fx-points">
+                <li>日 / 周 / 月三视图，置顶、子任务自由组合</li>
+                <li>重复事项一键跳过法定节假日（数据自动更新）</li>
+                <li>提醒精确到分钟，弹窗 + 声音，再忙也不错过</li>
+                <li>勾选即完成，今日进度条一目了然</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-01-todo.webp?v=0.4.60" alt="待办事项首页截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>⏰ 到点提醒弹窗</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>今日进度条</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 02 生日/纪念日 -->
+        <article class="fx-slide" style="--accent-strong:#ec4899;--accent-strong-2:#f472b6;--accent-soft:rgba(236,72,153,.10);--p:#ec4899">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">02 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v8m-4-4h8M20 12a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
+                生日 / 纪念日
+              </div>
+              <h3 class="fx-title">重要的人，一天都不会忘</h3>
+              <p class="fx-slogan">公历农历都能记，提前提醒，倒计时高亮</p>
+              <p class="fx-desc">把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。</p>
+              <ul class="fx-points">
+                <li>公历 / 农历双历记录，农历生日自动算</li>
+                <li>提前 N 天开始提醒，当天只提醒一次不打扰</li>
+                <li>「还有 X 天」倒计时高亮，最近的日子置顶</li>
+                <li>与待办栏同屏显示，不用来回切换应用</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-02-birthday.webp?v=0.4.60" alt="生日与纪念日记录截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>🎂 倒计时高亮</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>农历 / 公历切换</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 03 计算器 -->
+        <article class="fx-slide" style="--accent-strong:#8b5cf6;--accent-strong-2:#a78bfa;--accent-soft:rgba(139,92,246,.10);--p:#8b5cf6">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">03 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h6"/></svg>
+                计算器
+              </div>
+              <h3 class="fx-title">顺手一按，什么都能算</h3>
+              <p class="fx-slogan">四则运算、日期差、汇率换算，一页全搞定</p>
+              <p class="fx-desc">不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。</p>
+              <ul class="fx-points">
+                <li>基础四则运算，支持键盘连续输入</li>
+                <li>日期差 / 工作日 / 年龄计算</li>
+                <li>长度、重量、温度等单位换算</li>
+                <li>多币种实时汇率换算（联网自动更新）</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>算年假还剩几天、倒推项目工期、海外购物折算人民币。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-03-calculator.webp?v=0.4.60" alt="内置计算器截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>💱 实时汇率</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>键盘直达</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 04 万年历 -->
+        <article class="fx-slide" style="--accent-strong:#f59e0b;--accent-strong-2:#fbbf24;--accent-soft:rgba(245,158,11,.11);--p:#f59e0b">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">04 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg>
+                万年历
+              </div>
+              <h3 class="fx-title">农历、节气、宜忌，一查便知</h3>
+              <p class="fx-slogan">法定节假日休/班标记清晰，安排假期不踩坑</p>
+              <p class="fx-desc">内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。</p>
+              <ul class="fx-points">
+                <li>农历、节气、传统节日完整显示</li>
+                <li>法定节假日「休 / 班」角标，调休不搞混</li>
+                <li>每日宜忌详情，选日子有依据</li>
+                <li>「回到今天」一键返回，任意年月快速跳转</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>安排小长假出行、查农历生日、看黄历挑好日子。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-04-huangli.webp?v=0.4.60" alt="万年历截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>🗓 休/班角标</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>每日宜忌</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 05 牛马计薪器 -->
+        <article class="fx-slide" style="--accent-strong:#10b981;--accent-strong-2:#34d399;--accent-soft:rgba(16,185,129,.10);--p:#10b981">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">05 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7.5c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5-4 1-4 2.5 1.8 2.5 4 2.5 4-1 4-2.5"/></svg>
+                牛马计薪器
+              </div>
+              <h3 class="fx-title">每一秒搬砖，都看得见钱</h3>
+              <p class="fx-slogan">今日已赚实时滚动，下班倒计时精确到秒</p>
+              <p class="fx-desc">填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。</p>
+              <ul class="fx-points">
+                <li>今日已赚 / 日薪 / 时薪实时更新</li>
+                <li>下班 + 发薪双倒计时，精确到秒</li>
+                <li>8 种今日状态按时段自动轮换，可手动切换</li>
+                <li>专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>工作再苦，看着「已赚」数字往上跳，也能笑出声。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame crop">
+                <img src="./assets/shot-05-salary.webp?v=0.4.60" alt="牛马计薪器截图" loading="lazy" />
+              </div>
+              <span class="float-chip fc1"><span class="fc-dot"></span>💰 今日已赚实时滚动</span>
+              <span class="float-chip fc2"><span class="fc-dot"></span>🖥 桌面组件</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 06 截图/贴图 -->
+        <article class="fx-slide" style="--accent-strong:#f43f5e;--accent-strong-2:#fb7185;--accent-soft:rgba(244,63,94,.10);--p:#f43f5e">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">06 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h.9a2 2 0 001.7-.94l.54-.9A2 2 0 019.8 4.2h4.4a2 2 0 011.66.94l.54.9A2 2 0 0018.1 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13.5" r="3.6"/></svg>
+                截图 / 贴图
+              </div>
+              <h3 class="fx-title">截完就贴，钉在桌面上</h3>
+              <p class="fx-slogan">参考图钉在屏幕一角，写文档对资料不再来回切窗口</p>
+              <p class="fx-desc">快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。</p>
+              <ul class="fx-points">
+                <li>窗口 / 区域截图，选区可拖动微调</li>
+                <li>标注工具栏：箭头、画笔、矩形、文字、马赛克等</li>
+                <li>一键贴图钉在桌面：滚轮缩放、透明度可调</li>
+                <li>鼠标穿透模式：贴图不挡下面的操作</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:1020/913">
+                <img src="./assets/shot-06-screenshot.webp?v=0.4.60" alt="Tacco 截图：圈选区域后带标注工具条，可直接贴图或保存" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 07 便利签 -->
+        <article class="fx-slide" style="--accent-strong:#eab308;--accent-strong-2:#facc15;--accent-soft:rgba(234,179,8,.12);--p:#eab308">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">07 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4A5.5 5.5 0 0121 9.5c0 1.33-.47 2.55-1.26 3.5H21l-4.3 4.3a2.4 2.4 0 01-3.4-3.4L16 12h-1.26A5.5 5.5 0 0115.5 4z"/><path d="M4 14a2 2 0 012-2h7a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6z"/></svg>
+                便利签
+              </div>
+              <h3 class="fx-title">灵感随手贴，关机也不丢</h3>
+              <p class="fx-slogan">Alt+N 一键贴一张便签到桌面，重启自动贴回原位</p>
+              <p class="fx-desc">想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。</p>
+              <ul class="fx-points">
+                <li>快捷键一键新建（默认 Alt+N），最多同屏 12 张</li>
+                <li>6 色换肤 + 透明度滑条自定义</li>
+                <li>勾选划线、一键「转待办」进今日清单</li>
+                <li>重启自动恢复原位，多显示器也能回到原屏</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:714/603">
+                <img src="./assets/shot-07-notes.webp?v=0.4.60" alt="Tacco 便利签：桌面上并排贴着的黄色与绿色便签" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 08 剪贴板 -->
+        <article class="fx-slide" style="--accent-strong:#06b6d4;--accent-strong-2:#22d3ee;--accent-soft:rgba(6,182,212,.10);--p:#06b6d4">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">08 / 08</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9.5 4a1.5 1.5 0 013 0M9 11h6M9 14.5h6M9 18h3"/></svg>
+                剪贴板
+              </div>
+              <h3 class="fx-title">复制过的，都帮你留着</h3>
+              <p class="fx-slogan">历史自动记录，键盘选条目，一次带走十几段内容</p>
+              <p class="fx-desc">Tacco 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。</p>
+              <ul class="fx-points">
+                <li>复制历史自动记录，浮窗快捷键随时唤出</li>
+                <li>↑↓ 选择 · Enter 复制 · 数字键 1-9 快选</li>
+                <li>关键词搜索，秒找三天前复制的内容</li>
+                <li>密码管理器内容自动识别跳过，隐私不落盘</li>
+              </ul>
+              <p class="fx-tip"><b>适合场景：</b>汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:432px;--ar:665/861">
+                <img src="./assets/shot-08-clipboard.webp?v=0.4.60" alt="Tacco 剪贴板历史：搜索框、多条复制记录与快捷回贴编号" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- 自动播放进度条 -->
+      <div class="fx-progress" id="fxProgress"><span></span></div>
+
+      <div class="fx-pills" id="fxPills">
+        <button class="fx-pill active" data-goto="0" aria-label="待办事项"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h6"/><path d="M3 5l1.6 1.6L7.4 3.7"/><path d="M3 12l1.6 1.6L7.4 10.7"/><path d="M3 19l1.6 1.6L7.4 17.7"/></svg><span>待办事项</span></button>
+        <button class="fx-pill" data-goto="1" aria-label="生日纪念日"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M4 20v-6.5a2 2 0 012-2h12a2 2 0 012 2V20"/><path d="M8 11.5V9m4 2.5V7.5m4 4V9"/><path d="M8 6.2a1 1 0 100-2 1 1 0 000 2zm4-2a1 1 0 100-2 1 1 0 000 2zm4 2a1 1 0 100-2 1 1 0 000 2z"/></svg><span>生日纪念日</span></button>
+        <button class="fx-pill" data-goto="2" aria-label="计算器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h.01M9 18.5h6"/></svg><span>计算器</span></button>
+        <button class="fx-pill" data-goto="3" aria-label="万年历"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg><span>万年历</span></button>
+        <button class="fx-pill" data-goto="4" aria-label="牛马计薪器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.3"/><path d="M6.5 7V5.6A1.6 1.6 0 018.1 4H16"/></svg><span>牛马计薪器</span></button>
+        <button class="fx-pill" data-goto="5" aria-label="截图贴图"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14a1 1 0 001 1h13"/><path d="M17 21V7a1 1 0 00-1-1H3"/><circle cx="13.5" cy="10.5" r="1.5"/></svg><span>截图贴图</span></button>
+        <button class="fx-pill" data-goto="6" aria-label="便利签"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h7.5"/><path d="M20 13.5l-6.5 6.5v-4.5a2 2 0 012-2H20z"/><path d="M8 9h8M8 12.5h5"/></svg><span>便利签</span></button>
+        <button class="fx-pill" data-goto="7" aria-label="剪贴板"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9.5 4.5V3.6A1.6 1.6 0 0111.1 2h1.8a1.6 1.6 0 011.6 1.6v.9z"/><path d="M9 11h6M9 15h6"/></svg><span>剪贴板</span></button>
+      </div>
+      <p class="fx-hint">点击下方功能名 / 鼠标拖拽 / <kbd>←</kbd><kbd>→</kbd> 方向键 / 点两侧卡片均可切换 · 悬停暂停自动播放</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 下载安装 ================= -->
+<section class="install" id="install">
+  <div class="wrap">
+    <div class="install-card">
+      <img class="applogo" src="./assets/logo.webp?v=0.4.60" alt="Tacco 图标" />
+      <h2 id="installTitle">下载并安装到电脑</h2>
+      <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.58 · 免费下载</p>
+      <div class="hero-cta" style="justify-content:center;margin-top:28px;">
+        <a href="./Tacco-setup.exe" class="btn-download" id="installDownload">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span id="installDownloadText">下载 Tacco-setup.exe</span>
+        </a>
+      </div>
+      <div class="alt-dl" style="justify-content:center;margin-top:12px;" id="installAlt">
+        <span class="alt-label">其它平台：</span>
+        <a data-dl="win">Windows 版</a>
+        <a data-dl="mac-arm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel">macOS · Intel</a>
+      </div>
+      <div class="steps" id="installSteps">
+        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。</p></div>
+      </div>
+      <div class="smartscreen" id="installNote">
+        <span style="font-size:17px;line-height:1.4;">⚠️</span>
+        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>常见问题</h2>
+    <div class="faq-list">
+      <details class="faq-item" open>
+        <summary>Tacco 是免费的吗？<span class="chev">▾</span></summary>
+        <p>Tacco 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。</p>
+      </details>
+      <details class="faq-item">
+        <summary>我的数据存在哪里？安全吗？<span class="chev">▾</span></summary>
+        <p>数据默认保存在你自己的电脑上（本地优先）；开启云同步后才会加密传输到你自己的云端服务，不上传给任何第三方。剪贴板历史中的密码内容也会自动识别并跳过记录。</p>
+      </details>
+      <details class="faq-item">
+        <summary>支持哪些系统？<span class="chev">▾</span></summary>
+        <p>目前正式支持 <b>Windows 10 / 11（64 位）</b>，安装包约 17 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。<b>macOS 版正在内测</b>，暂未开放下载。</p>
+      </details>
+      <details class="faq-item">
+        <summary>Mac 版什么时候能用？<span class="chev">▾</span></summary>
+        <p>macOS 版已完成基础适配，目前处于内测阶段（截图贴图、剪贴板历史等系统级能力仍在适配），<b>暂不开放下载</b>。内测完成后会在本页开放入口，并同步更新下载链接。现阶段建议先在 Windows 上体验完整功能。</p>
+      </details>
+      <details class="faq-item">
+        <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
+        <p>不会。Tacco 只在需要时渲染一条细边和一个小面板，空闲时几乎不占用 CPU，内存占用也远低于常驻的聊天软件。</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 页脚 ================= -->
+<footer>
+  <div class="wrap">
+    <a href="#top" class="f-brand"><img src="./assets/logo.webp?v=0.4.60" alt="Tacco" /><span>Tacco</span></a>
+    <p class="f-slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
+    <p class="f-copy">© <span id="fYear">2026</span> Tacco. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+/* ============ 深浅色切换 ============ */
+const root = document.documentElement;
+const saved = localStorage.getItem('todobar-site-theme');
+const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+root.dataset.theme = dark ? 'dark' : 'light';
+document.getElementById('themeToggle').textContent = dark ? '☀️' : '🌙';
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const d = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = d;
+  localStorage.setItem('todobar-site-theme', d);
+  document.getElementById('themeToggle').textContent = d === 'dark' ? '☀️' : '🌙';
+});
+
+/* ============ 按设备自动匹配安装包 ============ */
+(function () {
+  /* 当前安装包版本:优先读同源 version.json(与实际安装包一致),失败则用内置兜底值。
+     dmg 文件名按 version.json 的版本号动态拼接。
+     说明:dmg 自托管在本下载站(与安装包同目录),文件名按 VER 动态拼接。
+     若改回指向 GitHub Release 直链,把 DMG_BASE 改为 'https://github.com/Sam5201-ai/todobar/releases/download/v'+VER+'/' 即可。 */
+  let VER = '0.4.59';
+  let currentKey = null;
+  const DMG_BASE = './';
+
+  /* ============ Mac 开放开关 ============
+     当前阶段只验证 Windows 端付费意愿,macOS 版内测中、不对外提供下载。
+     内测完成要开放 Mac 时,把 MAC_OPEN 改成 true 即可:
+     下载配置(mac-arm / mac-intel)、安装步骤、放行提示、FAQ 都已就绪,
+     打开后会自动恢复「按设备匹配 macOS 安装包」与平台切换条。 */
+  const MAC_OPEN = false;
+  const IS_MAC = /Macintosh|Mac OS X/i.test(navigator.userAgent || '');
+
+  function dlMap() {
+    const dmgArm = 'Tacco_' + VER + '_aarch64.dmg';
+    const dmgX64 = 'Tacco_' + VER + '_x64.dmg';
+    return {
+      win: {
+        label: '下载 Windows 安装包',
+        btn: '下载 Tacco-setup.exe',
+        meta: 'Windows 10 / 11 · 64 位 · 约 40 MB · 免费下载 · 无需管理员权限',
+        ver: 'Windows 10 / 11 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载',
+        /* ?v= 让每个版本的下载 URL 唯一,避免浏览器/边缘缓存返回旧安装包 */
+        href: './Tacco-setup.exe?v=' + VER,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">⚠️</span>
+        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>`
+      },
+      'mac-arm': {
+        label: '下载 macOS 版（Apple 芯片）',
+        btn: '下载 ' + dmgArm,
+        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 18 MB · Beta 测试中',
+        ver: 'macOS 12+ · Apple 芯片 · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgArm 并放好 dmg */
+        href: DMG_BASE + dmgArm,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgArm}</b>（Apple 芯片版）。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
+        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
+      },
+      'mac-intel': {
+        label: '下载 macOS 版（Intel）',
+        btn: '下载 ' + dmgX64,
+        meta: 'macOS 12+ · Intel 处理器 · 约 18 MB · Beta 测试中',
+        ver: 'macOS 12+ · Intel · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgX64 并放好 dmg */
+        href: DMG_BASE + dmgX64,
+        steps: `
+        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgX64}</b>（Intel 版）。</p></div>
+        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
+        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
+        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
+        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。</span>`
+      }
+    };
+  }
+
+  /* 自动判断:仅 Windows 提供下载;macOS 视 MAC_OPEN 决定给不给 dmg */
+  function detect() {
+    if (IS_MAC) return MAC_OPEN ? 'mac-arm' : 'win';
+    return 'win';
+  }
+
+  /* macOS 访客(MAC 未开放时):把主按钮从「下载 exe」改成「内测中」并说明,
+     避免 Mac 用户点了下载到一个自己跑不起来的安装包。 */
+  function applyMacClosed() {
+    const md = document.getElementById('mainDownload');
+    if (md) {
+      md.removeAttribute('download');
+      md.setAttribute('href', '#faq');
+    }
+    const t = document.getElementById('mainDownloadText');
+    if (t) t.textContent = 'macOS 版内测中';
+    const hm = document.getElementById('heroMeta');
+    if (hm) {
+      hm.textContent = '检测到你正在使用 macOS：Mac 版正在内测，暂未开放下载，开放后会在本页公布。';
+    }
+    const iv = document.getElementById('installVer');
+    if (iv) iv.textContent = '当前仅提供 Windows 版 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载';
+  }
+
+  function paintBadge() {
+    const badge = document.getElementById('osBadge');
+    if (badge) {
+      badge.textContent =
+        'v' + VER + (MAC_OPEN ? ' · Windows 已发布 · macOS Beta' : ' · Windows 版');
+    }
+  }
+
+  function apply(key) {
+    const d = dlMap()[key]; if (!d) return;
+    currentKey = key;
+    document.documentElement.dataset.os = key === 'win' ? 'win' : 'mac';
+    document.getElementById('mainDownloadText').textContent = d.label;
+    document.getElementById('heroMeta').textContent = d.meta;
+    document.getElementById('installVer').textContent = d.ver;
+    document.getElementById('installDownloadText').textContent = d.btn;
+    /* 主按钮/安装区按钮指向真实安装包(下载而非跳转) */
+    const md = document.getElementById('mainDownload');
+    md.setAttribute('href', d.href);
+    md.setAttribute('download', '');
+    const idl = document.getElementById('installDownload');
+    idl.setAttribute('href', d.href);
+    idl.setAttribute('download', '');
+    idl.removeAttribute('onclick');
+    document.getElementById('installSteps').innerHTML = d.steps;
+    document.getElementById('installNote').innerHTML = d.note;
+    document.querySelectorAll('.alt-dl a').forEach(a => {
+      a.classList.toggle('current', a.dataset.dl === key);
+    });
+    /* 重新量一次轮播高度（安装区文字变化不影响，但保持一致性） */
+    if (window.__fxFit) window.__fxFit();
+    if (IS_MAC && !MAC_OPEN) applyMacClosed();
+    /* 重新做一次下载链接改写:埋点脚本的 /download 中转会被上面的 href 重置覆盖 */
+    if (window.__rewriteDownloads) window.__rewriteDownloads();
+  }
+
+  document.querySelectorAll('.alt-dl a').forEach(a => {
+    a.addEventListener('click', (e) => { e.preventDefault(); apply(a.dataset.dl); });
+  });
+
+  /* Mac 入口关闭时:隐藏 macOS 下载链接与「不是这台电脑？」切换条
+     (只剩 Windows 一个选项,切换条没有意义) */
+  if (!MAC_OPEN) {
+    document.querySelectorAll('.alt-dl a[data-dl^="mac-"]').forEach(a => {
+      a.style.display = 'none';
+    });
+    if (!document.querySelector('.alt-dl a[data-dl^="mac-"]:not([style*="display: none"])')) {
+      document.querySelectorAll('.alt-dl').forEach(el => { el.style.display = 'none'; });
+    }
+  }
+
+  apply(detect());
+  paintBadge();
+
+  /* version.json 到达后刷新版本号与下载链接(与线上安装包严格一致) */
+  fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      const v = data && data.version;
+      if (!v) return;
+      VER = String(v).replace(/^v/, '');
+      paintBadge();
+      if (currentKey) apply(currentKey);
+    })
+    .catch(() => { /* 保留页面内置版本号 */ });
+})();
+
+/* ============ 功能轮播 ============ */
+(function () {
+  const stage = document.getElementById('fxStage');
+  const slides = Array.from(stage.querySelectorAll('.fx-slide'));
+  const pills = Array.from(document.querySelectorAll('.fx-pill'));
+  const progressWrap = document.getElementById('fxProgress');
+  const progress = progressWrap.querySelector('span');
+  const AUTO_MS = 9000;
+  let active = 0;
+  let autoTimer = null;
+  let dragging = false, dragX = 0, dragDX = 0, dragPointer = null;
+
+  function layout() {
+    const w = stage.clientWidth;
+    slides.forEach((s, i) => {
+      const off = i - active;
+      const ax = Math.abs(off);
+      let tf, op, filter, z;
+      if (ax > 2.4) { tf = 'translateX(-50%) scale(.4)'; op = 0; z = 1; filter = 'brightness(.6)'; }
+      else {
+        const x = off * Math.min(w * 0.46, 560) + (dragging ? dragDX * .25 : 0);
+        const rot = -off * 17 - (dragging ? dragDX * 0.012 : 0);
+        const sc = Math.max(1 - ax * 0.16, 0.62);
+        op = ax === 0 ? 1 : (ax <= 1 ? 0.9 : 0.45);
+        filter = ax === 0 ? 'none' : `brightness(${1 - ax * 0.18}) saturate(.9)`;
+        z = 100 - Math.round(ax * 10);
+        tf = `translateX(calc(-50% + ${x}px)) rotateY(${rot}deg) scale(${sc})`;
+      }
+      s.style.transform = tf;
+      s.style.opacity = op;
+      s.style.zIndex = z;
+      s.style.filter = filter;
+      s.style.pointerEvents = ax <= 1 ? 'auto' : 'none';
+      s.classList.toggle('is-active', i === active);
+    });
+    pills.forEach((p, pi) => p.classList.toggle('active', pi === active));
+  }
+
+  /* 自适应高度：按最高的左栏文案撑开舞台，避免长短不一的卡片被裁切 */
+  function fitStage() {
+    if (matchMedia('(max-width: 1020px)').matches) { stage.style.height = ''; return; }
+    const prevH = stage.style.height;
+    stage.style.height = '1500px';
+    let max = 0;
+    slides.forEach(s => {
+      const info = s.querySelector('.fx-info');
+      if (!info) return;
+      const oldH = info.style.height, oldA = info.style.alignSelf;
+      /* grid item 默认 stretch，必须临时取消拉伸才能量到内容自然高度 */
+      info.style.alignSelf = 'start';
+      info.style.height = 'auto';
+      max = Math.max(max, info.offsetHeight);
+      info.style.height = oldH;
+      info.style.alignSelf = oldA;
+    });
+    stage.style.height = prevH;
+    if (!max) return;
+    /* 右侧截图也要留出高度：竖版截图框 424×556 + 上下 padding，舞台最低 640 */
+    stage.style.height = Math.max(640, Math.min(max + 16, 860)) + 'px';
+  }
+  window.__fxFit = fitStage;
+
+  function go(i, user) {
+    active = ((i % slides.length) + slides.length) % slides.length;
+    layout();
+    restartProgress();
+    if (user) restartAuto();
+  }
+
+  /* 自动播放 + 进度条 */
+  function restartProgress() {
+    progress.classList.remove('run');
+    void progress.offsetWidth; /* 重置动画 */
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) progress.classList.add('run');
+  }
+  function restartAuto() {
+    clearInterval(autoTimer);
+    autoTimer = setInterval(() => go(active + 1), AUTO_MS);
+  }
+  function pauseAuto() { clearInterval(autoTimer); autoTimer = null; progressWrap.classList.add('paused'); }
+  function resumeAuto() { if (!autoTimer) restartAuto(); progressWrap.classList.remove('paused'); }
+
+  /* 交互绑定 */
+  document.getElementById('fxPrev').addEventListener('click', () => go(active - 1, true));
+  document.getElementById('fxNext').addEventListener('click', () => go(active + 1, true));
+  /* 点击两侧的相邻卡片切换 */
+  slides.forEach((s, i) => s.addEventListener('click', (e) => {
+    if (dragging || Math.abs(dragDX) > 6) return;
+    if (i !== active) { e.preventDefault(); go(i, true); }
+  }));
+  /* 点击胶囊直接跳到对应功能 */
+  pills.forEach((p, pi) => p.addEventListener('click', () => go(pi, true)));
+  /* 键盘 */
+  addEventListener('keydown', (e) => {
+    const rect = stage.getBoundingClientRect();
+    if (rect.top > innerHeight || rect.bottom < 0) return;
+    if (e.key === 'ArrowLeft') go(active - 1, true);
+    if (e.key === 'ArrowRight') go(active + 1, true);
+  });
+  /* 拖拽 / 触摸滑动 */
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true; dragX = e.clientX; dragDX = 0;
+    stage.classList.add('dragging');
+    stage.setPointerCapture(e.pointerId);
+    pauseAuto();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dragDX = e.clientX - dragX;
+    layout();
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    stage.classList.remove('dragging');
+    if (dragDX < -60) go(active + 1, true);
+    else if (dragDX > 60) go(active - 1, true);
+    else { dragDX = 0; layout(); }
+    dragging = false; dragDX = 0;
+    resumeAuto();
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  /* 悬停暂停自动播放 */
+  stage.addEventListener('mouseenter', pauseAuto);
+  stage.addEventListener('mouseleave', () => { if (!dragging) resumeAuto(); });
+  addEventListener('resize', () => { fitStage(); layout(); });
+
+  /* 启动 */
+  fitStage();
+  go(0);
+  /* 字体加载完成后重新量一次，避免字体度量变化导致再次裁切 */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { fitStage(); layout(); });
+  }
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) restartAuto();
+})();
+</script>
+<script>
+  // ===== 数据埋点 v2:设备指纹 + Cookie 双写 + 会话去重 + 下载中转(失败静默) =====
+  ;(function () {
+    const TRACK_URL = '/api/track'
+
+    // 设备指纹:canvas/webgl/硬件特征哈希,清缓存/重装后同机仍稳定(零第三方依赖)
+    function fingerprint() {
+      try {
+        const c = document.createElement('canvas')
+        const x = c.getContext('2d')
+        x.textBaseline = 'top'
+        x.font = "14px 'Arial'"
+        x.fillStyle = '#f60'
+        x.fillRect(125, 1, 62, 20)
+        x.fillStyle = '#069'
+        x.fillText('Tacco', 2, 15)
+        x.fillStyle = 'rgba(102,204,0,0.7)'
+        x.fillText('Tacco', 4, 17)
+        const ch = c.toDataURL().slice(-64)
+        let gl = null
+        try {
+          gl = document.createElement('webgl') || document.createElement('experimental-webgl')
+        } catch (e) {}
+        let wg = ''
+        if (gl) {
+          const d = gl.getExtension('WEBGL_debug_renderer_info')
+          if (d) wg = gl.getParameter(d.UNMASKED_RENDERER_WEBGL) + '|' + gl.getParameter(d.UNMASKED_VENDOR_WEBGL)
+        }
+        const parts = [
+          ch,
+          wg,
+          navigator.hardwareConcurrency || '',
+          navigator.deviceMemory || '',
+          screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+          new Date().getTimezoneOffset(),
+          (navigator.languages || []).join(','),
+          navigator.platform || '',
+          navigator.userAgent,
+        ]
+        let h = 2166136261
+        const s = parts.join('###')
+        for (let i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i)
+          h = Math.imul(h, 16777619)
+        }
+        return ('0000000' + (h >>> 0).toString(16)).slice(-8)
+      } catch (e) {
+        return 'fp-' + Math.random().toString(36).slice(2, 10)
+      }
+    }
+
+    // 稳定设备 ID:持久 ID(localStorage + Cookie 双写)优先,缺失时用指纹兜底
+    function visitorId() {
+      try {
+        let vid = localStorage.getItem('todobar-site-vid')
+        if (!vid) {
+          vid = 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+          localStorage.setItem('todobar-site-vid', vid)
+        }
+        const exp = new Date(Date.now() + 365 * 864e5).toUTCString()
+        document.cookie = 'todobar-site-vid=' + encodeURIComponent(vid) + ';path=/;max-age=31536000;SameSite=Lax'
+        return vid
+      } catch (e) {
+        return 'anon-' + Math.random().toString(36).slice(2, 12)
+      }
+    }
+
+    const vid = visitorId()
+    const device = fingerprint()
+
+    function track(events) {
+      try {
+        const payload = JSON.stringify({ source: 'site', events })
+        if (navigator.sendBeacon) {
+          const ok = navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }))
+          if (ok) return
+        }
+        fetch(TRACK_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {})
+      } catch (e) { /* 埋点失败绝不影响页面体验 */ }
+    }
+
+    // 会话 ID:同一次进入只上报 1 条 site_visit(进入次数,不随页内点击累加)
+    function sessionId() {
+      try {
+        let sid = sessionStorage.getItem('todobar-site-sid')
+        if (!sid) {
+          sid = 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+          sessionStorage.setItem('todobar-site-sid', sid)
+        }
+        return sid
+      } catch (e) {
+        return null
+      }
+    }
+
+    // 页面访问(设备去重 UV) + 进入会话(进入次数)
+    track([
+      { event: 'pageview', page: 'download', visitor: vid, device },
+      { event: 'site_visit', page: 'download', visitor: vid, device, sess: sessionId() },
+    ])
+
+    // 下载链接改写:点击前指向 /download 中转(带设备 + 缓存击穿参数)
+    function rewriteDownloads() {
+      document.querySelectorAll('a[download], a[href$=".exe"], a[href$=".dmg"]').forEach((a) => {
+        try {
+          const href = a.getAttribute('href') || ''
+          if (!href || href.indexOf('/download/') === 0) return
+          const u = new URL(href, location.href)
+          u.pathname = '/download' + u.pathname
+          u.searchParams.set('d', device)
+          a.setAttribute('href', u.pathname + u.search)
+        } catch (e) {}
+      })
+    }
+    rewriteDownloads()
+    /* 暴露给安装包匹配脚本:版本号异步刷新会重设 href,需要再改写一次,
+       否则这部分下载会绕过 /download 中转、丢失归因。 */
+    window.__rewriteDownloads = rewriteDownloads
+
+    // 下载点击:记录下载设备数(去重)。链接已改写走 /download 中转,由 server.js 记录归因
+    document.addEventListener('click', (e) => {
+      const t = e.target
+      const a = t && t.closest ? t.closest('a[download], a[href$=".exe"], a[href$=".dmg"]') : null
+      if (!a) return
+      track([{ event: 'download_click', page: 'download', visitor: vid, device, meta: (a.getAttribute('href') || '').slice(0, 120) }])
+    })
+  })()
+  // 版权年份
+  document.getElementById('fYear').textContent = new Date().getFullYear()
+</script>
+</body>
+</html>
+
