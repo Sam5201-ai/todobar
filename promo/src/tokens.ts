@@ -1,4 +1,4 @@
-// TickTask 品牌色板 —— 从 release/index.html（tailwind 主题）与真实界面截图提取
+// Tacco 品牌色板 —— 从 release/index.html（tailwind 主题）与真实界面截图提取
 export const C = {
   primary: '#1d7ef0', // 主色（logo 蓝 / 选中 / 链接）
   primaryLight: '#3d97f5',

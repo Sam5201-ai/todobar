@@ -56,7 +56,7 @@ fn save_update_file(data: String) -> Result<String, String> {
     let bytes = STANDARD
         .decode(data.trim())
         .map_err(|e| format!("解码安装包失败: {e}"))?;
-    let dest = std::env::temp_dir().join("TickTask-setup.exe");
+    let dest = std::env::temp_dir().join("Tacco-setup.exe");
     // 上一次更新中断可能留下被占用的残留文件(如安装向导还开着),先尝试删除。
     let _ = std::fs::remove_file(&dest);
     let mut file = std::fs::File::create(&dest).map_err(|e| format!("创建文件失败: {e}"))?;
@@ -127,7 +127,7 @@ fn install_update(path: String, app: tauri::AppHandle) -> Result<(), String> {
 // 产生「管理员权限」的实例。提权实例隐藏在托盘常驻并锁死 WebView2 用户数据目录
 // (%LOCALAPPDATA%\<identifier>\EBWebView),之后所有普通权限实例的 WebView2 环境创建
 // 都会失败——主进程活着、窗口有画面(死帧),但任何点击都无响应,且卸载重装均无效。
-// 另外 productName 从 0.1.x 的 Todobar 改为 TickTask 后,旧版写入的自启动注册表条目
+// 另外 productName 从 0.1.x 的 Todobar 改为 Tacco 后,旧版写入的自启动注册表条目
 // (Todobar -> D:\电脑软件\Todobar\todobar.exe)永远不会被新版的自愈逻辑覆盖,
 // 导致每次开机自启的都是旧版本。
 // ============================================================================
@@ -168,7 +168,7 @@ fn win_msg_box(text: &str) {
         use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONWARNING, MB_OK};
         let mut w: Vec<u16> = text.encode_utf16().collect();
         w.push(0);
-        let mut t: Vec<u16> = "TickTask".encode_utf16().collect();
+        let mut t: Vec<u16> = "Tacco".encode_utf16().collect();
         t.push(0);
         unsafe {
             MessageBoxW(None, PCWSTR(w.as_ptr()), PCWSTR(t.as_ptr()), MB_OK | MB_ICONWARNING);
@@ -213,7 +213,7 @@ fn handle_elevation(app: &tauri::AppHandle) {
             // 上一次降权重启后仍是提权(异常环境),不再循环,给出指引后继续运行。
             let _ = std::fs::remove_file(&flag);
             win_msg_box(
-                "TickTask 正以管理员身份运行,这可能导致界面假死。\n\
+                "Tacco 正以管理员身份运行,这可能导致界面假死。\n\
                  请关闭本程序后,直接双击桌面图标启动(不要右键\"以管理员身份运行\")。",
             );
             return;
@@ -327,7 +327,7 @@ fn spawn_webview_watchdog() {
             "主界面未能加载:WebView2 无法启动。\n\n\
              最常见原因是上一次更新/重装残留的后台进程仍占用数据目录。\n\n\
              恢复方法(二选一):\n\
-             1. 重启电脑后再次打开 TickTask(推荐);\n\
+             1. 重启电脑后再次打开 Tacco(推荐);\n\
              2. 打开任务管理器,结束所有 todobar.exe 进程后重新打开本程序。",
         );
     });
@@ -815,18 +815,18 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(
         app,
         "toggle",
-        "打开 / 关闭 TickTask",
+        "打开 / 关闭 Tacco",
         true,
         Some("CmdOrCtrl+Shift+T"),
     )?;
     let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
     let clipboard = MenuItem::with_id(app, "clipboard", "剪贴板历史", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 TickTask", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出 Tacco", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&toggle, &settings, &clipboard, &quit])?;
     let icon = app.default_window_icon().cloned();
 
     let mut tray = TrayIconBuilder::with_id("todobar")
-        .tooltip("TickTask")
+        .tooltip("Tacco")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -913,15 +913,15 @@ fn normalize_shortcut(s: &str) -> String {
     s.replace([' ', '\t'], "").to_lowercase()
 }
 
-/// 更新托盘菜单中「打开 / 关闭 TickTask」项的快捷键显示文字(纯展示,实际由全局快捷键触发)。
+/// 更新托盘菜单中「打开 / 关闭 Tacco」项的快捷键显示文字(纯展示,实际由全局快捷键触发)。
 fn update_tray_toggle_accelerator(app: &tauri::AppHandle, shortcut: &str) {
     // Tauri 加速器格式用 CmdOrCtrl,而非 CommandOrControl。
     let accel = shortcut.replace("CommandOrControl", "CmdOrCtrl");
     if let Some(tray) = app.tray_by_id("todobar") {
         if let (Ok(toggle), Ok(settings), Ok(quit)) = (
-            MenuItem::with_id(app, "toggle", "打开 / 关闭 TickTask", true, Some(accel.clone())),
+            MenuItem::with_id(app, "toggle", "打开 / 关闭 Tacco", true, Some(accel.clone())),
             MenuItem::with_id(app, "settings", "设置", true, None::<&str>),
-            MenuItem::with_id(app, "quit", "退出 TickTask", true, None::<&str>),
+            MenuItem::with_id(app, "quit", "退出 Tacco", true, None::<&str>),
         ) {
                 if let Ok(menu) = Menu::with_items(app, &[&toggle, &settings, &quit]) {
                 let _ = tray.set_menu(Some(menu));
@@ -1170,7 +1170,7 @@ fn open_salary_widget(app: tauri::AppHandle, style: String, raise: Option<bool>)
                 cand.as_str(),
                 tauri::WebviewUrl::App(std::path::PathBuf::new()),
             )
-            .title("TickTask 计薪组件")
+            .title("Tacco 计薪组件")
             // ⚠️ [0.4.38 根因修复] 必须与主窗口 additionalBrowserArgs 完全一致!
             // WebView2 硬性约束:同一进程内、同一用户数据目录,两个 webview 的
             // CoreWebView2EnvironmentOptions 不一致时,第二个环境创建必失败
@@ -1305,10 +1305,10 @@ fn save_screenshot_settings(json: String) -> Result<(), String> {
 // - 回放走系统默认播放器(cmd /C start),定位走 explorer /select。
 // ---------------------------------------------------------------------------
 
-/// 默认录音根目录:文档\TickTask录音(不存在时由各命令按需创建)。
+/// 默认录音根目录:文档\Tacco录音(不存在时由各命令按需创建)。
 fn recordings_dir_path() -> Result<PathBuf, String> {
     let doc = dirs::document_dir().ok_or_else(|| "无法定位「文档」目录".to_string())?;
-    Ok(doc.join("TickTask录音"))
+    Ok(doc.join("Tacco录音"))
 }
 
 /// 解析录音目录:dir 为空 → 默认目录;自定义目录必须为绝对路径。
@@ -1627,6 +1627,13 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                    // [0.4.57] 关闭=仅隐藏(托盘应用标准做法):隐藏后必须通知前端把
+                    // isOpen 复位为「收起」,否则前端状态停留在 open,下次托盘单击
+                    // 被取反成收起,要连点两次且窗口从未 show() —— 表现为「托盘点了
+                    // 也打不开窗口」。收到此事件后单击托盘即可直接重新展开。
+                    let _ = window
+                        .app_handle()
+                        .emit_to("main", "todobar-window-hidden", ());
                 }
             }
             tauri::WindowEvent::Destroyed => {

@@ -622,7 +622,7 @@ pub fn open_clipboard_window(app: tauri::AppHandle) {
             WINDOW_LABEL,
             WebviewUrl::App(PathBuf::new()),
         )
-        .title("TickTask 剪贴板")
+        .title("Tacco 剪贴板")
         // ⚠️ 必须与主窗口 additionalBrowserArgs 完全一致(0.4.38 血案根因)。
         .additional_browser_args(
             crate::BROWSER_ARGS,

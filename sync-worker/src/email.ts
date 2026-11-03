@@ -14,13 +14,13 @@ const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
 function defaultFrom(): string {
   // 没有配置发件域名时给一个占位;部署时务必在环境变量里填已验证的发信地址。
-  return 'TickTask <noreply@ticktask.app>'
+  return 'Tacco <noreply@ticktask.app>'
 }
 
 function buildHtml(code: string, purpose: string): string {
   const title = purpose === 'reset' ? '重置密码验证码' : '注册验证码'
   return `<div style="font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#f8fafc;border-radius:12px">
-  <h2 style="color:#0f172a;margin:0 0 12px">TickTask 验证码</h2>
+  <h2 style="color:#0f172a;margin:0 0 12px">Tacco 验证码</h2>
   <p style="color:#334155;font-size:14px;line-height:1.6">你好,你的${title}是:</p>
   <div style="font-size:28px;font-weight:700;letter-spacing:6px;color:#1d7ef0;margin:12px 0">${code}</div>
   <p style="color:#64748b;font-size:12px;line-height:1.6">该验证码 10 分钟内有效。若非本人操作,请忽略此邮件。</p>
@@ -39,7 +39,7 @@ export async function sendCodeEmail(
     console.error('[email] RESEND_API_KEY 未配置,无法发信')
     return { ok: false, error: '邮件服务未配置,暂不能发送验证码' }
   }
-  const subject = purpose === 'reset' ? 'TickTask 密码重置验证码' : 'TickTask 注册验证码'
+  const subject = purpose === 'reset' ? 'Tacco 密码重置验证码' : 'Tacco 注册验证码'
   const from = env.RESEND_FROM || defaultFrom()
   try {
     const res = await fetch(RESEND_ENDPOINT, {
@@ -52,7 +52,7 @@ export async function sendCodeEmail(
         from,
         to,
         subject,
-        text: `你的 TickTask 验证码是 ${code}(10 分钟内有效)。若非本人操作请忽略。`,
+        text: `你的 Tacco 验证码是 ${code}(10 分钟内有效)。若非本人操作请忽略。`,
         html: buildHtml(code, purpose),
       }),
     })
@@ -71,7 +71,7 @@ export async function sendCodeEmail(
       if (detail) error += `: ${detail}`
       // Resend 未验证域名时的典型限制:测试发件人只能发给注册 Resend 的邮箱
       if (/testing emails|own email address|verify a domain/i.test(detail)) {
-        error += ' —— 说明:Resend 测试发件人(onboarding@resend.dev)只能发给你注册 Resend 用的那个邮箱;要发给任意邮箱(如 QQ 邮箱),需在 Resend 后台 Domains 里添加你的域名并完成 DNS 验证,再把 RESEND_FROM 改为该域名下的地址(如 TickTask <noreply@你的域名>)'
+        error += ' —— 说明:Resend 测试发件人(onboarding@resend.dev)只能发给你注册 Resend 用的那个邮箱;要发给任意邮箱(如 QQ 邮箱),需在 Resend 后台 Domains 里添加你的域名并完成 DNS 验证,再把 RESEND_FROM 改为该域名下的地址(如 Tacco <noreply@你的域名>)'
       }
       return { ok: false, error }
     }

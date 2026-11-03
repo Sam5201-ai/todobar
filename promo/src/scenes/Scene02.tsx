@@ -50,7 +50,7 @@ export const Scene02: React.FC = () => {
   const sloganS = spring({ frame: Math.max(0, f - 46), fps, config: { damping: 15 } });
 
   // 品牌名逐字入场
-  const brand = 'TickTask'.split('');
+  const brand = 'Tacco'.split('');
 
   return (
     <AbsoluteFill

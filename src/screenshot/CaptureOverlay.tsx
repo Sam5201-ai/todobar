@@ -730,7 +730,7 @@ export default function CaptureOverlay() {
       // 「另存为」:弹出系统保存对话框,用户自选目录与文件名。
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
-      const name = `TickTask-截屏-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+      const name = `Tacco-截屏-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
       const target = await saveFileDialog({
         defaultPath: name,
         filters: [{ name: 'PNG 图片', extensions: ['png'] }],

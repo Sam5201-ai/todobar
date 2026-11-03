@@ -24,7 +24,7 @@ function showFatal(title: string, detail?: string) {
         String(detail).slice(0, 2000) +
         '</div>'
       : '') +
-    '<div style="margin-top:16px;color:#555">如反复出现,可删除应用数据目录后重试(Windows: %LOCALAPPDATA%\\TickTask 与用户目录下的 .ticktask),并查看 ~/.ticktask/logs/app.log</div>'
+    '<div style="margin-top:16px;color:#555">如反复出现,可删除应用数据目录后重试(Windows: %LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask),并查看 ~/.ticktask/logs/app.log</div>'
   root.appendChild(box)
 }
 
@@ -44,7 +44,7 @@ window.setTimeout(() => {
       '应用启动超时(界面未能加载)',
       '可能是本地数据库初始化阻塞或环境异常。请尝试:\n' +
         '1) 关闭后重新打开;\n' +
-        '2) 删除 %LOCALAPPDATA%\\TickTask 与用户目录下的 .ticktask 后重开;\n' +
+        '2) 删除 %LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask 后重开;\n' +
         '3) 查看 ~/.ticktask/logs/app.log 中的报错。',
     )
   }

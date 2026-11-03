@@ -150,7 +150,7 @@ export const HeadIcons: React.FC<{ dark?: boolean }> = ({ dark }) => {
   );
 };
 
-// 面板顶部栏：logo + TickTask + 四图标
+// 面板顶部栏：logo + Tacco + 四图标
 export const PanelHeader: React.FC<{ dark?: boolean; scale?: number }> = ({ dark, scale = 1 }) => (
   <div
     style={{
@@ -171,7 +171,7 @@ export const PanelHeader: React.FC<{ dark?: boolean; scale?: number }> = ({ dark
         letterSpacing: 0.5,
       }}
     >
-      TickTask
+      Tacco
     </div>
     <HeadIcons dark={dark} />
   </div>
@@ -524,7 +524,7 @@ export const WinGlyph: React.FC<{ size?: number; color?: string }> = ({ size = 2
   </svg>
 );
 
-// Windows 任务栏（Win11 风格）：开始 + 应用图标，TickTask 高亮运行中，右侧时钟
+// Windows 任务栏（Win11 风格）：开始 + 应用图标，Tacco 高亮运行中，右侧时钟
 export const Taskbar: React.FC = () => {
   const icon = (node: React.ReactNode, key: string, running = false) => (
     <div key={key} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -583,7 +583,7 @@ export const Taskbar: React.FC = () => {
         </svg>,
         'folder',
       )}
-      {/* TickTask 运行中 */}
+      {/* Tacco 运行中 */}
       {icon(
         <div style={{ width: 38, height: 38, borderRadius: 9, overflow: 'hidden', boxShadow: '0 0 0 2px rgba(108,184,245,0.65), 0 0 18px rgba(29,126,240,0.5)' }}>
           <Img src={staticFile('logo.png')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

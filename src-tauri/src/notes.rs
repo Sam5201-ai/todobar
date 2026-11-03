@@ -83,7 +83,7 @@ pub fn notes_open_window(
             label.as_str(),
             WebviewUrl::App(PathBuf::new()),
         )
-        .title("TickTask 便利签")
+        .title("Tacco 便利签")
         // ⚠️ 必须与主窗口 (tauri.conf.json app.windows[0].additionalBrowserArgs) 完全一致,
         // 否则第二个便利签起创建必失败(0.4.38 同款根因)。
         .additional_browser_args(

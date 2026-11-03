@@ -76,7 +76,12 @@ import {
 import { DATA_MIGRATED_EVENT, useTaskStore } from './useTaskStore'
 import { onOcrCreateTask } from './screenshot/ocr/ocrBridge'
 import { trackFeature, trackPage } from './analytics'
-import { expandRecurrences, recurrenceLabel, parseInstanceId } from './recurrence'
+import {
+  expandRecurrences,
+  occurrenceRemindAt,
+  recurrenceLabel,
+  parseInstanceId,
+} from './recurrence'
 import { loadHolidays } from './holidays'
 import { HuangliView } from './HuangliView'
 import { CalculatorView } from './CalculatorView'
@@ -857,8 +862,11 @@ function App() {
         }
       }
 
-      for (const t of store.tasks) {
-        if (t.done || !t.remindAt || remindedRef.current!.has(t.id)) continue
+      // 重复模板投影出「今天」的虚拟实例:每个发生日按自己生效的提醒时间弹通知。
+      // 模板本身不直接提醒(recurrence 非空即跳过);去重 key 用实例 id,天然带发生日。
+      const todayInstances = expandRecurrences(store.tasks, new Date(now), new Date(now))
+      for (const t of [...store.tasks, ...todayInstances]) {
+        if (t.done || t.recurrence || !t.remindAt || remindedRef.current!.has(t.id)) continue
         if (new Date(t.remindAt).getTime() <= now) {
           remindedRef.current!.add(t.id)
           await notify('待办提醒', t.title)
@@ -943,6 +951,7 @@ function App() {
 
     let unlistenToggle: (() => void) | undefined
     let unlistenSettings: (() => void) | undefined
+    let unlistenHidden: (() => void) | undefined
     // [0.4.56 修复] cancelled 守卫:开发模式 StrictMode 下 effect 会 mount→cleanup→mount,
     // 而 listen() 是异步的——首次 mount 的清理函数在其解析前就同步执行,unlisten 为空操作,
     // 导致首次注册的监听器泄漏,最终 todobar-tray-toggle 挂上两个监听器;按一次快捷键触发
@@ -960,6 +969,10 @@ function App() {
           setIsOpen(true)
           setIsSettingsOpen(true)
         })
+        // [0.4.57] 主窗口被关闭(拦截为隐藏)时,Rust 侧会发此事件把前端状态
+        // 复位为「收起」,保证下次托盘单击直接展开而不是先被取反成收起。
+        if (cancelled) return
+        unlistenHidden = await listen('todobar-window-hidden', () => setIsOpen(false))
       } catch {
         // Tray events are only available in the native desktop shell.
       }
@@ -970,6 +983,7 @@ function App() {
       cancelled = true
       unlistenToggle?.()
       unlistenSettings?.()
+      unlistenHidden?.()
     }
   }, [isNative])
 
@@ -1121,6 +1135,10 @@ function App() {
         if (isOpen) {
           setViewportWidth(fullCssWidth)
           setViewportHeight(fullCssHeight)
+          // [0.4.57] 展开前兜底 show():窗口可能已被任务栏「关闭窗口」隐藏,
+          // 此前展开分支从不调用 show(),隐藏后的窗口只被移动、永远不可见,
+          // 表现为「托盘怎么点都打不开」。show 对已可见窗口是无害幂等操作。
+          await appWindow.show()
           await Promise.all([
             appWindow.setSize(new PhysicalSize(windowWidth, workArea.size.height)),
             appWindow.setPosition(new PhysicalPosition(closedX, openY)),
@@ -1536,7 +1554,7 @@ function App() {
       } theme-${settings.theme} bg-${settings.background}`}
       style={appStyle}
     >
-      <section className="desktop-preview" aria-label="TickTask 桌面预览" aria-hidden={isNative}>
+      <section className="desktop-preview" aria-label="Tacco 桌面预览" aria-hidden={isNative}>
         <nav className="system-bar" aria-label="桌面菜单">
           <div className="window-dots" aria-hidden="true">
             <span />
@@ -1545,7 +1563,7 @@ function App() {
           </div>
           <div className="system-title">
             <ListTodo size={16} />
-            <span>TickTask</span>
+            <span>Tacco</span>
           </div>
           <div className="system-actions">
             <button type="button" aria-label="搜索">
@@ -1586,7 +1604,7 @@ function App() {
       <button
         className={`edge-handle ${isOpen ? 'is-open' : ''}`}
         type="button"
-        aria-label={isOpen ? '收起 TickTask' : '展开 TickTask'}
+        aria-label={isOpen ? '收起 Tacco' : '展开 Tacco'}
         aria-expanded={isOpen}
         onPointerDown={onHandlePointerDown}
         onPointerMove={onHandlePointerMove}
@@ -1602,7 +1620,7 @@ function App() {
 
       <aside
         className={`todo-sidebar ${isOpen ? 'is-open' : ''}`}
-        aria-label="TickTask 侧栏"
+        aria-label="Tacco 侧栏"
         aria-hidden={!isOpen}
       >
         {/* 独立页面(设置 / 万年历):绝对定位覆盖层,从右滑入展开、向右滑出关闭 */}
@@ -1661,7 +1679,7 @@ function App() {
                 <span className="app-icon">
                   <img src="/applogo.png" alt="" draggable={false} />
                 </span>
-                <strong>TickTask</strong>
+                <strong>Tacco</strong>
               </div>
               <div className="icon-cluster">
                 {/* 录音机入口(牛马计薪器左侧),录音中亮红点 */}
@@ -2054,7 +2072,7 @@ function App() {
                   setSettingsOccurrenceKey(null)
                 }}
                 onPinnedChange={(value) => store.setPinned(settingsTask.id, value)}
-                onSetRemind={(iso) => store.setRemindAt(settingsTask.id, iso)}
+                onSetRemind={(iso) => store.setRemindAt(settingsTask.id, iso, settingsOccurrenceKey)}
                 onSetDueRange={(dueIso, endIso) => store.setDueRange(settingsTask.id, dueIso, endIso)}
                 onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
               />
@@ -2415,7 +2433,7 @@ function VersionSetting() {
       ) : null}
       {update.status === 'installing' ? (
         <div className="sync-status" aria-live="polite">
-          安装程序即将启动,TickTask 会先退出以完成覆盖安装;请在弹出的安装向导中点「安装」,完成后会自动创建桌面快捷方式。
+          安装程序即将启动,Tacco 会先退出以完成覆盖安装;请在弹出的安装向导中点「安装」,完成后会自动创建桌面快捷方式。
         </div>
       ) : null}
       {update.status === 'error' ? (
@@ -2929,7 +2947,7 @@ function SidebarSettingsPanel({
           onCommit={(v) => void commitToggleWindowShortcut(v, onChange, onToast)}
         />
         <p className="settings-hint">
-          双击编辑框即可修改快捷键,按下快捷键即打开 / 关闭 TickTask 主窗口。
+          双击编辑框即可修改快捷键,按下快捷键即打开 / 关闭 Tacco 主窗口。
         </p>
 
         <ShortcutField
@@ -4214,6 +4232,22 @@ function TaskSettingsSheet({
   const [confirmScope, setConfirmScope] = useState<'series' | 'subtask' | null>(null)
   const isSeriesInstance = Boolean(task.recurrence) && Boolean(occurrenceKey)
   const isSeriesSubtask = Boolean(subRecurrence) && Boolean(occurrenceKey)
+  // 重复事项的某次实例:显示该发生日实际生效的提醒时间
+  // (单日例外优先,否则该发生日自己的日期 + 系列默认时刻),不用模板上的陈旧绝对值。
+  const seriesRemindAt =
+    isSeriesInstance && task.recurrence && occurrenceKey
+      ? occurrenceRemindAt(task.recurrence, occurrenceKey)
+      : null
+  // 重复事项的快捷提醒直接落在发生日当天(写入系列默认时刻),快捷按钮文案随之调整。
+  const quickSeriesAt = (hour: number) =>
+    `${occurrenceKey}T${String(hour).padStart(2, '0')}:00:00`
+  // 提示里展示的当前生效时刻(本地时分);无提醒时待用户选择后再定。
+  const seriesRemindTimeText = seriesRemindAt
+    ? (() => {
+        const d = new Date(seriesRemindAt)
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      })()
+    : '所选时刻'
   const occurrenceLabel = occurrenceKey
     ? `${occurrenceKey.slice(5)} ${WEEKDAY_CN[parseDayKey(occurrenceKey).getDay()]}`
     : ''
@@ -4228,29 +4262,57 @@ function TaskSettingsSheet({
         <div className="sheet-grip" aria-hidden="true" />
         <div className="sheet-title">{task.title}</div>
         <div className="sheet-section">提醒</div>
+        {isSeriesInstance ? (
+          <div className="sheet-hint" style={{ marginTop: 0 }}>
+            将对所有重复日生效:每个发生日都在「自己的日期 + {seriesRemindTimeText}」提醒
+          </div>
+        ) : null}
         <SheetDateTimePicker
           ariaLabel="提醒时间"
-          value={task.remindAt ?? ''}
+          value={(seriesRemindAt ?? task.remindAt) ?? ''}
           onLocked={fullAccess ? undefined : () => onLocked?.('设置待办提醒')}
           onChange={(v) => onSetRemind(v)}
         />
         <div className="date-picker-quick">
-          <button
-            type="button"
-            onClick={() =>
-              fullAccess ? onSetRemind(atHourOffset(0, 20)) : onLocked?.('设置待办提醒')
-            }
-          >
-            今晚 20:00
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              fullAccess ? onSetRemind(atHourOffset(1, 9)) : onLocked?.('设置待办提醒')
-            }
-          >
-            明早 09:00
-          </button>
+          {isSeriesInstance ? (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  fullAccess ? onSetRemind(quickSeriesAt(20)) : onLocked?.('设置待办提醒')
+                }
+              >
+                当天 20:00
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  fullAccess ? onSetRemind(quickSeriesAt(9)) : onLocked?.('设置待办提醒')
+                }
+              >
+                当天 09:00
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  fullAccess ? onSetRemind(atHourOffset(0, 20)) : onLocked?.('设置待办提醒')
+                }
+              >
+                今晚 20:00
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  fullAccess ? onSetRemind(atHourOffset(1, 9)) : onLocked?.('设置待办提醒')
+                }
+              >
+                明早 09:00
+              </button>
+            </>
+          )}
           <button type="button" className="is-danger" onClick={() => onSetRemind(null)}>
             清除
           </button>

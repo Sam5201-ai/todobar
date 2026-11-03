@@ -187,7 +187,7 @@ export function RecorderView(): ReactNode {
   const [noteDraft, setNoteDraft] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  // 保存位置:'' = 默认「文档\TickTask录音」
+  // 保存位置:'' = 默认「文档\Tacco录音」
   const [recDir, setRecDir] = useState(() => loadRecordingsDir())
   const [defaultDir, setDefaultDir] = useState('')
   const [dirSheetOpen, setDirSheetOpen] = useState(false)
@@ -820,7 +820,7 @@ export function RecorderView(): ReactNode {
         <RecSheet title="保存位置" onClose={() => setDirSheetOpen(false)}>
           <div className="rec-dir-body">
             <div className="rec-dir-current">
-              {recDir || defaultDir || '文档\\TickTask录音'}
+              {recDir || defaultDir || '文档\\Tacco录音'}
             </div>
             <div className="rec-dir-tip">
               修改后新录音将保存到所选文件夹,已有录音保留在原位置。

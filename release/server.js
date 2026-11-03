@@ -163,7 +163,7 @@ function clientIp(req) {
 function handleDownload(req, res, url) {
   const file = decodeURIComponent(url.pathname.slice('/download/'.length))
   // 仅放行命名规范的安装包,防目录穿越
-  if (!/^TickTask-[\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
+  if (!/^Tacco-[\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
     res.writeHead(404)
     return res.end('Not Found')
   }
@@ -205,5 +205,5 @@ const server = http.createServer((req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
-  console.log(`TickTask site server listening on http://${HOST}:${PORT}`)
+  console.log(`Tacco site server listening on http://${HOST}:${PORT}`)
 })

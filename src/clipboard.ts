@@ -1,7 +1,7 @@
 // 剪贴板历史的 Rust 桥接 + 统一复制通道。
 //
 // 设计:
-// - 所有「TickTask 主动写入剪贴板」都走 copyText(),底层调用 clipboard_write_text,
+// - 所有「Tacco 主动写入剪贴板」都走 copyText(),底层调用 clipboard_write_text,
 //   该命令会打 self-write 标记 → 监听线程据此跳过自身内容,不污染历史。
 // - 自定义命令无需在 capabilities 显式声明(与 notes/screenshot 同机制),窗口只要有
 //   core:default 等基础权限即可调用。
@@ -72,7 +72,7 @@ export async function clipboardHideWindow(): Promise<void> {
   await invoke('clipboard_hide_window').catch(() => {})
 }
 
-/** 统一复制通道:TickTask 内部所有「复制到剪贴板」都应走这里,避免被历史记录。 */
+/** 统一复制通道:Tacco 内部所有「复制到剪贴板」都应走这里,避免被历史记录。 */
 export async function copyText(text: string): Promise<void> {
   if (!isTauriRuntime()) {
     try {

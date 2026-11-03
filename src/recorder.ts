@@ -7,7 +7,7 @@
  * - 采集编码:getUserMedia → AudioContext → ScriptProcessorNode → lamejs mp3
  *   (单声道 64kbps,约 0.48MB/分钟),纯前端软编码,Rust 侧零音频依赖。
  * - 分片落盘:每约 8 秒(或积攒 ≥128KB)把 mp3 分片 base64 调 Rust
- *   recording_append 追加写入保存目录(默认「文档\TickTask录音」,可自定义),
+ *   recording_append 追加写入保存目录(默认「文档\Tacco录音」,可自定义),
  *   文件名 = 标题.mp3;内存占用有界,异常退出最多损失最后一个未落盘分片;
  *   失败分片放回队头下轮重试。
  * - 时长一律前端秒表记录(mp3 元数据不可靠),暂停期间不计时。
@@ -156,7 +156,7 @@ let processor: ScriptProcessorNode | null = null
 let muteGain: GainNode | null = null
 let encoder: lamejs.Mp3Encoder | null = null
 let recId: string | null = null
-/** 当前录音所在目录('' = 默认「文档\TickTask录音」)与磁盘文件名(含 .mp3)。 */
+/** 当前录音所在目录('' = 默认「文档\Tacco录音」)与磁盘文件名(含 .mp3)。 */
 let recDir = ''
 let recFile = ''
 let pending: Uint8Array[] = []
@@ -318,7 +318,7 @@ function classifyMicError(err: unknown): { kind: MicErrorKind; text: string } {
 export async function startRecording(): Promise<void> {
   if (snapshot.status !== 'idle') return
   if (!isTauriRuntime()) {
-    patch({ error: '请在 TickTask 桌面版中使用录音功能', errorKind: 'nottauri' })
+    patch({ error: '请在 Tacco 桌面版中使用录音功能', errorKind: 'nottauri' })
     return
   }
   patch({ status: 'starting', error: null, errorKind: null, lastResult: null, limitWarned: false })
@@ -530,7 +530,7 @@ export interface RecordingMeta {
   bytes: number
   /** ISO 时间戳(本地构造后再 toISOString,显示时本地时区取日期)。 */
   createdAtIso: string
-  /** 录音所在目录('' = 默认「文档\TickTask录音」);0.4.36 起支持自定义。 */
+  /** 录音所在目录('' = 默认「文档\Tacco录音」);0.4.36 起支持自定义。 */
   dir: string
   /** 磁盘文件名(含 .mp3),与 title 保持一致;旧记录回填 <id>.mp3。 */
   file: string
@@ -600,7 +600,7 @@ export function parseDiskRecordings(raw: unknown): RecordingMeta[] {
 }
 
 // ---------------------------------------------------------------------------
-// 保存目录配置(localStorage + 磁盘 prefs 双持久化;'' = 默认「文档\TickTask录音」)
+// 保存目录配置(localStorage + 磁盘 prefs 双持久化;'' = 默认「文档\Tacco录音」)
 // ---------------------------------------------------------------------------
 
 const DIR_STORE_KEY = 'ticktask.recordings.dir.v1'

@@ -355,7 +355,7 @@ pub fn show_pin_window(
             build_label.as_str(),
             tauri::WebviewUrl::App(std::path::PathBuf::new()),
         )
-        .title("TickTask 贴图")
+        .title("Tacco 贴图")
         // ⚠️ 与主窗口 additionalBrowserArgs 完全一致(WebView2 环境一致性铁律)!
         .additional_browser_args(crate::BROWSER_ARGS)
         .inner_size(w as f64, h as f64)
@@ -811,12 +811,12 @@ mod imp {
             Some(d) => d,
             None => {
                 let home = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
-                format!("{}\\Pictures\\TickTask", home)
+                format!("{}\\Pictures\\Tacco", home)
             }
         };
         std::fs::create_dir_all(&base).map_err(|e| format!("创建目录失败: {e}"))?;
         let stamp = local_timestamp();
-        let name = format!("TickTask-截屏-{}.png", stamp);
+        let name = format!("Tacco-截屏-{}.png", stamp);
         let path = std::path::Path::new(&base).join(&name);
         std::fs::write(&path, &bytes).map_err(|e| format!("保存文件失败: {e}"))?;
         Ok(path.to_string_lossy().into_owned())
@@ -856,7 +856,7 @@ mod imp {
             if IsIconic(hwnd).as_bool() {
                 return TRUE;
             }
-            // 跳过自身窗口(标题以 TickTask 开头)。
+            // 跳过自身窗口(标题以 Tacco 开头)。
             let mut buf: Vec<u16> = vec![0u16; 512];
             let len = GetWindowTextW(hwnd, &mut buf);
             if len > 0 {
@@ -864,7 +864,7 @@ mod imp {
                     .iter()
                     .map(|&c| char::from_u32(c as u32).unwrap_or(' '))
                     .collect();
-                if t.starts_with("TickTask") {
+                if t.starts_with("Tacco") {
                     return TRUE;
                 }
             }

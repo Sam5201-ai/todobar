@@ -849,8 +849,8 @@ function AccountModal({
       : view === 'devices'
         ? '设备管理'
         : tab === 'login'
-          ? '登录 TickTask'
-          : '注册 TickTask'
+          ? '登录 Tacco'
+          : '注册 Tacco'
 
   return (
     <div className="account-modal-overlay" onClick={onClose} role="presentation">

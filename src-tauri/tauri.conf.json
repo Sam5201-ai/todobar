@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TickTask",
+  "productName": "Tacco",
   "version": "0.4.59",
   "identifier": "dev.todobar.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TickTask",
+        "title": "Tacco",
         "width": 382,
         "height": 84,
         "resizable": false,
@@ -30,7 +30,7 @@
       },
       {
         "label": "capture-overlay",
-        "title": "TickTask 截图",
+        "title": "Tacco 截图",
         "width": 800,
         "height": 600,
         "resizable": false,
@@ -46,7 +46,7 @@
       },
       {
         "label": "pin-1",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,
@@ -62,7 +62,7 @@
       },
       {
         "label": "pin-2",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,
@@ -78,7 +78,7 @@
       },
       {
         "label": "pin-3",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,
@@ -94,7 +94,7 @@
       },
       {
         "label": "pin-4",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,
@@ -110,7 +110,7 @@
       },
       {
         "label": "pin-5",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,
@@ -126,7 +126,7 @@
       },
       {
         "label": "pin-6",
-        "title": "TickTask 贴图",
+        "title": "Tacco 贴图",
         "width": 320,
         "height": 240,
         "resizable": false,

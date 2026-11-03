@@ -75,7 +75,7 @@ export const Scene07: React.FC = () => {
           transform: `translateY(${(1 - nameS) * 30}px)`,
         }}
       >
-        TickTask
+        Tacco
       </div>
       <div
         style={{
