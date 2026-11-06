@@ -97,7 +97,7 @@ const RESULT_CACHE_CAP: usize = 16;
 /// 识别管线版本:混入缓存键。管线变更(预处理/模型/解码)后 +1,
 /// 旧结果自动失效 —— 否则重测同一张图永远命中修复前的旧缓存,
 /// 表现为「修了没生效」的假象(2026-10-31 排查 rec 漏字时引入)。
-const RECOGNIZE_PIPELINE_VERSION: u64 = 2;
+const RECOGNIZE_PIPELINE_VERSION: u64 = 3;
 
 fn cache_key(bytes: &[u8]) -> u64 {
     use std::hash::{Hash, Hasher};
@@ -703,6 +703,14 @@ mod ppocr {
 
     /// det 输入长边上限(PP-OCR 官方默认)。
     const DET_SIDE: f32 = 736.0;
+    /// det 输入最小高度。仅按长边缩放时,超宽扁条图(如框选单行长文案,
+    /// 603x29 只放大 1.22x,det 图上字高 ~24px)会因字符过小导致 DB 概率图
+    /// 断裂、检测框碎裂塌陷(h≈7.5px),rec 拿到压扁碎片输出乱码——实测
+    /// 框选超过 ~18 字即错乱(2026-11-05 日志证据链:250px 宽选区放大 2.94x
+    /// 字高 ~56px conf=1.0,603px 宽只放大 1.22x 拆成碎框)。对这类图按
+    /// 高度补足放大(29px 高 → 3.31x,det 图字高 ~60px),与大图长边限制
+    /// 互不干扰(高图该分支恒 < 1 不生效)。
+    const DET_MIN_H: f32 = 96.0;
     /// DB 概率图二值化阈值(官方默认 0.3)。
     const DB_THRESHOLD: f32 = 0.3;
     /// bbox 外扩系数(POC 实测 1.8;过小丢边缘笔画,过大沾邻框)。
@@ -831,7 +839,9 @@ mod ppocr {
         ow: u32,
         oh: u32,
     ) -> Result<Vec<DetBox>, String> {
-        let ratio = DET_SIDE / ow.max(oh) as f32;
+        // 长边缩放与最小高度保障取较大者:超宽扁条图(框选单行长文案)按高度
+        // 补足放大,否则 det 图上字符过小导致检测碎裂(见 DET_MIN_H 注释)。
+        let ratio = (DET_SIDE / ow.max(oh) as f32).max(DET_MIN_H / oh as f32);
         // 尺寸四舍五入到 32 的倍数(POC 同款:Math.round(n/32)*32)。
         let rw = ((((ow as f32 * ratio) as u32 + 16) / 32) * 32).max(32);
         let rh = ((((oh as f32 * ratio) as u32 + 16) / 32) * 32).max(32);

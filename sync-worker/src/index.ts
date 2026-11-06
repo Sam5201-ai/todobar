@@ -1442,16 +1442,89 @@ app.post('/api/feedback', async (c) => {
 
 // ---------------------------------------------------------------------------
 // 非 /api 路径:代理官网下载页,让 todobar.tuanzhang.site 直接打开下载落地页
+//
+// 性能说明(2026-11-04):
+// 直连回源每次 3~6s,偶发 Cloudflare 522(回源超时),严重拖累搜索引擎抓取。
+// 这里给整站加边缘缓存:命中边缘时 ~几十毫秒;上游故障时回退到缓存副本;
+// 缓存也拿不到才返回 503(而不是让 CF 抛 522)。HTML 短 TTL 保证发版及时可见。
 // ---------------------------------------------------------------------------
 
 const SITE_UPSTREAM = 'https://todobar-app.app.workbuddy.host'
+const SITE_TTL_PAGE = 300 // 页面/文本类:5 分钟
+const SITE_TTL_ASSET = 86400 // 图片/字体/安装包等:1 天
+const SITE_UPSTREAM_TIMEOUT_MS = 8000
 
-async function proxySite(request: Request, pathname: string, search: string): Promise<Response> {
+function siteCacheTtl(pathname: string): number {
+  const p = pathname.toLowerCase()
+  if (
+    p === '/' ||
+    p.endsWith('/') ||
+    p.endsWith('.html') ||
+    p.endsWith('.json') ||
+    p.endsWith('.xml') ||
+    p.endsWith('.txt')
+  ) {
+    return SITE_TTL_PAGE
+  }
+  return SITE_TTL_ASSET
+}
+
+async function proxySite(
+  request: Request,
+  pathname: string,
+  search: string,
+  ctx: ExecutionContext,
+): Promise<Response> {
   const target = SITE_UPSTREAM + pathname + search
-  const resp = await fetch(target, { redirect: 'follow' })
-  const headers = new Headers(resp.headers)
-  headers.set('access-control-allow-origin', '*')
-  return new Response(resp.body, { status: resp.status, headers })
+  const ttl = siteCacheTtl(pathname)
+  const cache = caches.default
+  // 缓存键忽略 query(除版本号外无业务含义),避免 ?v= 把缓存打散
+  const cacheKey = new Request(`${SITE_UPSTREAM}${pathname}`, { method: 'GET' })
+
+  try {
+    const upstream = await fetch(target, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(SITE_UPSTREAM_TIMEOUT_MS),
+      cf: {
+        cacheEverything: true,
+        cacheTtl: ttl,
+        cacheTtlByStatus: { '200-299': ttl, '301-302': 60, '404': 60, '500-599': 0 },
+      },
+    } as RequestInit)
+    const headers = new Headers(upstream.headers)
+    headers.set('access-control-allow-origin', '*')
+    headers.set('x-site-cache', upstream.headers.get('cf-cache-status') || 'MISS')
+    const body = await upstream.arrayBuffer()
+    const out = new Response(body, { status: upstream.status, headers })
+    // 写入 Cache API 作为上游故障时的兜底副本(仅成功的 GET)
+    if (upstream.ok && request.method === 'GET') {
+      const forCache = new Response(body, {
+        status: upstream.status,
+        headers: {
+          'content-type': headers.get('content-type') || 'application/octet-stream',
+          'cache-control': `public, max-age=${ttl}`,
+          'access-control-allow-origin': '*',
+        },
+      })
+      ctx.waitUntil(cache.put(cacheKey, forCache).catch(() => {}))
+    }
+    return out
+  } catch {
+    // 上游超时/报错:优先返回缓存副本(即使已过期),避免 522
+    const stale = await cache.match(cacheKey)
+    if (stale) {
+      const h = new Headers(stale.headers)
+      h.set('x-site-cache', 'STALE')
+      return new Response(stale.body, { status: 200, headers: h })
+    }
+    return new Response(
+      '<!doctype html><meta charset="utf-8"><title>Tacco</title><h1>页面暂时无法访问</h1><p>官网正在恢复中,请稍后刷新重试。</p>',
+      {
+        status: 503,
+        headers: { 'content-type': 'text/html; charset=utf-8', 'retry-after': '60' },
+      },
+    )
+  }
 }
 
 export default {
@@ -1459,7 +1532,7 @@ export default {
     const url = new URL(request.url)
     // 自定义域名上的非 API 请求一律转发到下载页(404 修复的关键)
     if (!url.pathname.startsWith('/api/')) {
-      return proxySite(request, url.pathname, url.search)
+      return proxySite(request, url.pathname, url.search, ctx)
     }
     // 首个请求同步补好表结构,确保后续 upsert 不再因缺列而 422。
     try {

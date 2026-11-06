@@ -11,6 +11,41 @@
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" type="image/png" href="./favicon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Tacco",
+  "alternateName": ["TickTask", "Todobar", "贴边待办栏"],
+  "applicationCategory": "UtilitiesApplication",
+  "applicationSubCategory": "待办事项管理 / 桌面效率工具",
+  "operatingSystem": "Windows 10, Windows 11",
+  "softwareVersion": "0.4.61",
+  "fileSize": "40MB",
+  "inLanguage": "zh-CN",
+  "url": "https://sync.tuanzhang.site/",
+  "downloadUrl": "https://sync.tuanzhang.site/Tacco-setup.exe",
+  "description": "Tacco 是一款贴在屏幕边缘的极简待办工具：平时只占一条细边，鼠标一划即出、用完自动收回。集成日/周/月待办、生日与纪念日提醒、内置计算器、黄历、云同步、牛马计薪器，以及截图钉屏、剪贴板历史、便利签、录音等桌面套件，支持自定义字体与背景。免费下载 Windows 安装包。",
+  "featureList": [
+    "贴边悬浮待办栏，不占桌面空间",
+    "日视图 / 周视图 / 月视图切换",
+    "生日与纪念日提醒",
+    "内置计算器与黄历",
+    "多设备云同步",
+    "牛马计薪器",
+    "截图钉屏与标注",
+    "剪贴板历史记录",
+    "桌面便利签",
+    "录音与转写"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "CNY",
+    "availability": "https://schema.org/InStock"
+  }
+}
+</script>
 <style>
 /* ==========================================================
    Tacco 下载页 v2 · 原型
@@ -114,6 +149,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 @keyframes ping { 75%,100% { transform: scale(2.4); opacity: 0; } }
 .hero h1 { font-size: clamp(34px, 4.6vw, 52px); font-weight: 900; line-height: 1.18; letter-spacing: -.02em; margin-top: 22px; }
+.hero h1 .h1-kicker { display: block; font-size: 15px; font-weight: 700; letter-spacing: .04em; color: var(--muted); margin-bottom: 10px; }
 .hero h1 .grad {
   background: linear-gradient(92deg, #2e8df6, var(--primary) 40%, var(--accent));
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -506,6 +542,8 @@ footer { border-top: 1px solid var(--border); padding: 40px 0 44px; text-align: 
 footer .f-brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; }
 footer .f-brand img { width: 28px; height: 28px; border-radius: 9px; }
 footer .f-slogan { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+footer .f-nav { margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+footer .f-nav a { color: var(--muted); font-weight: 600; }
 footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 
 /* 每个功能的主题色（通过 --accent-strong 等变量注入 slide） */
@@ -542,7 +580,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   <div class="wrap hero-grid">
     <div>
       <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.59 · Windows 版</span></span>
-      <h1>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
+      <h1><span class="h1-kicker">Tacco · Windows 贴边待办栏</span>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
       <p class="lead">
         Tacco 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
         鼠标一划即出、用完自动收回。而且它不止是待办——<b>8 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
@@ -591,7 +629,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   <div class="wrap">
     <div class="fx-head">
       <span class="fx-kicker-line">Features</span>
-      <h2>8 大功能，逐一看过再下载</h2>
+      <h2>Tacco 的 8 大功能：截图钉屏、剪贴板历史、便利签、录音等</h2>
       <p>每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
     </div>
 
@@ -852,7 +890,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   <div class="wrap">
     <div class="install-card">
       <img class="applogo" src="./assets/logo.webp?v=0.4.60" alt="Tacco 图标" />
-      <h2 id="installTitle">下载并安装到电脑</h2>
+      <h2 id="installTitle">下载 Tacco Windows 安装包并安装到电脑</h2>
       <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.58 · 免费下载</p>
       <div class="hero-cta" style="justify-content:center;margin-top:28px;">
         <a href="./Tacco-setup.exe" class="btn-download" id="installDownload">
@@ -882,7 +920,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <!-- ================= FAQ ================= -->
 <section class="faq" id="faq">
   <div class="wrap">
-    <h2>常见问题</h2>
+    <h2>常见问题：免费吗、支持哪些系统、数据会不会丢</h2>
     <div class="faq-list">
       <details class="faq-item" open>
         <summary>Tacco 是免费的吗？<span class="chev">▾</span></summary>
@@ -913,6 +951,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   <div class="wrap">
     <a href="#top" class="f-brand"><img src="./assets/logo.webp?v=0.4.60" alt="Tacco" /><span>Tacco</span></a>
     <p class="f-slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
+    <p class="f-nav"><a href="./features.html">功能详解</a> · <a href="./compare.html">横向对比</a> · <a href="./faq.html">常见问题</a> · <a href="./changelog.html">更新日志</a></p>
     <p class="f-copy">© <span id="fYear">2026</span> Tacco. All rights reserved.</p>
   </div>
 </footer>
