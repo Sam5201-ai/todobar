@@ -14,7 +14,7 @@ import { Check, Settings, X } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { loadDiskPref, saveDiskPref } from './prefs'
 import { useAccount } from './membership'
-import { memberOnly } from './account'
+import { memberOnly, OPEN_LOGIN_GUIDE_EVENT } from './account'
 import { VipBadge } from './VipBadge'
 import {
   loadSalaryWidgetConfig,
@@ -479,7 +479,7 @@ export function SalaryView() {
   // 桌面组件(透明悬浮窗)的配置状态:启用开关 + 风格。
   const [widget, setWidget] = useState<SalaryWidgetConfig>(() => loadSalaryWidgetConfig())
   // 会员闸门:受限用户(未登录 / 试用过期未激活)不能启用桌面组件。
-  const { fullAccess, showVip } = useAccount()
+  const { fullAccess, showVip, account } = useAccount()
 
   // 启动时从磁盘偏好回灌(确保重装/清缓存后状态与上次一致)。
   useEffect(() => {
@@ -693,7 +693,11 @@ export function SalaryView() {
             aria-label="启用桌面组件"
             onClick={() => {
               if (!fullAccess) {
-                showSalToast(memberOnly('桌面组件'))
+                if (!account) {
+                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '桌面组件' }))
+                } else {
+                  showSalToast(memberOnly('桌面组件'))
+                }
                 return
               }
               void applyWidget({ ...widget, enabled: !widget.enabled })
@@ -708,13 +712,17 @@ export function SalaryView() {
               key={s.value}
               type="button"
               className={widget.style === s.value ? 'is-selected' : ''}
-              onClick={() => {
-                if (!fullAccess) {
+            onClick={() => {
+              if (!fullAccess) {
+                if (!account) {
+                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '桌面组件' }))
+                } else {
                   showSalToast(memberOnly('桌面组件'))
-                  return
                 }
-                void applyWidget({ enabled: true, style: s.value })
-              }}
+                return
+              }
+              void applyWidget({ enabled: true, style: s.value })
+            }}
             >
               <img src={STYLE_PREVIEWS[s.value]} alt={`${s.label}样式预览`} draggable={false} />
               <span>{s.label}</span>

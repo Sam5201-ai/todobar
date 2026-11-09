@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react'
 import { loadDiskPref, saveDiskPref } from './prefs'
+import {
+  DEFAULT_TOPBAR_TOOLS,
+  sanitizeTopbarTools,
+  type TopbarToolsPref,
+} from './topbarTools'
+import type { DockSide, MonitorPref } from './dock'
 
-const STORAGE_KEY = 'todobar.sidebar.settings.v19'
+// 保持 v19:新增字段(topbarTools / dockSide / targetMonitor)一律由
+// sanitizeSettings 自动补齐,无需升 key。
+// ⚠️ 不升 key 是刻意的选择——升 key 会让首帧以「默认值」启动,而磁盘回灌
+// (loadDiskPref) 与镜像写入 (saveDiskPref) 是并发的,写可能先于读完成,把
+// prefs.json 里的旧设置覆盖成默认值,导致用户主题/宽度/快捷键全部丢失。
+export const SIDEBAR_SETTINGS_KEY = 'todobar.sidebar.settings.v19'
+const STORAGE_KEY = SIDEBAR_SETTINGS_KEY
 
 export type ThemeMode = 'light' | 'dark'
 
@@ -58,6 +70,12 @@ export type SidebarSettings = {
   noteShortcut: string
   /** 唤出剪贴板历史浮窗的全局快捷键,默认 CommandOrControl+Shift+V。 */
   clipboardShortcut: string
+  /** 首页顶栏快捷入口:完整顺序 + 勾选启用的工具(设置按钮固定,不参与配置)。 */
+  topbarTools: TopbarToolsPref
+  /** 主窗停靠在哪一侧桌缘。 */
+  dockSide: DockSide
+  /** 主窗显示在哪块屏幕:主屏(默认)/ 副屏 / 具体显示器 key。会被持久化。 */
+  targetMonitor: MonitorPref
 }
 
 export const defaultSidebarSettings: SidebarSettings = {
@@ -79,6 +97,19 @@ export const defaultSidebarSettings: SidebarSettings = {
   toggleWindowShortcut: 'CommandOrControl+Shift+T',
   noteShortcut: 'Alt+N',
   clipboardShortcut: 'CommandOrControl+Shift+V',
+  topbarTools: { ...DEFAULT_TOPBAR_TOOLS },
+  dockSide: 'right',
+  targetMonitor: 'primary',
+}
+
+/**
+ * 旧版本把 'auto'(跟随窗口所在屏)当默认值,但该选项已下线。
+ * 任何空值 / 'auto' 一律归到主屏,避免老用户的落盘值落到一个不存在的选项上。
+ */
+export function normalizeMonitorPref(value: unknown): MonitorPref {
+  return typeof value === 'string' && value.trim() && value !== 'auto'
+    ? value
+    : 'primary'
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -144,6 +175,9 @@ function sanitizeSettings(value: Partial<SidebarSettings>): SidebarSettings {
       typeof value.clipboardShortcut === 'string' && value.clipboardShortcut.trim().length > 0
         ? value.clipboardShortcut
         : defaultSidebarSettings.clipboardShortcut,
+    topbarTools: sanitizeTopbarTools(value.topbarTools ?? defaultSidebarSettings.topbarTools),
+    dockSide: value.dockSide === 'left' ? 'left' : 'right',
+    targetMonitor: normalizeMonitorPref(value.targetMonitor),
   }
 }
 
@@ -177,17 +211,30 @@ export function useSidebarSettings() {
   })
 
   // 重装 / 清缓存后 localStorage 会丢失,这里从磁盘持久化(~/.ticktask/prefs.json)回灌。
+  // ⚠️ 优先级:localStorage > 磁盘 > 默认值。磁盘写入是异步 IPC,用户改完设置立刻
+  // 关窗时 prefs.json 可能还落后一个版本;旧实现用 {...current, ...disk} 让旧磁盘值
+  // 盖掉用户刚选的屏幕/主题/宽度,表现为「每次打开都要重新选一次」。
+  // 只有在 localStorage 真的丢失(清缓存 / 重装)时才由磁盘接管。
   useEffect(() => {
     let cancelled = false
     void loadDiskPref<Partial<SidebarSettings>>('sidebar').then((disk) => {
       if (cancelled || !disk) return
-      setSettings((current) => {
-        const merged = sanitizeSettings({ ...current, ...disk })
-        const params = new URLSearchParams(window.location.search)
-        const themeParam = params.get('theme')
-        if (themeParam === 'dark' || themeParam === 'light') merged.theme = themeParam
-        return merged
+      let stored: Partial<SidebarSettings> | null = null
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY)
+        if (raw) stored = JSON.parse(raw) as Partial<SidebarSettings>
+      } catch {
+        /* 缓存损坏时让磁盘接管 */
+      }
+      const merged = sanitizeSettings({
+        ...defaultSidebarSettings,
+        ...disk,
+        ...(stored ?? {}),
       })
+      const params = new URLSearchParams(window.location.search)
+      const themeParam = params.get('theme')
+      if (themeParam === 'dark' || themeParam === 'light') merged.theme = themeParam
+      if (!cancelled) setSettings(merged)
     })
     return () => {
       cancelled = true

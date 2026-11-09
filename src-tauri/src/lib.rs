@@ -1038,6 +1038,37 @@ fn show_main_window_ready(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 主窗贴边展开 / 收起动画的「原子」几何写入(0.4.62)。
+///
+/// ⚠️ 为什么必须放在 Rust 侧:前端逐帧调两次 Tauri JS API(setSize + setPosition)
+/// 时,两次 invoke 之间 Rust 会回到事件循环,Windows 有机会处理一次 WM_PAINT,
+/// 于是出现「窗口先变宽(还贴在旧的 x)→ 再挪位」的中间帧,高 DPI 小屏上
+/// 表现为明显的展开闪烁。这里在同一个命令的同步块里连续写完 size + position,
+/// 消息队列不会插进来重绘,窗口一次到位。
+///
+/// 另外切屏时前端会连写 2~3 次:Windows 在窗口跨到不同 DPI 的显示器时会按
+/// 「逻辑尺寸」重新缩放窗口,第一次写入会被缩放吃掉,后续几次按新屏物理像素
+/// 校正后才稳定 —— 这修掉了「切到副屏后仍是主屏窗口尺寸」的问题。
+#[tauri::command]
+fn set_main_window_bounds(
+    app: tauri::AppHandle,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "主窗口不存在".to_string())?;
+    window
+        .set_size(tauri::PhysicalSize::new(width, height))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // [0.4.38] 计薪组件 ghost label 事故修复
 //
@@ -1617,6 +1648,7 @@ pub fn run() {
         .manage(ToggleWindowShortcutState::default())
         .manage(WidgetState::default())
         .manage(notes::NoteShortcutState::default())
+        .manage(notes::NotePoolState::default())
         .manage(clipboard::ClipboardState::default())
         // 窗口生命周期日志 + 主窗口关闭拦截(改为隐藏,托盘应用标准做法):
         // 之前截图流程若误触发主窗口关闭,进程随最后一个窗口销毁直接退出,
@@ -1658,6 +1690,7 @@ pub fn run() {
             set_data_dir,
             reveal_path,
             show_main_window_ready,
+            set_main_window_bounds,
             get_persist_config,
             set_persist_config,
             device_fingerprint,
@@ -1699,6 +1732,7 @@ pub fn run() {
             close_salary_widget,
             salary_widget_exists,
             notes::notes_open_window,
+            notes::notes_claim_window,
             notes::notes_close_window,
             notes::notes_window_exists,
             notes::notes_set_pinned,
@@ -1712,6 +1746,7 @@ pub fn run() {
             clipboard::clipboard_write_text,
             clipboard::clipboard_copy_back,
             clipboard::clipboard_hide_window,
+            clipboard::clipboard_open_window,
             clipboard::register_clipboard_shortcut,
             clipboard::clipboard_set_active,
             app_log,
@@ -1778,23 +1813,34 @@ pub fn run() {
                 let _ = window.set_skip_taskbar(true);
                 let _ = window.set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0)));
 
+                // ⚠️ 这里只是「启动兜底」:窗口 visible(false),前端 src/dock.ts 会在
+                // show_main_window_ready 之前按用户选的目标屏 / 停靠边重新定位。
+                // 旧实现把窗口贴到 screen.right - tabWidth(收起态),窗口大半跨到
+                // 相邻屏;混合 DPI 下 Windows 会按另一块屏重新缩放 WebView,启动期
+                // 就埋下「面板裁切 + 坐标口径错乱」的坑。现在统一放到当前屏内
+                // 的完整右贴位置,任何时刻都不越屏。
                 if let Ok(Some(monitor)) = window.current_monitor() {
                     let monitor_size = monitor.size();
                     let monitor_position = monitor.position();
                     let scale_factor = monitor.scale_factor();
                     let window_width = (382.0_f64 * scale_factor).round() as u32;
-                    let tab_width = (42.0_f64 * scale_factor).round() as u32;
-                    let closed_offset = (2.0_f64 * scale_factor).round() as i32;
 
                     let _ = window
                         .set_size(tauri::PhysicalSize::new(window_width, monitor_size.height));
                     let _ = window.set_position(tauri::PhysicalPosition::new(
-                        monitor_position.x + monitor_size.width as i32 - tab_width as i32
-                            + closed_offset,
+                        monitor_position.x + monitor_size.width as i32 - window_width as i32,
                         monitor_position.y,
                     ));
                 }
             }
+
+            // L2 便利签低延迟:启动后延迟预建 1 个隐藏窗口,避开主窗启动 /
+            // WebView2 初始化峰值。Alt+N 时前端直接领取该窗口的预留 id。
+            let pool_app = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1800));
+                notes::spawn_pool_window(pool_app);
+            });
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(

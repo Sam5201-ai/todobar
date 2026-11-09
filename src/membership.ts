@@ -6,7 +6,7 @@
  * 登录/登出/刷新会员状态后组件自动重渲染,无需手动传参透传。
  */
 
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   ACCOUNT_CHANGED_EVENT,
   ACCOUNT_KEY,
@@ -64,9 +64,38 @@ export interface MembershipState {
   showVip: boolean
 }
 
+/**
+ * 「自动同步」开关的生效值(唯一真源)。
+ *
+ * - 受限态(未登录 / 试用期结束且未激活会员)一律关闭,即使试用期内原本是打开的;
+ * - 成为会员(激活或重新进入试用)后按用户原有偏好自动恢复,无需手动重开。
+ *
+ * ⚠️ 只影响「显示与是否启动定时同步」,不改写持久化的 autoSync 偏好:
+ * 把偏好写死成 false 会导致成为会员后无法自动启用,也抹掉用户主动关闭过的选择。
+ */
+export function effectiveAutoSync(pref: boolean, fullAccess: boolean): boolean {
+  return fullAccess && pref
+}
+
 /** 订阅登录态与权限。受限功能入口统一用本 hook 判定。 */
 export function useAccount(): MembershipState {
   const account = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  // ⚠️ 试用期在应用常驻期间自然到期时**不会**触发 ACCOUNT_CHANGED_EVENT(账号数据没变),
+  // 而 isFullAccess / isTrialActive 是按 Date.now() 实时比较的:不主动重算的话,
+  // 受限功能入口与「自动同步」开关会一直停在「试用中」。这里 30s 检测一次,
+  // 到期后只强制重渲染一次并注销定时器,不产生持续开销。
+  const [, bumpTrialCheck] = useState(0)
+  useEffect(() => {
+    if (!account || account.activated || !account.trialEndsAt) return
+    const endsAt = Date.parse(account.trialEndsAt)
+    if (!Number.isFinite(endsAt) || endsAt <= Date.now()) return
+    const timer = window.setInterval(() => {
+      if (Date.now() < endsAt) return
+      window.clearInterval(timer)
+      bumpTrialCheck((n) => n + 1)
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [account])
   const fullAccess = isFullAccess(account)
   const trialActive = isTrialActive(account)
   return {

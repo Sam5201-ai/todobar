@@ -36,7 +36,7 @@ import {
 import { invoke } from '@tauri-apps/api/core'
 import { open as pickDirectory } from '@tauri-apps/plugin-dialog'
 import { useAccount } from './membership'
-import { memberOnly } from './account'
+import { memberOnly, OPEN_LOGIN_GUIDE_EVENT } from './account'
 import { loadDiskPref } from './prefs'
 import {
   cancelRecording,
@@ -173,7 +173,7 @@ interface RecToast {
 
 export function RecorderView(): ReactNode {
   const snap = useRecorderSnapshot()
-  const { fullAccess } = useAccount()
+  const { fullAccess, account } = useAccount()
 
   const [list, setList] = useState<RecordingMeta[]>(() => loadRecordings())
   const [missing, setMissing] = useState<Set<string>>(() => new Set())
@@ -321,7 +321,11 @@ export function RecorderView(): ReactNode {
     if (snap.status !== 'idle') return
     // 会员闸门:受限用户可进页/回放/管理,仅禁止新增录音。
     if (!fullAccess) {
-      showToast('err', memberOnly('录音'))
+      if (!account) {
+        window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '录音' }))
+      } else {
+        showToast('err', memberOnly('录音'))
+      }
       return
     }
     void startRecording()

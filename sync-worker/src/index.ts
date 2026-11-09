@@ -44,6 +44,7 @@ import {
   verifyCode,
 } from './auth'
 import { sendCodeEmail } from './email'
+import { fetchUsage } from './usage'
 import {
   ALLOWED_EVENTS,
   appPageStats,
@@ -80,6 +81,10 @@ export type WorkerEnv = {
   ADMIN_EMAIL?: string
   /** 后台管理平台密码(可选,默认值为需求指定值)。 */
   ADMIN_PASSWORD?: string
+  /** Cloudflare API Token(Account Analytics Read),供后台服务监控页读取用量。用 wrangler secret put 注入。 */
+  CF_API_TOKEN?: string
+  /** Cloudflare Account ID(非敏感,写进 wrangler.toml [vars])。 */
+  CF_ACCOUNT_ID?: string
 }
 
 // 每个 DB(生产环境即单个 D1 实例)只跑一次建表/补列。用 await 而非
@@ -946,6 +951,32 @@ app.get('/api/admin/overview', async (c) => {
   const days = int(c.req.query('days'), 7, 90, 30)
   const data = await overviewStats(c.env.DB, days)
   return c.json(data)
+})
+
+// ---- 服务监控 --------------------------------------------------------------
+// 每次请求都实时向 Cloudflare GraphQL Analytics 取最新快照,不做服务端缓存,
+// 也不缓存响应,保证后台「刷新数据」按钮拿到的是最新可用数据。
+app.get('/api/admin/usage', async (c) => {
+  const days = int(c.req.query('days'), 7, 30, 8)
+  try {
+    const data = await fetchUsage(c.env, days)
+    return new Response(JSON.stringify(data), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[usage]', msg)
+    return new Response(JSON.stringify({ error: `用量数据读取失败：${msg}` }), {
+      status: 502,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    })
+  }
 })
 
 // ---- 用户管理 --------------------------------------------------------------

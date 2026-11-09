@@ -68,6 +68,8 @@
   --range-track: rgba(244, 244, 245, 0.1);
   --range-thumb: #f4f4f5;
   --range-thumb-border: rgba(255, 255, 255, 0.2);
+  /* 弹窗卡片底色:覆盖 index.css :root 的 #ffffff,否则暗色主题下弹窗仍是白卡片 */
+  --surface: #1a1a1e;
   --surface-hover: #1c1c1f;
   --row-shadow: none;
   --row-shadow-hover: none;
@@ -145,11 +147,52 @@
     calc(100vh - var(--handle-half) - 8px)
   );
 
-  width: 100vw;
+  /* ⚠️ 固定为「把手 + 面板」宽度,不能用 100vw:展开/收起动画会逐帧改变窗口宽度,
+     100vw 会让整棵 DOM 每帧按新视口重排(高 DPI 小屏上就是「闪烁展开」)。
+     固定后布局恒定,窗口变宽只是把已经画好的卡片逐列揭示出来。 */
+  width: calc(var(--tab-width) + var(--panel-width));
   height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   background: transparent;
   isolation: isolate;
+}
+
+/* ===== 贴边内容层:展开 / 收起动画(0.4.62 重构) =====
+   ⚠️ 不再逐帧 resize 原生窗口:每帧一次 JS→Rust IPC + WebView2 重排重绘,
+   再叠加 48ms 点击穿透轮询抢主线程,帧间隔忽长忽短 = 用户说的「卡顿」。
+   现在原生窗口恒定全宽,只靠这一层的 GPU 合成器 transform 平移内容:
+     右贴:收起 translateX(+面板宽) 向右,展开回 0 向左;
+     左贴:收起 translateX(-面板宽) 向左,展开回 0 向右。
+   移出窗口的部分被视口天然裁掉,收起时只剩把手那一列。 */
+.dock-layer {
+  display: contents;
+}
+.workspace.is-native .dock-layer {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: calc(var(--tab-width) + var(--panel-width));
+  height: 100vh;
+  transform: translateX(0);
+  transition: transform var(--motion-ms) cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  pointer-events: none;
+}
+/* 层本身不吃点击,把手与面板照常交互(SVG 保持 pointer-events:none)。 */
+.workspace.is-native .dock-layer .edge-handle,
+.workspace.is-native .dock-layer .todo-sidebar {
+  pointer-events: auto;
+}
+.workspace.is-native.is-sidebar-closed .dock-layer {
+  transform: translateX(var(--panel-width));
+}
+.workspace.is-native.dock-left.is-sidebar-closed .dock-layer {
+  transform: translateX(calc(-1 * var(--panel-width)));
+}
+/* 切屏 / 换停靠边 / 改宽度时 transform 目标瞬间跳变,不能有过渡。 */
+.workspace.is-native.is-dock-snap .dock-layer {
+  transition: none;
 }
 
 .workspace.is-native .desktop-preview {
@@ -162,12 +205,21 @@
 
 .workspace.is-native .native-dock-surface {
   position: fixed;
-  top: 0; right: 0; bottom: 0; left: 0; /* inset 简写 Safari<14.5 不支持,WKWebView 会定位失效 */
+  top: 0;
+  left: 0;
   z-index: 14;
   display: block;
-  width: 100vw;
-  height: 100vh;
+  /* ⚠️ 必须用 SVG 自身的 width/height 属性(逻辑像素),不能用 100vw:
+     收起态窗口会缩窄到只有把手宽(42px),100vw 会把整张卡片压扁成一条,
+     把手圆角变形甚至消失。固定尺寸后,窗口只截取卡片里的把手那一列。 */
+  width: auto;
+  height: auto;
   pointer-events: none;
+}
+/* 左贴镜像后把手位于卡片右侧,收起态窗口需右对齐截取。 */
+.workspace.dock-left.is-native .native-dock-surface {
+  left: auto;
+  right: 0;
 }
 
 .native-dock-surface path {
@@ -665,6 +717,10 @@ kbd {
   box-shadow: none;
   backdrop-filter: none;
   transform: none;
+  /* 视觉过渡统一由 .dock-layer 的 transform 承担;面板自身不再淡入淡出,
+     否则 CSS 过渡与滑动叠加又会变成「闪一下」。 */
+  opacity: 1;
+  transition: none;
 }
 
 .workspace.is-native .todo-sidebar.is-open {
@@ -673,6 +729,10 @@ kbd {
 
 .workspace.is-native.is-sidebar-closed {
   overflow: hidden;
+}
+
+.workspace.is-native.is-sidebar-open .todo-sidebar {
+  opacity: 1;
 }
 
 .sidebar-header {
@@ -5475,6 +5535,25 @@ body.is-row-dragging * {
 .vip-sheet {
   position: relative; /* 供右上角关闭按钮绝对定位 */
   gap: 12px;
+  /* 覆盖通用 .sheet 的整窗滚动:权益条目增多后只滚内容区,购买按钮保持吸底。 */
+  overflow: hidden;
+}
+
+.vip-sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+/* 内容区滚动时,标题 / 把手 / 购买按钮都不参与压缩,只由 .vip-sheet-scroll 收缩。 */
+.vip-sheet > .sheet-grip,
+.vip-sheet > .sheet-title,
+.vip-sheet > .vip-buy-btn {
+  flex-shrink: 0;
 }
 
 .vip-sheet-close {
@@ -5518,8 +5597,8 @@ body.is-row-dragging * {
 .vip-benefits {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px 12px;
+  gap: 7px;
+  padding: 10px 12px;
   border-radius: 10px;
   background: rgba(245, 196, 97, 0.12);
   border: 1px solid rgba(196, 145, 55, 0.3);
@@ -5527,15 +5606,27 @@ body.is-row-dragging * {
 
 .vip-benefit-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* 长权益会换行,勾与首行对齐而不是整块居中 */
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .vip-benefit-item svg {
   color: #d97706;
   flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* 「更多会员权益...」是收尾提示,不是已兑现的权益,做淡化以区分。 */
+.vip-benefit-item.is-more {
+  color: var(--muted);
+}
+.vip-benefit-item.is-more svg {
+  color: var(--muted);
+  opacity: 0.55;
 }
 
 .vip-steps {
@@ -5807,6 +5898,629 @@ body.is-row-dragging * {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+/* 未登录引导弹窗(受限功能点击 → 去登录) */
+.login-guide-body {
+  padding: 2px 0;
+}
+.login-guide-body p {
+  margin: 0;
+  color: var(--ink, #4b4b4b);
+  line-height: 1.7;
+  font-size: 14px;
+}
+.login-guide-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.login-guide .vip-buy-btn {
+  min-width: 96px;
+}
+
+/* 首页更新提示弹窗:每版本最多一次,内容来自后台版本记录。
+   portal 挂进 .todo-sidebar 后,遮罩 inset:0 天然只覆盖工具面板(不碰左侧把手区);
+   宽度沿用 .account-modal 的 320px,与注册/登录弹窗一致,居中显示。 */
+.account-modal-overlay.update-notice-overlay {
+  justify-content: center;
+  padding-right: 0;
+}
+.account-modal.update-notice {
+  width: min(320px, calc(100% - 28px));
+  max-height: min(620px, calc(100% - 48px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.update-notice-body {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.update-notice-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted, #6b6b75);
+  font-size: 12px;
+}
+.update-notice-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #17181c);
+}
+.update-notice-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--ink, #3c3c44);
+}
+.update-notice-list li {
+  line-height: 1.6;
+}
+.update-notice-notes {
+  margin: 0;
+  color: var(--ink, #4b4b4b);
+  line-height: 1.7;
+}
+.update-notice-extra,
+.update-notice-missed {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(120, 120, 140, 0.09);
+  color: var(--muted, #5a5a66);
+  font-size: 12px;
+}
+/* 显式蓝色:不跟 --accent 走(亮色主题下 --accent 是深灰,会丢掉强调语义) */
+.update-notice-missed {
+  background: rgba(90, 130, 220, 0.12);
+  color: #3355cc;
+}
+.workspace.theme-dark .update-notice-missed {
+  background: rgba(90, 130, 220, 0.2);
+  color: #93b4ff;
+}
+.workspace.theme-dark .update-notice-extra,
+.workspace.theme-dark .update-notice-group {
+  background: rgba(255, 255, 255, 0.06);
+}
+.update-notice-all-link {
+  justify-self: start;
+  padding: 0;
+}
+.update-notice-all {
+  display: grid;
+  gap: 12px;
+}
+.update-notice-group {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(120, 120, 140, 0.07);
+}
+.update-notice-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.update-notice-group-title {
+  font-weight: 600;
+  color: var(--ink, #17181c);
+}
+.update-notice-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(220, 70, 70, 0.12);
+  color: #b03030;
+  font-size: 12px;
+}
+.update-notice-error.is-ok {
+  background: rgba(60, 160, 100, 0.12);
+  color: #237a4b;
+}
+.workspace.theme-dark .update-notice-error {
+  color: #ff9a9a;
+}
+.workspace.theme-dark .update-notice-error.is-ok {
+  color: #6fdb9c;
+}
+.update-notice .vip-buy-btn {
+  min-width: 96px;
+}
+
+/* ===== 首页顶栏快捷入口(0.4.62) ==========================================
+   动态槽位 + 「⋯ 更多」溢出菜单 + 设置页配置分组。全部使用 .workspace 上的
+   主题变量,暗色下自动跟随,不会出现 portal 到 body 时的「侧栏黑、卡片白」。 */
+
+/* header 作为菜单的定位基准,菜单贴顶栏右下方,不受侧栏 padding 影响。 */
+.sidebar-header {
+  position: relative;
+}
+
+/* 「⋯ 更多」按钮右上角的小圆点:提示有工具被收起。 */
+.icon-cluster button .more-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d8a33c;
+  border: 1px solid var(--sidebar-solid-bg);
+  pointer-events: none;
+}
+
+.topbar-menu {
+  position: absolute;
+  top: calc(100% - 2px);
+  right: 0;
+  width: 222px;
+  z-index: 50;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--sidebar-solid-bg);
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 36px rgba(18, 22, 30, 0.18), 0 2px 8px rgba(18, 22, 30, 0.08);
+  animation: topbar-menu-in 150ms ease-out;
+}
+@keyframes topbar-menu-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: none; }
+}
+.tm-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px 8px;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.tm-head em {
+  font-style: normal;
+  opacity: 0.8;
+}
+.tm-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.tm-item:hover,
+.tm-item:focus-visible {
+  background: var(--surface-hover);
+}
+.tm-item > svg {
+  color: var(--muted);
+  flex: none;
+}
+.tm-item .nm {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-item .kd {
+  font-size: 9.5px;
+  color: var(--muted);
+  flex: none;
+  white-space: nowrap;
+}
+.tm-vip {
+  font-size: 9px;
+  font-weight: 800;
+  color: #7a4f09;
+  background: linear-gradient(135deg, #ffe9a8, #ffce5c);
+  border-radius: 5px;
+  padding: 1px 5px;
+  flex: none;
+}
+.tm-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 5px 4px;
+}
+.tm-manage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.tm-manage:hover,
+.tm-manage:focus-visible {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+/* ===== 设置页「顶栏快捷入口」配置分组 ===== */
+#topbar-tools-group .settings-hint {
+  margin: 2px 0 4px;
+}
+.tt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: var(--settings-row);
+}
+.tt-row.is-off .tt-nm,
+.tt-row.is-off .tt-icon {
+  opacity: 0.55;
+}
+.tt-check {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--muted);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+}
+.tt-check.is-on {
+  background: #15161a;
+  border-color: #15161a;
+}
+.workspace.theme-dark .tt-check.is-on {
+  background: #f4f4f5;
+  border-color: #f4f4f5;
+  color: #0d0d0e;
+}
+.tt-icon {
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.tt-nm {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-pos {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--muted);
+  flex: none;
+}
+.tt-pos.is-top {
+  color: var(--ink);
+}
+.tt-move {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: none;
+}
+.tt-move button {
+  width: 17px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.tt-move button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.tt-move button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tt-reset {
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tt-reset:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+/* ===== 顶栏快捷入口:设置页只留一行入口,8 行配置收进底部 popup ===== */
+.tt-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--settings-row);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.tt-entry:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+.tt-entry-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--muted);
+}
+.tt-entry-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.tt-entry-text strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tt-entry-text em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-entry > svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.tt-sheet {
+  background: var(--settings-surface, var(--sidebar-bg));
+}
+.tt-sheet .settings-hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.tt-sheet .tt-list {
+  /* 8 行约 356px,一屏放下;极小屏才退化为内部滚动。 */
+  max-height: min(400px, 54vh);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.tt-sheet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.tt-sheet-buttons {
+  display: flex;
+  gap: 8px;
+}
+.tt-btn {
+  min-width: 64px;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tt-btn:hover {
+  background: var(--surface-hover);
+}
+.tt-btn.is-primary {
+  background: #15161a;
+  border-color: #15161a;
+  color: #fff;
+}
+.tt-btn.is-primary:hover {
+  filter: brightness(1.15);
+}
+.workspace.theme-dark .tt-btn.is-primary {
+  background: #f4f4f5;
+  border-color: #f4f4f5;
+  color: #0d0d0e;
+}
+
+/* ===== 窗口位置(设置页):贴边方向 + 显示屏幕 ===== */
+.dock-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: 8px;
+}
+.dock-setting-row > span {
+  flex: 0 0 62px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.dock-setting-row > .segmented-control,
+.dock-setting-row > .dock-select {
+  flex: 1;
+  min-width: 0;
+}
+.dock-setting-row.is-disabled {
+  opacity: 0.55;
+}
+.dock-select {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
+.dock-select:disabled {
+  cursor: not-allowed;
+}
+.dock-select:focus-visible {
+  border-color: var(--accent);
+}
+.workspace.theme-dark .dock-select {
+  background: #202024;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+.dock-setting-row .segmented-control button {
+  font-size: 11px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* ===== 左侧停靠:整窗 UI 镜像 =====
+   窗口内 DOM 是「把手在左、面板在右」;左贴时坐标由 dock.ts 镜像到屏幕左缘,
+   视觉层也必须镜像,否则会出现「把手贴着屏幕内侧、面板伸到屏外」。
+   native-dock-surface 是纯形状 SVG(无文字),可直接 scaleX(-1) 翻转。 */
+.workspace.dock-left .native-dock-surface {
+  transform: scaleX(-1);
+}
+.workspace.dock-left .handle-symbol {
+  transform: scaleX(-1);
+}
+
+/* 浏览器预览态:把手 / 面板改用左缘定位与反向位移 */
+.workspace.dock-left .edge-handle {
+  right: auto;
+  left: 12px;
+  box-shadow:
+    7px 14px 24px rgba(15, 23, 42, 0.1),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.92);
+  transition:
+    left var(--motion-ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 160ms ease,
+    transform 160ms ease;
+}
+.workspace.dock-left .edge-handle.is-open {
+  right: auto;
+  left: min(var(--panel-width), calc(100vw - var(--tab-width)));
+}
+.workspace.dock-left .todo-sidebar {
+  right: auto;
+  left: 0;
+  padding: 17px 18px 17px 15px;
+  border-left: 0;
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: 30px 0 80px rgba(28, 39, 50, 0.14);
+  transform: translateX(calc(-100% - 18px));
+}
+/* ⚠️ 特异性必须高于上面的收起位移,否则左贴时展开态也会被移出屏幕。 */
+.workspace.dock-left .todo-sidebar.is-open {
+  transform: translateX(0);
+}
+
+/* 原生态:窗口整体由 PhysicalPosition 移动,内部只需交换左右锚点。
+   ⚠️ 0.4.62 竖向阴影修复:下面这两处预览态镜像规则(第 6385 / 6400 行附近)
+   带 box-shadow,特异性与 .workspace.is-native 相同但位置更靠后,会把原生模式的
+   box-shadow:none 盖掉。右贴没有对应的镜像规则所以不受影响 —— 这正是「只有
+   桌面左侧才出现一条贯穿整屏的竖向阴影」的原因。这里显式复位。 */
+.workspace.dock-left.is-native .edge-handle,
+.workspace.dock-left.is-native .edge-handle.is-open,
+.workspace.dock-left.is-native .todo-sidebar,
+.workspace.dock-left.is-native .todo-sidebar.is-open {
+  box-shadow: none;
+}
+.workspace.dock-left.is-native .edge-handle,
+.workspace.dock-left.is-native .edge-handle.is-open {
+  left: auto;
+  right: 0;
+}
+.workspace.dock-left.is-native .todo-sidebar {
+  left: auto;
+  right: var(--tab-width);
+  padding: 17px 18px 17px 15px;
+  border-right: 0;
+  border-radius: 0 var(--panel-radius) var(--panel-radius) 0;
+  transform: none;
+}
+.workspace.dock-left.is-native .todo-sidebar.is-open {
+  transform: none;
+}
+
+/* 独立页面(设置 / 万年历):滑入滑出方向跟着停靠边镜像 */
+.workspace.dock-left .page-panel {
+  animation-name: page-slide-in-left;
+}
+.workspace.dock-left .page-panel.is-closing {
+  animation-name: page-slide-out-left;
+}
+@keyframes page-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes page-slide-out-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+/* 居中弹层:入场横向偏移也跟着镜像(纵向动画保持不变) */
+.workspace.dock-left .account-modal {
+  animation-name: account-pop-left;
+}
+@keyframes account-pop-left {
+  from { transform: translate(-8px, 8px) scale(0.97); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 
 

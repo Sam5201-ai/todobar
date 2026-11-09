@@ -25,6 +25,7 @@ import {
   refreshAccount,
   warmDeviceFingerprint,
   AUTH_INVALID_EVENT,
+  ACCOUNT_CHANGED_EVENT,
   type AccountState,
   type DeviceInfo,
 } from './account'
@@ -181,6 +182,13 @@ export function AccountSetting({
     const onInvalid = () => setAccount(null)
     window.addEventListener(AUTH_INVALID_EVENT, onInvalid)
     return () => window.removeEventListener(AUTH_INVALID_EVENT, onInvalid)
+  }, [])
+
+  // 登录态变更(任意入口登录/激活/登出)时,账号区同步刷新,避免「已登录但设置页仍显示未登录」的割裂。
+  useEffect(() => {
+    const onChanged = () => setAccount(loadAccount())
+    window.addEventListener(ACCOUNT_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(ACCOUNT_CHANGED_EVENT, onChanged)
   }, [])
 
   // 会员状态静默刷新:挂载与窗口重新获焦点时向云端对齐(后台激活/其他设备兑换后生效)。
@@ -561,11 +569,16 @@ export function AccountSetting({
 // sheet 一致:is-closing + 190ms 后卸载。
 // ---------------------------------------------------------------------------
 
+// 会员权益明细:用具体能力替代此前「全功能解锁 / 一次买断 / 持续更新」这类
+// 笼统卖点(买断与更新已由价格区、顶部横幅表达,不必在权益里重复)。
+// 最后一条是收尾提示,渲染时做淡化处理。
 const VIP_BENEFITS = [
-  '全功能永久解锁,无任何限制',
-  '一次买断,永久有效,无订阅费用',
-  '后续版本持续免费更新',
-  '不限设备数量,多设备云同步',
+  '待办事项不限制每日新建数量，支持添加子任务，支持设置事项提醒',
+  '支持新增生日/纪念日，不设限制',
+  '可使用牛马计薪器桌面组件，漂亮的牛马组件尽情使用',
+  '支持本地录音、截图/贴图、新建便利签、剪贴板',
+  '支持待办事项云端同步',
+  '更多会员权益...',
 ]
 
 const VIP_STEPS = [
@@ -619,43 +632,49 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
         </button>
         <div className="sheet-title">升级永久会员</div>
 
-        <div className="vip-price">
-          <span className="vip-price-num">￥29.9</span>
-          <span className="vip-price-note">永久买断 · 无订阅</span>
-        </div>
+        {/* 权益明细变长后只在内容区滚动,「立即购买」始终吸底可见。 */}
+        <div className="vip-sheet-scroll">
+          <div className="vip-price">
+            <span className="vip-price-num">￥29.9</span>
+            <span className="vip-price-note">永久买断 · 无订阅</span>
+          </div>
 
-        <div className="vip-benefits">
-          {VIP_BENEFITS.map((b) => (
-            <div key={b} className="vip-benefit-item">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          <div className="vip-benefits">
+            {VIP_BENEFITS.map((b, i) => (
+              <div
+                key={b}
+                className={`vip-benefit-item ${i === VIP_BENEFITS.length - 1 ? 'is-more' : ''}`}
               >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-              <span>{b}</span>
-            </div>
-          ))}
-        </div>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                <span>{b}</span>
+              </div>
+            ))}
+          </div>
 
-        <div className="vip-steps">
-          <div className="vip-steps-title">如何激活</div>
-          {VIP_STEPS.map((s, i) => (
-            <div key={s} className="vip-step">
-              <span className="vip-step-num">{i + 1}</span>
-              <span>{s}</span>
-            </div>
-          ))}
-        </div>
+          <div className="vip-steps">
+            <div className="vip-steps-title">如何激活</div>
+            {VIP_STEPS.map((s, i) => (
+              <div key={s} className="vip-step">
+                <span className="vip-step-num">{i + 1}</span>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
 
-        {err ? <div className="vip-sheet-err">{err}</div> : null}
+          {err ? <div className="vip-sheet-err">{err}</div> : null}
+        </div>
 
         <button type="button" className="vip-buy-btn" onClick={() => void handleBuy()} disabled={opening}>
           {opening ? '正在打开…' : '立即购买'}
@@ -669,7 +688,7 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
 // 弹窗:登录/注册(双 tab + 找回密码)/ 修改密码 / 设备管理
 // ---------------------------------------------------------------------------
 
-function AccountModal({
+export function AccountModal({
   view,
   account,
   onClose,

@@ -52,11 +52,16 @@ export type Note = {
   bgAlpha: number
   /** 「始终置顶」(用户口中的"钉住")。 */
   pinned: boolean
-  /** 位置尺寸,存 Windows 全局虚拟桌面坐标,支持多显示器原位置恢复。 */
+  /** 位置尺寸(逻辑像素),配合 scaleFactor 换算成 Windows 全局虚拟桌面物理坐标。
+   *  ⚠️ 旧数据没有 scaleFactor,由便利签窗口当前屏的缩放推断,保持原行为。 */
   x: number
   y: number
   w: number
   h: number
+  /** 该签坐标的换算基准(创建 / 最后一次拖动时所在屏的缩放)。 */
+  scaleFactor?: number
+  /** 新建时跟随的目标屏名(诊断用;用户手动拖动后不改写,尊重拖动)。 */
+  monitorName?: string
   createdAt: number
   updatedAt: number
   /** 收起态:数据保留、窗口销毁,可从管理器召回。 */
@@ -133,6 +138,13 @@ function normalizeNote(raw: unknown): Note | null {
     y: clampNum(v.y, -32768, 32768, 120),
     w: clampNum(v.w, 200, 640, 240),
     h: clampNum(v.h, 160, 900, 220),
+    scaleFactor:
+      typeof v.scaleFactor === 'number' &&
+      Number.isFinite(v.scaleFactor) &&
+      v.scaleFactor > 0
+        ? v.scaleFactor
+        : undefined,
+    monitorName: typeof v.monitorName === 'string' ? v.monitorName : undefined,
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : Date.now(),
     updatedAt: typeof v.updatedAt === 'number' ? v.updatedAt : Date.now(),
     collapsed: v.collapsed === true,

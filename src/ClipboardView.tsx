@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  LogicalPosition,
   LogicalSize,
+  PhysicalPosition,
   cursorPosition,
   getCurrentWindow,
   monitorFromPoint,
 } from '@tauri-apps/api/window'
 import { Copy, Pin, PinOff, Search, Trash2, X } from 'lucide-react'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 import './ClipboardView.css'
 import {
@@ -26,6 +26,11 @@ const WIN_W = 468
 const WIN_H = 600
 
 const win = getCurrentWindow()
+
+function clamp(v: number, lo: number, hi: number): number {
+  if (hi < lo) return lo
+  return Math.min(Math.max(v, lo), hi)
+}
 
 /** 读取主程序设置的明/暗主题,独立浮窗需自行套用(主界面样式不生效于此窗口)。 */
 function readTheme(): 'light' | 'dark' {
@@ -70,6 +75,8 @@ export function ClipboardView() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const positionedRef = useRef(false)
+  /** 最近一次「显示」的时刻,用于忽略 show 之后紧随的伪失焦事件。 */
+  const shownAtRef = useRef(0)
 
   const flash = useCallback((msg: string) => {
     setToast(msg)
@@ -80,17 +87,27 @@ export function ClipboardView() {
     void clipboardList().then((list) => setItems(list))
   }, [])
 
-  // 居中到光标所在显示器(用该显示器 scaleFactor 把物理坐标换算成逻辑坐标)。
+  // 居中到光标所在显示器。
+  // ⚠️ 全程使用【物理坐标】+ PhysicalPosition,绝不做 scaleFactor 换算:
+  // Tauri 的 LogicalPosition 以主屏 DPI 为基准,而 Monitor.position/size 返回的是物理像素。
+  // 混合 DPI 双屏(主屏 1.5x / 副屏 1.0x)下,旧代码把「物理 ÷ 副屏 sf」当逻辑坐标,
+  // 又被系统按主屏 1.5x 放大一次 → 窗口被放到所有屏幕之外,表现为「怎么都打不开」。
   const reposition = useCallback(async () => {
     try {
-      const pos = await cursorPosition()
+      const pos = await cursorPosition() // 物理坐标
       const mon = await monitorFromPoint(pos.x, pos.y)
       const sf = mon?.scaleFactor ?? (await win.scaleFactor())
-      const cx = ((mon ? mon.position.x + mon.size.width / 2 : pos.x) ) / sf
-      const cy = ((mon ? mon.position.y + mon.size.height / 2 : pos.y) ) / sf
-      const x = Math.round(cx - WIN_W / 2)
-      const y = Math.round(cy - WIN_H / 2)
-      await win.setPosition(new LogicalPosition(x, y))
+      // 窗口 inner_size 是逻辑尺寸,在目标显示器上的物理尺寸 = 逻辑 × 该屏 scaleFactor。
+      const w = WIN_W * sf
+      const h = WIN_H * sf
+      const left = mon ? mon.position.x : pos.x - w / 2
+      const top = mon ? mon.position.y : pos.y - h / 2
+      const width = mon ? mon.size.width : w
+      const height = mon ? mon.size.height : h
+      // 居中并夹取到目标显示器可视区内,避免跨屏 / 越界导致整窗不可见。
+      const x = clamp(left + (width - w) / 2, left, left + width - w)
+      const y = clamp(top + (height - h) / 2, top, top + height - h)
+      await win.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)))
     } catch {
       /* 取显示器失败则保留默认位置 */
     }
@@ -105,6 +122,7 @@ export function ClipboardView() {
         await win.setSize(new LogicalSize(WIN_W, WIN_H))
         await reposition()
         await win.setAlwaysOnTop(true)
+        shownAtRef.current = Date.now()
         await win.show()
         await win.setFocus()
         inputRef.current?.focus() // 进入命令面板式操作
@@ -126,12 +144,29 @@ export function ClipboardView() {
     let un: UnlistenFn | undefined
     void win
       .onFocusChanged(({ payload: focused }) => {
-        // 点到别处自动收起(读完了,没必要占屏);
-        // 重新获得焦点(快捷键二次唤起)则按新光标位置重新居中。
-        if (!focused) void clipboardHideWindow()
-        else void reposition()
+        if (focused) {
+          shownAtRef.current = Date.now()
+          // 二次唤起按新光标位置重新居中(屏幕/分辨率变化后老坐标可能已失效)。
+          void reposition()
+          return
+        }
+        // Windows 在贴边主窗口抢占焦点时,会紧跟 show 发一次 focused:false;
+        // 旧逻辑会立刻把刚显示的浮窗收起,表现为「点了没反应」。给 800ms 宽限期。
+        if (Date.now() - shownAtRef.current < 800) return
+        void clipboardHideWindow()
       })
       .then((fn) => (un = fn))
+    return () => un?.()
+  }, [reposition])
+
+  // Rust 每次唤起已有窗口都会发此事件:先重新定位再显示,保证双屏切换后不会
+  // 停留在旧坐标(曾经跑到屏幕外)。即使 set_focus 被系统拒绝也能定位成功。
+  useEffect(() => {
+    let un: UnlistenFn | undefined
+    void listen('clipboard-reposition', () => {
+      shownAtRef.current = Date.now()
+      void reposition()
+    }).then((fn) => (un = fn))
     return () => un?.()
   }, [reposition])
 

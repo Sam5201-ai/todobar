@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.4.61"
+version = "0.4.62"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"

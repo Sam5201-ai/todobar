@@ -30,6 +30,14 @@ export function persistAccountDurable(a: AccountState | null): void {
 /** 登录态失效(如令牌过期/在其他设备被解绑,云端返回 401)时广播,供账号面板与同步开关回到未登录态。 */
 export const AUTH_INVALID_EVENT = 'ticktask-auth-invalid'
 
+/** 请求打开全局登录弹窗:任意入口需要登录(或未登录用户点击受限功能后由引导弹窗)
+ *  时派发,由 App 根挂载的全局登录弹窗监听并打开。 */
+export const OPEN_LOGIN_EVENT = 'ticktask-open-login'
+
+/** 请求打开「去登录」引导弹窗(未登录用户点击受限功能时派发,detail 为功能名)。
+ *  与 OPEN_LOGIN_EVENT 区分:本事件先弹引导,用户点「去登录」后才派发 OPEN_LOGIN_EVENT。 */
+export const OPEN_LOGIN_GUIDE_EVENT = 'ticktask-open-login-guide'
+
 export function notifyAuthInvalid(): void {
   saveAccount(null)
   try {

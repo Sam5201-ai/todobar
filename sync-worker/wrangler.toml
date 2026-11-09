@@ -12,6 +12,8 @@ routes = [
 # 静态令牌（个人工具足够）。多设备用同一令牌；要按设备吊销再换 KV 方案。
 [vars]
 API_TOKENS = "a8a151bba6093d833e412e950fce6f17a62c68a9e122230e"
+# 后台「服务监控」页读取 GraphQL Analytics 用；令牌单独用 wrangler secret put CF_API_TOKEN 注入。
+CF_ACCOUNT_ID = "30b571afc22b411372befbba0492efb3"
 
 # 邮件发送(Resend):生产环境请用 `wrangler secret put RESEND_API_KEY` 注入,
 # 不要把密钥明文写进仓库。RESEND_FROM 填已在 Resend 验证过的发信域名地址。

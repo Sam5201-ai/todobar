@@ -258,6 +258,54 @@
     .sync-chip.err { color: var(--red); border-color: #f3c8c8; }
     @keyframes chipspin { to { transform: rotate(360deg); } }
 
+    /* ---- 服务监控 ---- */
+    .nav .mon-new { margin-left: auto; background: #f59e0b; color: #0f1b2d; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; }
+    .nav a.active .mon-new { background: rgba(255,255,255,.9); color: #1565c8; }
+    .mon-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .mon-updated { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+    .mon-spin { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: monspin .8s linear infinite; }
+    @keyframes monspin { to { transform: rotate(360deg); } }
+    .mon-banner { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 11px 14px; font-size: 13px; margin-bottom: 16px; border: 1px solid transparent; }
+    .mon-banner.ok { background: var(--green-bg); color: #15803d; border-color: #c6ecd5; }
+    .mon-banner.warn { background: var(--amber-bg); color: var(--amber); border-color: #f3ddb0; }
+    .mon-banner.crit { background: var(--red-bg); color: var(--red); border-color: #f3c8c8; }
+    .mon-banner .b-title { font-weight: 600; }
+    .mon-banner .b-sub { color: var(--text-2); font-size: 12px; margin-left: 10px; }
+    .mon-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .mon-kpi { padding: 16px 18px; display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .mon-kpi .info { min-width: 0; flex: 1; }
+    .mon-kpi .label { font-size: 12.5px; color: var(--text-2); }
+    .mon-kpi .value { font-size: 21px; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+    .mon-kpi .value small { font-size: 12px; font-weight: 500; color: var(--text-3); margin-left: 3px; }
+    .mon-kpi .extra { font-size: 11.5px; color: var(--text-3); margin-top: 5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .mon-charts { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 14px; }
+    .mon-bottom { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; align-items: start; }
+    .mon-chart-box svg { width: 100%; height: auto; display: block; }
+    .mon-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--text-2); padding: 10px 2px 0; }
+    .mon-legend .item { display: inline-flex; align-items: center; gap: 6px; }
+    .mon-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
+    .mon-legend .item.off { opacity: .4; }
+    .mon-track { display: inline-block; width: 76px; height: 7px; border-radius: 4px; background: var(--slate-bg); vertical-align: middle; margin-right: 8px; overflow: hidden; }
+    .mon-fill { display: block; height: 100%; border-radius: 4px; }
+    .mon-kv { display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; }
+    .mon-kv-row { display: flex; justify-content: space-between; gap: 12px; }
+    .mon-kv-row .k { color: var(--text-2); }
+    .mon-kv-row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .mon-rule { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; color: var(--text-2); }
+    .mon-rule:last-child { border-bottom: none; }
+    .mon-rule .k { flex-shrink: 0; font-weight: 600; }
+    .mon-hero { display: flex; gap: 13px; align-items: flex-start; background: var(--red-bg); border: 1px solid #f3c8c8; border-radius: 10px; padding: 13px 14px; margin-bottom: 14px; }
+    .mon-hero .t { font-size: 13.5px; font-weight: 600; color: #b91c1c; }
+    .mon-hero .d { font-size: 12.5px; color: var(--text-2); line-height: 1.65; margin-top: 4px; }
+    .mon-alert-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; font-size: 13px; }
+    .mon-alert-row .v { font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums; }
+    .mon-note { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin-top: 12px; }
+    .mon-note b { color: var(--text); font-weight: 600; }
+    @media (max-width: 1180px) {
+      .mon-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mon-charts, .mon-bottom { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 960px) {
       .grid-2, .grid-charts { grid-template-columns: 1fr; }
     }
@@ -623,12 +671,13 @@
       { hash: '#/codes', label: '激活码管理', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
       { hash: '#/releases', label: '版本记录', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' },
       { hash: '#/feedback', label: '用户反馈', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>' },
+      { hash: '#/monitor', label: '服务监控', badge: 'NEW', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>' },
     ]
 
     function shell(contentHtml) {
       const token = localStorage.getItem(TOKEN_KEY)
       const cur = location.hash || '#/overview'
-      const navHtml = NAV.map((n) => `<a href="${n.hash}" class="${cur === n.hash ? 'active' : ''}">${n.icon}<span>${n.label}</span></a>`).join('')
+      const navHtml = NAV.map((n) => `<a href="${n.hash}" class="${cur === n.hash ? 'active' : ''}">${n.icon}<span>${n.label}</span>${n.badge ? `<span class="mon-new">${n.badge}</span>` : ''}</a>`).join('')
       document.getElementById('app').innerHTML = `
         <div class="shell">
           <aside class="sidebar">
@@ -800,8 +849,8 @@
       const installRate = rate(f.installs, f.visitors)
       const regRate = rate(f.registrations, f.installs)
       const fnRows = [
-        { l: '访客数(设备)', v: f.visitors, c: '#1d7ef0', sub: `按设备指纹去重 · 近${d.range}天同设备多次进入=1` },
         { l: '点击数(进入次数)', v: f.clicks, c: '#3d97f5', sub: `进入1次计1次,页内操作不计 · 人均 ${perVisit} 次/设备` },
+        { l: '访客数(设备)', v: f.visitors, c: '#1d7ef0', sub: `按设备指纹去重 · 近${d.range}天同设备多次进入=1` },
         { l: '安装数(设备)', v: f.installs, c: '#f59e0b', sub: '上报过安装记录的去重设备数' },
         { l: '注册数(账号)', v: f.registrations, c: '#16a34a', sub: '完成注册且注册前其设备有过安装' },
       ]
@@ -812,7 +861,7 @@
           <div style="margin-top:10px">
             ${fnRows.map((x, i) => {
               // 点击数(进入次数)与访客数不同量纲,显示人均次数;安装/注册与上一设备级指标比百分比
-              const rateTexts = [null, `人均 ${perVisit} 次`, `↓${installRate}(安装/访客)`, `↓${regRate}(注册/安装)`]
+              const rateTexts = [`人均 ${perVisit} 次`, null, `↓${installRate}(安装/访客)`, `↓${regRate}(注册/安装)`]
               const r = rateTexts[i] ? `<span class="rate">${rateTexts[i]}</span>` : ''
               const sub = x.sub ? `<div style="margin:2px 0 6px 92px;font-size:11px;color:var(--text-3)">${x.sub}</div>` : ''
               return `<div class="funnel-row"><span class="f-label">${x.l}</span><div class="f-track"><div class="f-bar" style="width:${Math.max(1.5, (x.v / funnelMax) * 100)}%;background:${x.c}"></div></div><span class="f-val"><b>${fmt(x.v)}</b>${r}</span></div>${sub}`
@@ -1977,9 +2026,330 @@
     }
 
     // =====================================================================
+    // 视图:服务监控(Cloudflare 免费版额度巡检)
+    // =====================================================================
+    const MON_DEFS = [
+      { key: 'requests',     name: 'Workers 请求 / 天',       color: '#1d7ef0' },
+      { key: 'rowsRead',     name: 'D1 读取行数 / 天',         color: '#f59e0b' },
+      { key: 'rowsWritten',  name: 'D1 写入行数 / 天',         color: '#8b5cf6' },
+      { key: 'storageBytes', name: 'D1 存储（账户累计）',      color: '#16a34a' },
+    ]
+    const MON_REFRESH_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>'
+    const MON_OK_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>'
+    const MON_WARN_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2 20h20L12 3z"/><path d="M12 9v5"/><circle cx="12" cy="17.3" r=".8" fill="currentColor" stroke="none"/></svg>'
+    const MON_LEVEL_TXT = ['正常', '注意', '严重']
+    const MON_LEVEL_BADGE = ['badge-green', 'badge-amber', 'badge-red']
+    const MON_LEVEL_COLOR = ['#16a34a', '#d97706', '#dc2626']
+    const MON_ALERT_KEY = 'ticktask-usage-alert-shown'
+    const monState = { data: null, filter: 'all', loading: false, timer: null, lastAt: null }
+
+    function monNum(n) { return Math.round(Number(n) || 0).toLocaleString('en-US') }
+    function monBytes(b) {
+      b = Number(b) || 0
+      return b >= 1024 ** 3 ? (b / 1024 ** 3).toFixed(2) + ' GB' : (b / 1024 ** 2).toFixed(2) + ' MB'
+    }
+    function monPct(r) { r = Number(r) || 0; return (r * 100).toFixed(r > 0 && r < 0.01 ? 2 : 1) + '%' }
+    function monLevel(r) { return r >= 0.8 ? 2 : r >= 0.5 ? 1 : 0 }
+    function monFmt(key, v) { return key === 'storageBytes' ? monBytes(v) : monNum(v) + (key === 'requests' ? ' 次' : ' 行') }
+    function monLimit(key, v) { return key === 'storageBytes' ? '5 GB' : monNum(v) }
+    function monBjTime(d) {
+      const t = new Date(d.getTime() + 8 * 3600_000)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}`
+    }
+
+    function monRing(r, color) {
+      const R = 27, C = 2 * Math.PI * R, p = Math.min(1, Math.max(0, r))
+      return `<svg width="66" height="66" viewBox="0 0 66 66" role="img" style="flex-shrink:0">
+        <circle cx="33" cy="33" r="${R}" fill="none" stroke="#eef2f7" stroke-width="7"/>
+        <circle cx="33" cy="33" r="${R}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - p)).toFixed(1)}" transform="rotate(-90 33 33)"/>
+        <text x="33" y="37" text-anchor="middle" font-size="13" font-weight="700" fill="${color}">${(p * 100).toFixed(p > 0 && p < 0.01 ? 2 : 0)}%</text>
+      </svg>`
+    }
+
+    function monRenderBanner(data) {
+      const lv = Math.max.apply(null, data.metrics.map((m) => monLevel(m.ratio)))
+      const hits = data.metrics.filter((m) => monLevel(m.ratio) >= 1)
+      const el = document.getElementById('mon-banner')
+      if (!el) return
+      el.className = 'mon-banner ' + (lv === 2 ? 'crit' : lv === 1 ? 'warn' : 'ok')
+      el.innerHTML = (lv === 0 ? MON_OK_ICON : MON_WARN_ICON) +
+        `<div><span class="b-title">${lv === 0 ? '服务运行正常' : lv === 1 ? '存在接近限额的指标' : '服务额度告警'}</span>` +
+        `<span class="b-sub">${lv === 0
+          ? '四项指标均低于日额度 50%，配额不影响用户使用。'
+          : esc(hits.map((m) => m.name + ' ' + monPct(m.ratio)).join(' · ')) + (lv === 2 ? ' · 已自动触发告警弹窗' : '')}</span></div>`
+    }
+
+    function monRenderKpis(data) {
+      const box = document.getElementById('mon-kpis')
+      if (!box) return
+      box.innerHTML = data.metrics.map((m) => {
+        const def = MON_DEFS.find((d) => d.key === m.key) || MON_DEFS[0]
+        const lv = monLevel(m.ratio)
+        return `<div class="card mon-kpi">
+          ${monRing(m.ratio, lv === 2 ? '#dc2626' : lv === 1 ? '#d97706' : def.color)}
+          <div class="info">
+            <div class="label">${esc(m.name)}</div>
+            <div class="value">${monFmt(m.key, m.current)}<small>/ ${monLimit(m.key, m.limit)}</small></div>
+            <div class="extra"><span class="badge ${MON_LEVEL_BADGE[lv]}">${MON_LEVEL_TXT[lv]}</span><span>占额度 ${monPct(m.ratio)}</span></div>
+          </div>
+        </div>`
+      }).join('')
+    }
+
+    function monTrendSvg(data) {
+      const labels = data.days.map((d) => String(d).slice(5))
+      const shown = monState.filter === 'all' ? MON_DEFS : MON_DEFS.filter((d) => d.key === monState.filter)
+      const W = 680, H = 236, padL = 40, padR = 14, padT = 14, padB = 28
+      const iw = W - padL - padR, ih = H - padT - padB, n = labels.length
+      const y = (v) => padT + ih - (v / 100) * ih
+      const x = (i) => padL + (n > 1 ? (iw * i) / (n - 1) : 0)
+      let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="近 ${n} 个 UTC 日额度占用率趋势折线图">`
+      ;[0, 20, 40, 60, 80, 100].forEach((t) => {
+        out += `<line x1="${padL}" y1="${y(t)}" x2="${W - padR}" y2="${y(t)}" stroke="#eef1f6" stroke-width="1"/>`
+        out += `<text x="${padL - 7}" y="${y(t) + 4}" text-anchor="end" font-size="10.5" fill="#94a3b8">${t}%</text>`
+      })
+      out += `<line x1="${padL}" y1="${y(50)}" x2="${W - padR}" y2="${y(50)}" stroke="#d97706" stroke-width="1.2" stroke-dasharray="5 4" opacity=".8"/>`
+      out += `<text x="${W - padR - 2}" y="${y(50) - 5}" text-anchor="end" font-size="10.5" fill="#d97706">注意线 50%</text>`
+      out += `<line x1="${padL}" y1="${y(80)}" x2="${W - padR}" y2="${y(80)}" stroke="#dc2626" stroke-width="1.3" stroke-dasharray="5 4" opacity=".85"/>`
+      out += `<text x="${W - padR - 2}" y="${y(80) - 5}" text-anchor="end" font-size="10.5" fill="#dc2626">告警线 80%</text>`
+      labels.forEach((d, i) => { out += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="10.5" fill="#94a3b8">${esc(d)}</text>` })
+      shown.forEach((def) => {
+        const arr = data.series[def.key] || []
+        const ratios = labels.map((_, i) => (Number(arr[i]) || 0) / (Number(data.limits[def.key]) || 1))
+        const pts = ratios.map((r, i) => `${x(i).toFixed(1)},${y(Math.min(100, r * 100)).toFixed(1)}`)
+        out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${def.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
+        ratios.forEach((r, i) => {
+          const cy = y(Math.min(100, r * 100))
+          out += `<circle cx="${x(i).toFixed(1)}" cy="${cy.toFixed(1)}" r="3" fill="#fff" stroke="${def.color}" stroke-width="1.7"><title>${esc(data.days[i])} · ${esc(def.name)} ${monPct(r)}</title></circle>`
+        })
+      })
+      return out + '</svg>'
+    }
+
+    function monBarSvg(data) {
+      const vals = (data.series.rowsRead || []).map((v) => Number(v) || 0)
+      const labels = data.days.map((d) => String(d).slice(5))
+      const peak = Math.max.apply(null, vals.concat([0]))
+      const top = Math.max(3_000_000, Math.ceil(peak / 1_000_000) * 1_000_000)
+      const W = 420, H = 236, padL = 48, padR = 12, padT = 16, padB = 28
+      const iw = W - padL - padR, ih = H - padT - padB
+      const y = (v) => padT + ih - (Math.min(v, top) / top) * ih
+      const bw = (iw / Math.max(1, vals.length)) * 0.56
+      let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="近 ${vals.length} 个 UTC 日 D1 读取行数柱状图">`
+      ;[0, 0.25, 0.5, 0.75, 1].forEach((f) => {
+        const t = top * f
+        out += `<line x1="${padL}" y1="${y(t)}" x2="${W - padR}" y2="${y(t)}" stroke="#eef1f6"/>`
+        out += `<text x="${padL - 7}" y="${y(t) + 4}" text-anchor="end" font-size="10.5" fill="#94a3b8">${t === 0 ? '0' : (t / 1_000_000).toFixed(1) + 'M'}</text>`
+      })
+      const critLine = data.limits.rowsRead * 0.8
+      if (critLine <= top) {
+        out += `<line x1="${padL}" y1="${y(critLine)}" x2="${W - padR}" y2="${y(critLine)}" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="5 4" opacity=".85"/>`
+      }
+      vals.forEach((v, i) => {
+        const cx = padL + (iw * (i + 0.5)) / vals.length
+        const h = Math.max(2, padT + ih - y(v))
+        const ratio = v / (Number(data.limits.rowsRead) || 5_000_000)
+        const over = ratio >= 0.5
+        out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${over ? '#f59e0b' : '#93c5fd'}" opacity="${over ? 0.95 : 0.9}"><title>${esc(data.days[i])} · ${monNum(v)} 行（占额度 ${monPct(ratio)}）</title></rect>`
+        out += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${esc(labels[i])}</text>`
+        if (over) out += `<text x="${cx.toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="#d97706">${monPct(ratio)}</text>`
+      })
+      return out + '</svg>'
+    }
+
+    function monRenderCharts(data) {
+      const trend = document.getElementById('mon-trend')
+      if (!trend) return
+      trend.innerHTML = monTrendSvg(data)
+      document.getElementById('mon-bars').innerHTML = monBarSvg(data)
+      document.getElementById('mon-legend').innerHTML = MON_DEFS.map((d) =>
+        `<span class="item ${monState.filter !== 'all' && monState.filter !== d.key ? 'off' : ''}"><span class="sw" style="background:${d.color}"></span>${esc(d.name)}</span>`
+      ).join('') + '<span class="item" style="color:var(--text-3)">悬浮折线节点查看当日占比</span>'
+      document.querySelectorAll('#mon-metric-seg button').forEach((b) => b.classList.toggle('active', b.dataset.m === monState.filter))
+    }
+
+    function monRenderTable(data) {
+      const box = document.getElementById('mon-table')
+      if (!box) return
+      const rows = data.metrics.map((m) => {
+        const lv = monLevel(m.ratio)
+        const def = MON_DEFS.find((d) => d.key === m.key) || MON_DEFS[0]
+        return `<tr>
+          <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${def.color};margin-right:7px"></span>${esc(m.name)}</td>
+          <td><span class="mon-track"><span class="mon-fill" style="width:${Math.min(100, m.ratio * 100).toFixed(1)}%;background:${MON_LEVEL_COLOR[lv]}"></span></span><b>${monPct(m.ratio)}</b></td>
+          <td>${monFmt(m.key, m.current)}</td>
+          <td>${monLimit(m.key, m.limit)}</td>
+          <td>${m.yesterday == null ? '—' : monPct(m.yesterday / m.limit)}</td>
+          <td>${m.peak ? monPct(m.peak.ratio) + '（' + fmtDay(m.peak.date) + '）' : '—（累计值）'}</td>
+          <td><span class="badge ${MON_LEVEL_BADGE[lv]}">${MON_LEVEL_TXT[lv]}</span></td>
+        </tr>`
+      }).join('')
+      box.innerHTML = '<thead><tr><th>指标</th><th>占额度</th><th>当前 UTC 日</th><th>上限</th><th>昨日</th><th>近 ' + data.days.length + ' 日峰值</th><th>状态</th></tr></thead><tbody>' + rows + '</tbody>'
+    }
+
+    function monRenderAccount(data) {
+      const box = document.getElementById('mon-account')
+      if (!box) return
+      const a = data.account || {}
+      const peakRead = (data.metrics.find((m) => m.key === 'rowsRead') || {}).peak
+      const rows = (a.workers || []).slice(0, 4).map((w) =>
+        `<div class="mon-kv-row"><span class="k">${esc(w.name)} 今日请求</span><span class="v">${monNum(w.requests)} 次</span></div>`
+      )
+      if (!rows.length) rows.push('<div class="mon-kv-row"><span class="k">Worker 今日请求</span><span class="v">无数据</span></div>')
+      rows.push(`<div class="mon-kv-row"><span class="k">D1 数据库</span><span class="v">${monNum(a.d1Databases)} 个 · ${monBytes(a.storageBytes)}</span></div>`)
+      rows.push(`<div class="mon-kv-row"><span class="k">今日 Worker 错误请求</span><span class="v">${monNum(a.errorsToday)} 次</span></div>`)
+      rows.push(`<div class="mon-kv-row"><span class="k">近 ${data.days.length} 日最高单日读取</span><span class="v">${peakRead ? monNum(peakRead.value) + ' 行（' + fmtDay(peakRead.date) + '）' : '—'}</span></div>`)
+      box.innerHTML = rows.join('')
+    }
+
+    function monRenderNotes(data) {
+      const box = document.getElementById('mon-notes')
+      if (!box) return
+      const notes = (data.notes || []).map((n) => '<div>· ' + esc(n) + '</div>').join('')
+      box.innerHTML = '<div>数据来源：' + esc(data.source || 'Cloudflare GraphQL Analytics API') +
+        ' · 服务端取数，无需 VPN · 日额度按 UTC 00:00（北京 08:00）重置</div>' + notes
+    }
+
+    function monRenderAll(data) {
+      monRenderBanner(data)
+      monRenderKpis(data)
+      monRenderCharts(data)
+      monRenderTable(data)
+      monRenderAccount(data)
+      monRenderNotes(data)
+      const el = document.getElementById('mon-updated')
+      if (el) el.textContent = '最后更新 ' + monBjTime(monState.lastAt || new Date(data.generatedAt)) + '（北京）'
+    }
+
+    /** ≥80% 自动弹窗；同一 UTC 日、同一组越限指标只弹一次（刷新不重置抑制状态）。 */
+    function monCheckAlert(data) {
+      const hits = data.metrics.filter((m) => m.ratio >= 0.8)
+      if (!hits.length) return
+      const sig = data.todayUtc + '|' + hits.map((m) => m.key).sort().join(',')
+      try { if (localStorage.getItem(MON_ALERT_KEY) === sig) return } catch (e) { /* 隐私模式忽略 */ }
+      try { localStorage.setItem(MON_ALERT_KEY, sig) } catch (e) { /* 忽略 */ }
+      const rows = hits.map((m) =>
+        `<div class="mon-alert-row"><span>${esc(m.name)} · 当前 UTC 日</span><span class="v">${monPct(m.ratio)}（${monFmt(m.key, m.current)} / ${monLimit(m.key, m.limit)}）</span></div>`
+      ).join('')
+      const inner = `
+        <div class="modal-head"><h3>服务额度告警</h3><button class="x" type="button" id="mon-alert-x" aria-label="关闭">×</button></div>
+        <div class="modal-body">
+          <div class="mon-hero"><div>
+            <div class="t">免费版额度已使用超过 80%</div>
+            <div class="d">继续增长将触发硬限制：Workers 返回 Error 1027，D1 查询直接报错，用户端同步与登录可能失败，且不会自动扣费续命。</div>
+          </div></div>
+          ${rows}
+          <div class="mon-note"><b>建议处置</b><br/>
+            1. 立即升级 Cloudflare Workers Paid（$5/月起），通常几分钟内解除每日硬限制。<br/>
+            2. 短期降载：给 <b>analytics_events(source, ts)</b> 加复合索引、限制激活码列表全表扫描，降低 D1 读取行数。<br/>
+            3. 日额度于 UTC 00:00（北京 08:00）重置，重置前请留意剩余窗口。
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn" type="button" id="mon-alert-ok">知道了</button><button class="btn btn-primary" type="button" id="mon-alert-refresh">立即重新检测</button></div>`
+      openModal(inner, { wide: true })
+      const x = document.getElementById('mon-alert-x')
+      if (x) x.onclick = closeModal
+      const ok = document.getElementById('mon-alert-ok')
+      if (ok) ok.onclick = closeModal
+      const again = document.getElementById('mon-alert-refresh')
+      if (again) again.onclick = () => { closeModal(); monLoad(document.getElementById('mon-refresh')) }
+    }
+
+    async function monLoad(btn, silent) {
+      if (monState.loading) return
+      monState.loading = true
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="mon-spin"></span><span>正在读取最新数据…</span>' }
+      try {
+        const data = await api('/api/admin/usage?t=' + Date.now())
+        if (!data || !Array.isArray(data.metrics)) throw new Error('接口返回数据不完整')
+        monState.data = data
+        monState.lastAt = new Date()
+        monRenderAll(data)
+        monCheckAlert(data)
+        if (!silent) toast('已读取 Cloudflare 最新用量数据')
+      } catch (e) {
+        const box = document.getElementById('mon-banner')
+        if (box) {
+          box.className = 'mon-banner crit'
+          box.innerHTML = MON_WARN_ICON + '<div><span class="b-title">用量数据读取失败</span><span class="b-sub">' +
+            esc(e.message || '未知错误') + ' · 可稍后重试，若持续失败请检查服务端 CF_API_TOKEN 配置</span></div>'
+        }
+        toast('用量数据读取失败：' + (e.message || '未知错误'), 'err')
+      } finally {
+        monState.loading = false
+        if (btn) { btn.disabled = false; btn.innerHTML = MON_REFRESH_ICON + '<span>刷新数据</span>' }
+      }
+    }
+
+    async function renderMonitor() {
+      shell(`<div class="page-head">
+        <div><h1>服务监控</h1><div class="sub">Cloudflare 免费版额度实时巡检 · 日额度按 UTC 00:00（北京 08:00）重置 · 打开页面每 5 分钟自动刷新</div></div>
+        <div class="mon-head-actions">
+          <span class="mon-updated" id="mon-updated">—</span>
+          <button class="btn btn-primary" id="mon-refresh" type="button">${MON_REFRESH_ICON}<span>刷新数据</span></button>
+        </div>
+      </div>
+      <div id="mon-banner" class="mon-banner ok">${MON_OK_ICON}<div><span class="b-title">正在读取用量数据…</span><span class="b-sub">首次加载会实时向 Cloudflare 取数</span></div></div>
+      <div id="mon-kpis" class="mon-kpi-grid"></div>
+      <div class="mon-charts">
+        <section class="card card-pad">
+          <div class="card-title" style="margin-bottom:14px">
+            <span>额度占用趋势 <span class="hint">单位：占当日免费额度的百分比</span></span>
+            <div class="seg" id="mon-metric-seg">
+              <button type="button" class="active" data-m="all">全部</button>
+              <button type="button" data-m="requests">请求</button>
+              <button type="button" data-m="rowsRead">D1 读</button>
+              <button type="button" data-m="rowsWritten">D1 写</button>
+              <button type="button" data-m="storageBytes">存储</button>
+            </div>
+          </div>
+          <div class="mon-chart-box" id="mon-trend"></div>
+          <div class="mon-legend" id="mon-legend"></div>
+        </section>
+        <section class="card card-pad">
+          <div class="card-title" style="margin-bottom:14px"><span>D1 读取行数 <span class="hint">绝对值 / 红线为 80% 告警线</span></span></div>
+          <div class="mon-chart-box" id="mon-bars"></div>
+          <div class="mon-legend"><span class="item"><span class="sw" style="background:#f59e0b"></span>达到 50% 的日期</span><span class="item" style="color:var(--text-3)">日上限 500 万行 · 80% = 400 万行</span></div>
+        </section>
+      </div>
+      <div class="mon-bottom">
+        <section class="card">
+          <div class="card-pad" style="padding-bottom:6px"><div class="card-title" style="margin-bottom:6px">额度明细 <span class="hint">当前 UTC 日累计 / 免费版上限</span></div></div>
+          <table id="mon-table"></table>
+        </section>
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <section class="card card-pad"><div class="card-title" style="margin-bottom:14px">账户构成</div><div class="mon-kv" id="mon-account"></div></section>
+          <section class="card card-pad"><div class="card-title" style="margin-bottom:14px">告警规则 <span class="hint">每次刷新后自动判定</span></div>
+            <div class="mon-rule"><span class="k" style="color:var(--amber)">≥ 50%</span><span>标记「注意」：状态横幅与对应卡片转橙，不打断操作。</span></div>
+            <div class="mon-rule"><span class="k" style="color:var(--red)">≥ 80%</span><span>自动弹出告警弹窗，列出越限指标、影响范围与处置建议。</span></div>
+            <div class="mon-rule"><span class="k" style="color:var(--text-2)">去重</span><span>同一 UTC 日、同一组越限指标只弹一次，避免重复打扰。</span></div>
+          </section>
+        </div>
+      </div>
+      <div class="form-tip" id="mon-notes" style="margin-top:14px;line-height:1.8"></div>`)
+      const btn = document.getElementById('mon-refresh')
+      btn.onclick = () => monLoad(btn)
+      document.getElementById('mon-metric-seg').onclick = (e) => {
+        const b = e.target.closest('button')
+        if (!b) return
+        monState.filter = b.dataset.m
+        if (monState.data) monRenderCharts(monState.data)
+      }
+      if (monState.timer) clearInterval(monState.timer)
+      monState.timer = setInterval(() => {
+        if (location.hash === '#/monitor' && !document.hidden) monLoad(null, true)
+      }, 5 * 60_000)
+      if (monState.data) monRenderAll(monState.data)
+      monLoad(btn, true)
+    }
+
+    // =====================================================================
     // 路由入口
     // =====================================================================
     function render() {
+      if (monState.timer) { clearInterval(monState.timer); monState.timer = null }
       const hash = location.hash || '#/overview'
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token || hash === '#/login') {
@@ -1992,6 +2362,7 @@
         case '#/codes': renderCodes(); break
         case '#/releases': renderReleases(); break
         case '#/feedback': renderFeedback(); break
+        case '#/monitor': renderMonitor(); break
         default: location.hash = '#/overview'
       }
     }

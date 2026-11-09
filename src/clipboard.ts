@@ -72,6 +72,18 @@ export async function clipboardHideWindow(): Promise<void> {
   await invoke('clipboard_hide_window').catch(() => {})
 }
 
+/** 顶栏入口:唤出剪贴板浮窗(与全局快捷键、托盘菜单共用 Rust 开窗逻辑,但不 toggle 收起)。 */
+export async function clipboardOpenWindow(): Promise<boolean> {
+  try {
+    await invoke('clipboard_open_window')
+    return true
+  } catch (e) {
+    // 不再静默吞错:命令未注册 / 后端未重启时至少留一条可查线索 + 界面提示。
+    console.warn('[clipboard] 打开剪贴板窗口失败:', e)
+    return false
+  }
+}
+
 /** 统一复制通道:Tacco 内部所有「复制到剪贴板」都应走这里,避免被历史记录。 */
 export async function copyText(text: string): Promise<void> {
   if (!isTauriRuntime()) {

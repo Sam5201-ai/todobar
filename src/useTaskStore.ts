@@ -38,6 +38,7 @@ import {
   refreshAccount,
 } from './account'
 import { trackAppOpen } from './analytics'
+import { effectiveAutoSync } from './membership'
 
 export type CustomList = {
   id: string
@@ -399,8 +400,12 @@ export function useTaskStore() {
       engine.onStateChange = setSyncState
       engineRef.current = engine
       // 会员闸门:未激活(且非试用)用户不上传云端、不从云端恢复,故不启动定时同步。
-      if (cfg.enabled && hasFullAccess()) {
-        engine.startAuto(cfg.autoSync ? cfg.intervalSec : 0)
+      const fullAccessAtBoot = hasFullAccess()
+      if (cfg.enabled && fullAccessAtBoot) {
+        // ⚠️ 关闭自动同步时绝不能调 startAuto(0):SyncEngine 的 Math.max(5, intervalSec)
+        // 会把 0 解释成「每 5 秒同步一次」,关掉开关反而同步得更频繁。关闭就彻底不启动。
+        // 生效值与设置页共用 effectiveAutoSync,受限态一律不启动。
+        if (effectiveAutoSync(cfg.autoSync, fullAccessAtBoot)) engine.startAuto(cfg.intervalSec)
         // 新设备/空库首次联网:自动从云端补齐缺失数据(只增不删,本地多出的不动)。
         const st = await repo.getSyncState()
         if (!st.lastPullAt) void autoFillFromCloud()
@@ -431,22 +436,36 @@ export function useTaskStore() {
     }
   }, [reload])
 
-  // 会员状态联动:登录/登出/激活/试用到期都会广播 ACCOUNT_CHANGED_EVENT,
-  // 此处据此启停定时同步——受限用户不向云端上传、不从云端恢复;恢复权限后自动接着同步。
+  // 会员状态联动:登录/登出/激活都会广播 ACCOUNT_CHANGED_EVENT,
+  // 此处据此启停定时同步——受限用户(未登录 / 试用过期且未激活)不启动自动同步、
+  // 不向云端上传;恢复权限后按用户原有的 autoSync 偏好自动接着同步。
   useEffect(() => {
     if (!ready) return
     const apply = () => {
-      if (!hasFullAccess()) {
-        engineRef.current?.stopAuto()
-        return
-      }
-      if (syncConfig.enabled && syncConfig.autoSync) {
+      // 与设置页开关共用同一生效值:未登录 / 试用过期未激活 / 用户主动关闭 /
+      // 未启用同步,一律停掉定时器;条件恢复后按原偏好自动接着同步。
+      if (syncConfig.enabled && effectiveAutoSync(syncConfig.autoSync, hasFullAccess())) {
         engineRef.current?.startAuto(syncConfig.intervalSec)
+      } else {
+        engineRef.current?.stopAuto()
       }
     }
     apply()
     window.addEventListener(ACCOUNT_CHANGED_EVENT, apply)
-    return () => window.removeEventListener(ACCOUNT_CHANGED_EVENT, apply)
+    // 试用期在应用常驻期间自然到期不会有账号事件(账号数据本身没变),
+    // 这里低频检测「刚从全功能变为受限」并补一次 stopAuto。
+    // ⚠️ 只在状态翻转时调用 apply:每轮无条件 startAuto 会重置 SyncEngine 的
+    // setInterval,自动间隔(最长 12 小时)会被无限推迟,等于再也不自动同步。
+    let wasFull = hasFullAccess()
+    const trialGuard = window.setInterval(() => {
+      const now = hasFullAccess()
+      if (wasFull && !now) apply()
+      wasFull = now
+    }, 30_000)
+    return () => {
+      window.removeEventListener(ACCOUNT_CHANGED_EVENT, apply)
+      window.clearInterval(trialGuard)
+    }
   }, [ready, syncConfig.enabled, syncConfig.autoSync, syncConfig.intervalSec])
 
   // ---- task operations -----------------------------------------------------
@@ -967,7 +986,9 @@ export function useTaskStore() {
             createHttpSyncClient(AUTH_BASE, loadAccount()?.token ?? next.token),
           )
           // 会员闸门:受限用户不自动上传云端(其启停还由上面的会员联动 effect 兜底)。
-          if (next.autoSync && hasFullAccess()) engineRef.current.startAuto(next.intervalSec)
+          // 与设置页共用生效值;关闭偏好时不启动定时器(见启动处的 startAuto(0) 陷阱)。
+          if (effectiveAutoSync(next.autoSync, hasFullAccess()))
+            engineRef.current.startAuto(next.intervalSec)
           // 登录成功(同步从关到开)后自动从云端补齐缺失数据:
           // 换设备/重装/清库后登录,无需手动点「恢复云端数据」即可拿回云端事项。
           // 只增不删:本地多出的数据保留,云端已删除的墓碑不会复活。

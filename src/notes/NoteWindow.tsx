@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { availableMonitors, getCurrentWindow, LogicalSize, PhysicalPosition } from '@tauri-apps/api/window'
+import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
 import { Check, Palette, Pin, PinOff, X } from 'lucide-react'
 
@@ -62,35 +62,45 @@ export function NoteWindow() {
     positionedRef.current = true
     void (async () => {
       try {
-        const sf = await win.scaleFactor()
-        await win.setSize(new LogicalSize(note.w, note.h))
+        // 坐标一律按该签记录的 scaleFactor 换算成物理像素;旧数据没有该字段时
+        // 用窗口当前屏缩放推断,保持原有恢复行为(尊重用户手动拖到别的屏)。
+        const sf = note.scaleFactor ?? (await win.scaleFactor())
+        const wPhys = Math.round(note.w * sf)
+        const hPhys = Math.round(note.h * sf)
+        await win.setSize(new PhysicalSize(wPhys, hPhys))
+        let px = note.x * sf
+        let py = note.y * sf
 
-        // 越界自愈:保存的坐标若已不在任何可用显示器内(拔显示器/改分辨率/DPI 变化),
-        // 则重置到主屏居中 —— 否则便利签会「跑到屏幕外,用户以为丢了」。
-        let x = note.x
-        let y = note.y
+        // 越界自愈:全物理坐标比对。旧实现把显示器 position 除以该屏缩放,
+        // 混合 DPI 下会误判,把明明在副屏上的便利签「自愈」回主屏。
         try {
           const monitors = await availableMonitors()
           const inRange = monitors.some((m) => {
-            const ms = m.scaleFactor || 1
-            const mx = m.position.x / ms
-            const my = m.position.y / ms
-            const mw = m.size.width / ms
-            const mh = m.size.height / ms
-            return x >= mx - note.w && x <= mx + mw && y >= my - note.h && y <= my + mh
+            const wa = m.workArea ?? { position: m.position, size: m.size }
+            return (
+              px >= wa.position.x - wPhys &&
+              px <= wa.position.x + wa.size.width &&
+              py >= wa.position.y - hPhys &&
+              py <= wa.position.y + wa.size.height
+            )
           })
           if (!inRange && monitors.length > 0) {
             const primary = monitors[0]
-            const ps = primary.scaleFactor || 1
-            x = Math.round(primary.position.x / ps + primary.size.width / ps / 2 - note.w / 2)
-            y = Math.round(primary.position.y / ps + primary.size.height / ps / 2 - note.h / 2)
-            updateNote(note.id, { x, y })
+            const pwa = primary.workArea ?? { position: primary.position, size: primary.size }
+            const psf = primary.scaleFactor || 1
+            px = pwa.position.x + pwa.size.width / 2 - wPhys / 2
+            py = pwa.position.y + pwa.size.height / 2 - hPhys / 2
+            updateNote(note.id, {
+              x: Math.round(px / psf),
+              y: Math.round(py / psf),
+              scaleFactor: psf,
+            })
           }
         } catch {
           /* 取显示器失败则不纠偏,按原坐标显示 */
         }
 
-        await win.setPosition(new PhysicalPosition(Math.round(x * sf), Math.round(y * sf)))
+        await win.setPosition(new PhysicalPosition(Math.round(px), Math.round(py)))
         await win.setAlwaysOnTop(note.pinned)
         await win.show()
       } catch {
@@ -195,6 +205,7 @@ export function NoteWindow() {
             updateNote(note.id, {
               w: Math.round(payload.width / sf),
               h: Math.round(payload.height / sf),
+              scaleFactor: sf,
             })
           })
         }, 300)
@@ -230,6 +241,9 @@ export function NoteWindow() {
             updateNote(noteId, {
               x: Math.round(payload.x / sf),
               y: Math.round(payload.y / sf),
+              // 手动拖到别的屏后,把坐标系切换到该屏缩放 —— 下次恢复仍原位,
+              // 不会被「新建跟随目标屏」强行拉回(用户决策 3)。
+              scaleFactor: sf,
             })
           })
         }, 150)

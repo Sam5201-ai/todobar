@@ -593,6 +593,12 @@ fn probe_alive(win: &WebviewWindow) -> bool {
 /// 快捷键 / 托盘菜单调用。捕获「上一个前台窗口」(用户的真实目标 app)用于自动粘贴。
 /// 窗已在且可见 → 收起;否则(复用/新建)显示。
 pub fn open_clipboard_window(app: tauri::AppHandle) {
+    open_clipboard_window_inner(app, false)
+}
+
+/// force_show = true 时只负责打开、不做 toggle 收起(顶栏入口),
+/// 快捷键 / 托盘菜单仍保持「再按一次收起」的原语义。
+fn open_clipboard_window_inner(app: tauri::AppHandle, force_show: bool) {
     // 唤起瞬间,前台是用户正在用的目标 app,记下 HWND 供自动粘贴用。
     #[cfg(windows)]
     {
@@ -605,11 +611,16 @@ pub fn open_clipboard_window(app: tauri::AppHandle) {
         // 已有活窗口 → 复用(可见则收起,否则显示)
         if let Some(existing) = app.get_webview_window(WINDOW_LABEL) {
             if probe_alive(&existing) {
-                if existing.is_visible().unwrap_or(false) {
+                if !force_show && existing.is_visible().unwrap_or(false) {
+                    crate::append_app_log("[clipboard] toggle hide");
                     let _ = existing.hide();
                 } else {
+                    // 每次唤起都让浮窗前端重新定位:双屏 / 改分辨率 / 换主屏后,
+                    // 旧坐标可能已跑到所有屏幕之外,只 show 会「怎么点都看不见」。
+                    let _ = existing.emit("clipboard-reposition", ());
                     let _ = existing.show();
                     let _ = existing.set_focus();
+                    crate::append_app_log(&format!("[clipboard] show existing (force={force_show})"));
                 }
                 return;
             }
@@ -657,6 +668,15 @@ pub fn clipboard_hide_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         let _ = w.hide();
     }
+    Ok(())
+}
+
+/// 顶栏「剪贴板」入口:复用全局快捷键 / 托盘菜单的同一套开窗逻辑,但只打开不收起。
+/// 注意:从主窗口点击时前台窗口是 Tacco 自己,`open_clipboard_window` 记下的
+/// prev_hwnd 指向主窗;此时主要用于查看历史,自动粘贴目标以用户当前窗口为准。
+#[tauri::command]
+pub fn clipboard_open_window(app: tauri::AppHandle) -> Result<(), String> {
+    open_clipboard_window_inner(app, true);
     Ok(())
 }
 

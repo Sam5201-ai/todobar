@@ -20,6 +20,9 @@
 //!    探活失败的 label 会成为 ghost 死句柄,后续需 close 清理。
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -42,6 +45,117 @@ fn probe_alive(win: &WebviewWindow) -> bool {
         std::thread::sleep(std::time::Duration::from_millis(150));
     }
     false
+}
+
+// ————————————————————————— L2 预建窗口池 —————————————————————————
+//
+// 冷启动一次「新建便利签」实测 4.1s、之后 0.2~1.2s,主因是每次都要新建
+// WebView2 窗口。这里在启动后预建 1 个隐藏窗口,其 label 自带预留 note id,
+// 前端创建数据时直接用这个 id —— 按键瞬间只剩「写数据 → 事件 → 前端 show」。
+//
+// ⚠️ 只做「预建 + show/hide」,不做 warmup/park(0.4.56 截图池窗已证伪回退)。
+// ⚠️ 池窗 label 仍是 note-<id>,前端 main.tsx 的 /^note-/ 路由与
+//    NoteWindow 的 NOTE_ID 解析完全不用改。
+
+#[derive(Default)]
+pub struct NotePoolState {
+    /// 已建好、尚未绑定数据的隐藏窗口预留 id。
+    free: Mutex<Vec<String>>,
+    /// 正在创建中的池窗数,防止并发重复预建。
+    pending: AtomicUsize,
+}
+
+static POOL_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn new_pool_id() -> String {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let seq = POOL_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("pool_{ms}_{seq}")
+}
+
+/// 建窗唯一实现(池窗与常规开窗共用),返回是否真的可用。
+/// ⚠️ 必须在子线程调用:同步命令里内联 build() 会死锁(见文件头第 1 条)。
+fn build_note_window(app: &tauri::AppHandle, label: &str, pinned: bool) -> bool {
+    let builder = tauri::WebviewWindowBuilder::new(app, label, WebviewUrl::App(PathBuf::new()))
+        .title("Tacco 便利签")
+        // ⚠️ 必须与主窗口 (tauri.conf.json app.windows[0].additionalBrowserArgs) 完全一致,
+        // 否则第二个便利签起创建必失败(0.4.38 同款根因)。
+        .additional_browser_args(crate::BROWSER_ARGS)
+        .inner_size(240.0, 220.0)
+        .decorations(false)
+        .transparent(true)
+        .visible(false)
+        .always_on_top(pinned)
+        .skip_taskbar(true)
+        .focused(false)
+        .resizable(true)
+        .shadow(false);
+
+    match builder.build() {
+        Ok(win) => {
+            if probe_alive(&win) {
+                crate::append_app_log(&format!("[notes] 窗口创建成功 label={label}"));
+                true
+            } else {
+                crate::append_app_log(&format!(
+                    "[notes] build() Ok 但探活失败 label={label} (ghost)"
+                ));
+                let _ = win.close();
+                false
+            }
+        }
+        Err(e) => {
+            crate::append_app_log(&format!("[notes] 窗口创建失败 label={label}: {e}"));
+            false
+        }
+    }
+}
+
+/// 保证「最多 1 个空闲池窗」。启动后与每次领取后各调用一次;
+/// 内部检查 free + pending,不会堆积出多个常驻 WebView2 进程。
+pub fn spawn_pool_window(app: tauri::AppHandle) {
+    {
+        let Some(state) = app.try_state::<NotePoolState>() else {
+            return;
+        };
+        let free = state.free.lock().unwrap();
+        if free.len() + state.pending.load(Ordering::Relaxed) >= 1 {
+            return;
+        }
+        state.pending.fetch_add(1, Ordering::Relaxed);
+    }
+
+    let id = new_pool_id();
+    let label = note_label(&id);
+    crate::append_app_log(&format!("[notes] 预建池窗 label={label}"));
+    std::thread::spawn(move || {
+        let ok = build_note_window(&app, label.as_str(), true);
+        if let Some(state) = app.try_state::<NotePoolState>() {
+            if ok {
+                state.free.lock().unwrap().push(id);
+                crate::append_app_log("[notes] 池窗就绪");
+            }
+            state.pending.fetch_sub(1, Ordering::Relaxed);
+        }
+    });
+}
+
+/// 领取一个预建窗口的预留 id;没有可用池窗时返回 None(前端回落常规开窗)。
+#[tauri::command]
+pub fn notes_claim_window(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let id = app
+        .try_state::<NotePoolState>()
+        .and_then(|s| s.free.lock().unwrap().pop());
+    crate::append_app_log(&format!(
+        "[notes] claim pool: {}",
+        id.as_deref().unwrap_or("miss")
+    ));
+    // 无论命中与否都补建下一个,下一次按键仍有池窗可用。
+    spawn_pool_window(app.clone());
+    Ok(id)
 }
 
 /// 打开(或复用)某个便利签的窗口。
@@ -77,41 +191,8 @@ pub fn notes_open_window(
             std::thread::sleep(std::time::Duration::from_millis(120));
         }
 
-        // ② 新建窗口
-        let builder = tauri::WebviewWindowBuilder::new(
-            &app,
-            label.as_str(),
-            WebviewUrl::App(PathBuf::new()),
-        )
-        .title("Tacco 便利签")
-        // ⚠️ 必须与主窗口 (tauri.conf.json app.windows[0].additionalBrowserArgs) 完全一致,
-        // 否则第二个便利签起创建必失败(0.4.38 同款根因)。
-        .additional_browser_args(
-            crate::BROWSER_ARGS,
-        )
-        .inner_size(240.0, 220.0)
-        .decorations(false)
-        .transparent(true)
-        .visible(false)
-        .always_on_top(pinned)
-        .skip_taskbar(true)
-        .focused(false)
-        .resizable(true)
-        .shadow(false);
-
-        match builder.build() {
-            Ok(win) => {
-                if probe_alive(&win) {
-                    crate::append_app_log(&format!("[notes] 窗口创建成功 label={label}"));
-                } else {
-                    crate::append_app_log(&format!(
-                        "[notes] build() Ok 但探活失败 label={label}(ghost)"
-                    ));
-                    let _ = win.close();
-                }
-            }
-            Err(e) => crate::append_app_log(&format!("[notes] 窗口创建失败 label={label}: {e}")),
-        }
+        // ② 新建窗口(与池窗共用同一套构建参数,避免两份实现漂移)
+        let _ = build_note_window(&app, label.as_str(), pinned);
     });
 
     Ok(())

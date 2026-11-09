@@ -3,12 +3,16 @@ import {
   BookOpen,
   Cake,
   Calculator,
+  Camera,
+  ChevronUp,
+  ClipboardList,
   Coins,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle,
+  Ellipsis,
   Gift,
   ListTodo,
   History,
@@ -20,11 +24,12 @@ import {
   RefreshCw,
   Search,
   Settings,
+  StickyNote,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { CSSProperties, Dispatch, PointerEvent as ReactPointerEvent, ReactNode, SetStateAction } from 'react'
 import './App.css'
 // 系统头像(DiceBear avataaars,男女各半),本地打包无需联网。
 import avatarA1 from './assets/avatars/a1.png'
@@ -34,28 +39,66 @@ import avatarA4 from './assets/avatars/a4.png'
 import avatarA5 from './assets/avatars/a5.png'
 import { useSidebarSettings, fontStackOf, FONT_OPTIONS, BACKGROUND_OPTIONS } from './sidebarSettings'
 import type { SidebarSettings } from './sidebarSettings'
-import { AccountSetting } from './AccountSetting'
+import {
+  dockFrame,
+  dockMonitorCount,
+  dockShouldIgnore,
+  dockSignature,
+  listDockMonitors,
+  resolveDockTarget,
+  type DockGeometry,
+  type DockMonitorOption,
+  type DockRect,
+  type DockSide,
+  type MonitorPref,
+} from './dock'
+import { AccountSetting, AccountModal } from './AccountSetting'
 import ScreenshotSettingsPanel from './screenshot/ScreenshotSettingsPanel'
 import { ShortcutField } from './ShortcutField'
 import { applyNoteShortcut } from './notes/shortcuts'
 import { useNotesBridge } from './notes/useNotesBridge'
-import { applyClipboardShortcut, clipboardSetActive } from './clipboard'
+import { applyClipboardShortcut, clipboardOpenWindow, clipboardSetActive } from './clipboard'
 import { getSettings as getScreenshotSettings } from './screenshot/store'
+import { startCapture } from './screenshot/bridge'
+import { createNoteWithWindow, failText } from './notes/manager'
+import {
+  DEFAULT_TOPBAR_TOOLS,
+  TOPBAR_TOOLS,
+  formatShortcut,
+  sanitizeTopbarTools,
+  splitTopbarTools,
+  topbarPosition,
+  type TopbarTool,
+  type TopbarToolId,
+  type TopbarToolsPref,
+} from './topbarTools'
 import {
   submitFeedback,
   fetchFeedbackHistory,
   markFeedbackRead,
   FREE_DAILY_TASK_LIMIT,
   memberOnly,
+  OPEN_LOGIN_EVENT,
+  OPEN_LOGIN_GUIDE_EVENT,
+  AUTH_BASE,
 } from './account'
 import type { FeedbackItem } from './account'
-import { useAccount } from './membership'
+import { effectiveAutoSync, useAccount } from './membership'
 import {
   currentAppVersion,
   fetchReleases,
   readReleaseCache,
 } from './changelog'
 import type { ReleaseRecord } from './changelog'
+import type { UpdateState, UpdateNotice } from './update'
+import {
+  fetchLatestVersion,
+  isNewerVersion,
+  missedVersions,
+  isUpdateShown,
+  markUpdateShown,
+  downloadAndInstall,
+} from './update'
 import { SqliteStore } from './db/repository'
 import {
   CN_DAYS,
@@ -107,9 +150,6 @@ const isTauriRuntime = () =>
   '__TAURI_INTERNALS__' in window ||
   '__TAURI__' in window
 
-type NativeWindowHandle<Position> = {
-  setPosition: (position: Position) => Promise<void>
-}
 type HandleDragState = {
   startScreenY: number
   startHandleY: number
@@ -278,44 +318,11 @@ function countdownLabel(days: number | null): string {
   return `${days} 天后`
 }
 
-function animateNativeX<Position>(
-  windowHandle: NativeWindowHandle<Position>,
-  createPosition: (x: number, y: number) => Position,
-  startX: number,
-  endX: number,
-  y: number,
-  duration: number,
-) {
-  return new Promise<void>((resolve) => {
-    const startTime = performance.now()
-    let lastX = Number.NaN
-
-    const step = (time: number) => {
-      const progress = Math.min((time - startTime) / duration, 1)
-      const eased = progress * progress * (3 - 2 * progress)
-      const nextX = Math.round(startX + (endX - startX) * eased)
-
-      if (nextX !== lastX) {
-        lastX = nextX
-        void windowHandle.setPosition(createPosition(nextX, y))
-      }
-
-      if (progress < 1) {
-        requestAnimationFrame(step)
-      } else {
-        resolve()
-      }
-    }
-
-    requestAnimationFrame(step)
-  })
-}
-
 function App() {
   const store = useTaskStore()
   // 会员权限:未登录 / 试用过期未激活 = 受限(云端同步、计薪组件、子任务、
   // 单日新建上限、提醒、生日纪念日均按此判定)。登录或激活后自动重渲染放行。
-  const { fullAccess } = useAccount()
+  const { fullAccess, account } = useAccount()
   const [isNative] = useState(() => isTauriRuntime())
   const [isOpen, setIsOpen] = useState(
     () => new URLSearchParams(window.location.search).get('open') === '1',
@@ -327,10 +334,27 @@ function App() {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight)
   const [dragHandleY, setDragHandleY] = useState<number | null>(null)
+  // 主窗统一几何:ref 供 48ms 点击穿透轮询读取,state 供 CSS 宽度 / 设置页提示使用。
+  const dockGeomRef = useRef<DockGeometry | null>(null)
+  const [dockGeom, setDockGeom] = useState<DockGeometry | null>(null)
+  const [dockTick, setDockTick] = useState(0)
   const didNativeLayout = useRef(false)
-  const previousOpenState = useRef(isOpen)
   const dragState = useRef<HandleDragState | null>(null)
   const suppressNextClick = useRef(false)
+  const workspaceRef = useRef<HTMLElement | null>(null)
+  // 展开/收起动画:token 保证连点时旧循环立即让位;ref 表示「CSS 过渡进行中」,
+  // 期间窗口保持可点(不穿透),避免面板还在滑出就把点击放给桌面。
+  const dockAnimToken = useRef(0)
+  const dockAnimatingRef = useRef(false)
+  /** 上一次真正落位的几何,用于识别「切屏/改边/改宽度」迁移(迁移不做动画)。 */
+  const appliedDockRef = useRef<{ geom: DockGeometry } | null>(null)
+  /**
+   * 上次落位时的「布局输入」签名。签名未变 ⇒ 原生窗口矩形必然没变,
+   * 展开/收起可以走零 RPC 快路径,把动画 100% 交给 CSS 合成器。
+   * 若每次点击都再发一次 set_size/set_position + 三次显示器查询,这些 IPC
+   * 会挤进动画首帧,WebView2 重排 + 主线程排队就是残余「卡顿/不丝滑」的来源。
+   */
+  const dockSettingsKeyRef = useRef('')
 
   // ---- tab 页与主视图状态 ----------------------------------------------------
 
@@ -411,6 +435,123 @@ function App() {
 
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
+  // ---- 版本更新:App 根统一持有状态,首页弹窗与设置页共用同一份进度 -------------
+  const [appVersion, setAppVersion] = useState('')
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
+  /** 已检查到新版本但尚未展示的弹窗数据(收起侧栏时先暂存)。 */
+  const [updateNotice, setUpdateNotice] = useState<UpdateNotice | null>(null)
+  const [updateNoticeOpen, setUpdateNoticeOpen] = useState(false)
+  /** StrictMode 双挂载守卫:一次启动最多弹一次。 */
+  const updatePromptedRef = useRef(false)
+
+  // 全局登录弹窗 + 未登录引导弹窗:受限功能点击时分流——未登录 → 引导去登录;
+  // 已登录但非会员(试用过期) → 维持「会员功能」提示 toast。
+  const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [loginView, setLoginView] = useState<'auth' | 'password'>('auth')
+  const [loginGuide, setLoginGuide] = useState<{ open: boolean }>({ open: false })
+  /** 全局弹窗的挂载点:挂进 .todo-sidebar 而非 document.body,让 absolute 遮罩只覆盖
+   *  工具面板(左侧透明把手区不受遮罩/卡片影响),并继承 .workspace 上的主题变量。
+   *  用 callback ref + state 拿节点,避免 render 阶段 querySelector 拿不到 DOM。 */
+  const [sidebarHost, setSidebarHost] = useState<HTMLElement | null>(null)
+
+  // 任意入口派发 OPEN_LOGIN_EVENT → 打开全局登录弹窗(例如引导弹窗「去登录」按钮);
+  // 派发 OPEN_LOGIN_GUIDE_EVENT → 打开「去登录」引导弹窗(未登录用户点击受限功能)。
+  // ⚠️ 引导文案不再点名具体功能、也不承诺「登录后即可使用」:登录只是解锁的前提,
+  // 具体能力还取决于账号当前是否在试用期 / 已激活会员,故事件携带的功能名不再读取。
+  useEffect(() => {
+    const openLogin = () => {
+      setLoginView('auth')
+      setLoginModalOpen(true)
+    }
+    const openGuide = () => setLoginGuide({ open: true })
+    window.addEventListener(OPEN_LOGIN_EVENT, openLogin)
+    window.addEventListener(OPEN_LOGIN_GUIDE_EVENT, openGuide)
+    return () => {
+      window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
+      window.removeEventListener(OPEN_LOGIN_GUIDE_EVENT, openGuide)
+    }
+  }, [])
+
+  // 受限功能统一拦截入口:未登录弹「去登录」引导;已登录非会员维持会员提示。
+  const handleLocked = (feature: string) => {
+    if (!account) {
+      setLoginGuide({ open: true })
+    } else {
+      setToast({ kind: 'err', text: memberOnly(feature) })
+    }
+  }
+
+  // 启动取当前版本号 + 拉取远程法定节假日。原先这两件事挂在设置页组件里,
+  // 用户不进设置页就不跑;上移到根后首页弹窗才能拿到版本号,节假日也不再依赖设置页。
+  useEffect(() => {
+    void currentAppVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(''))
+    void loadHolidays()
+  }, [])
+
+  // 启动约 1.5s 后检查更新:version.json 判定最新版本 + 安装包 URL,
+  // /api/releases 的版本记录提供弹窗文案。检查失败静默(设置页仍可手动检查)。
+  // **检查与展示分离**:收起侧栏时只暂存数据,等展开再弹,避免贴边状态糊全屏遮罩。
+  useEffect(() => {
+    if (!appVersion) return
+    let alive = true
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const latest = await fetchLatestVersion()
+          if (!alive) return
+          const hasNew = isNewerVersion(latest.version, appVersion)
+          setUpdateState(
+            hasNew
+              ? { status: 'available', version: latest.version, url: latest.url }
+              : { status: 'latest' },
+          )
+          if (!hasNew) return
+          // 版本记录:网络优先,失败用本地缓存;都没有时靠 notes 兜底,不阻塞弹窗。
+          let releases = readReleaseCache() ?? []
+          try {
+            releases = await fetchReleases()
+          } catch {
+            /* 静默降级到缓存 */
+          }
+          if (!alive) return
+          const exact = releases.find((r) => r.version === latest.version) ?? null
+          setUpdateNotice({
+            version: latest.version,
+            url: latest.url,
+            notes: latest.notes,
+            date: exact?.release_date ?? '',
+            title: exact?.title ?? '',
+            items: exact?.items ?? [],
+            missed: missedVersions(releases, appVersion, latest.version),
+            releases,
+          })
+        } catch {
+          /* 检查失败不打扰用户 */
+        }
+      })()
+    }, 1500)
+    return () => {
+      alive = false
+      window.clearTimeout(timer)
+    }
+  }, [appVersion])
+
+  // 仅侧栏展开、且没有其他全局弹窗占用时展示;展示那一刻写入去重标记
+  // (每版本最多一次),网络失败或用户没看到不会消耗额度。
+  useEffect(() => {
+    if (!updateNotice || updatePromptedRef.current) return
+    if (isUpdateShown(updateNotice.version)) {
+      setUpdateNotice(null)
+      return
+    }
+    if (!isOpen || loginGuide.open || loginModalOpen) return
+    updatePromptedRef.current = true
+    markUpdateShown(updateNotice.version)
+    setUpdateNoticeOpen(true)
+  }, [isOpen, updateNotice, loginGuide.open, loginModalOpen])
+
   // 账号分库:启动时把游客库数据并入已登录账号库后广播,这里弹 toast 告知。
   useEffect(() => {
     const onMigrated = (e: Event) => {
@@ -473,7 +614,7 @@ function App() {
     }
     // 会员闸门:受限用户(未登录 / 试用过期未激活)不能上传云端。
     if (!fullAccess) {
-      setToast({ kind: 'err', text: memberOnly('云同步') })
+      handleLocked('云同步')
       return
     }
     trackFeature('sync')
@@ -485,7 +626,7 @@ function App() {
     setRestoreSheetOpen(false)
     // 会员闸门:受限用户不能从云端恢复数据。
     if (!fullAccess) {
-      setToast({ kind: 'err', text: memberOnly('恢复云端数据') })
+      handleLocked('恢复云端数据')
       return
     }
     if (!store.syncConfig.enabled) {
@@ -560,6 +701,106 @@ function App() {
     })
   }
   const recorderActive = useRecorderActive()
+
+  // ---- 首页顶栏快捷入口:动态槽位 + 「⋯ 更多」溢出菜单 -----------------------
+  const [moreOpen, setMoreOpen] = useState(false)
+  /** 「管理顶栏入口…」直达设置页并滚动到配置分组,自增 token 触发一次定位。 */
+  const [topbarFocus, setTopbarFocus] = useState(0)
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+  const moreBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  const topbar = useMemo(
+    () => splitTopbarTools(settings.topbarTools, settings.panelWidth),
+    [settings.topbarTools, settings.panelWidth],
+  )
+
+  // 菜单里的快捷键提示跟随设置页里用户改过的值(截图快捷键读运行时缓存)。
+  const shortcutLabels = useMemo<Partial<Record<TopbarToolId, string>>>(() => ({
+    screenshot: formatShortcut(getScreenshotSettings().shotShortcut || ''),
+    note: formatShortcut(settings.noteShortcut),
+    clipboard: formatShortcut(settings.clipboardShortcut),
+    sync: lastSyncLabel ? `同步于 ${lastSyncLabel}` : '',
+  }), [settings.noteShortcut, settings.clipboardShortcut, lastSyncLabel])
+
+  // 侧栏收起时菜单不该残留;点击菜单外 / Esc 关闭(带 StrictMode 卸载守卫)。
+  useEffect(() => {
+    if (!isOpen) setMoreOpen(false)
+  }, [isOpen])
+  useEffect(() => {
+    if (!moreOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node
+      if (moreMenuRef.current?.contains(target) || moreBtnRef.current?.contains(target)) return
+      setMoreOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [moreOpen])
+
+  /** 顶栏 / 更多菜单的统一点击分发:会员闸门 → 埋点 → 触发对应功能。 */
+  const runTopbarTool = (id: TopbarToolId, name: string) => {
+    setMoreOpen(false)
+    const tool = TOPBAR_TOOLS.find((t) => t.id === id)
+    // 录音机 / 同步的闸门在各自页内或 onHeaderSync 内,这里只拦三个桌面套件入口。
+    if (tool?.gated && !fullAccess) {
+      handleLocked(name)
+      return
+    }
+    trackFeature(`topbar:${id}`)
+    switch (id) {
+      case 'screenshot':
+        // 区域模式进入,覆盖层工具栏可现场切换窗口 / 全屏(与截图快捷键一致)。
+        void startCapture('region')
+        break
+      case 'note':
+        void createNoteWithWindow(fullAccess).then((r) => {
+          if (!r.ok) setToast({ kind: 'err', text: failText(r.reason) })
+        })
+        break
+      case 'clipboard':
+        void clipboardOpenWindow().then((ok) => {
+          if (!ok) setToast({ kind: 'err', text: '剪贴板窗口打开失败，请重启工具后再试' })
+        })
+        break
+      case 'calculator':
+        toggleCalculator()
+        break
+      case 'huangli':
+        toggleHuangli()
+        break
+      case 'salary':
+        toggleSalary()
+        break
+      case 'recorder':
+        toggleRecorder()
+        break
+      case 'sync':
+        onHeaderSync()
+        break
+    }
+  }
+
+  const openSettingsPage = () => {
+    setMoreOpen(false)
+    setIsSettingsOpen((c) => {
+      if (!c) trackPage('settings')
+      return !c
+    })
+  }
+
+  const manageTopbarTools = () => {
+    setMoreOpen(false)
+    setIsSettingsOpen(true)
+    trackPage('settings')
+    setTopbarFocus((n) => n + 1)
+  }
 
   // ---- 生日 tab 派生数据 -----------------------------------------------------
 
@@ -760,9 +1001,12 @@ function App() {
 
   const visibleHandleY = dragHandleY ?? settings.handleY
   const effectivePanelWidth = useMemo(() => {
+    // 原生模式下直接用统一几何算出的面板宽度,保证 CSS 宽度、窗口物理宽度与
+    // 点击穿透判定三者严格一致(此前各算一份,混合 DPI 下会出现边缘错位)。
+    if (isNative && dockGeom) return dockGeom.panelCssWidth
     const availableWidth = Math.max(280, viewportWidth - settings.tabWidth - 8)
     return Math.min(settings.panelWidth, availableWidth)
-  }, [settings.panelWidth, settings.tabWidth, viewportWidth])
+  }, [dockGeom, isNative, settings.panelWidth, settings.tabWidth, viewportWidth])
   const nativeHandleCenter = useMemo(() => {
     const height = Math.max(settings.handleHeight, viewportHeight || 0)
     const half = settings.handleHeight / 2
@@ -930,6 +1174,15 @@ function App() {
 
   useEffect(() => {
     const syncViewportSize = () => {
+      // 动画期间窗口宽度逐帧变化,跳过 setState:否则整个 App 每帧重渲染,
+      // 且 viewportWidth 会被 42px 的中间宽度污染。
+      if (dockAnimatingRef.current) return
+      if (isNative) {
+        // 原生模式的面板宽度一律由 dock.ts 的目标屏几何给出(syncNativeWindow
+        // 里已写入),这里只同步高度,不用跟逐帧变化的 innerWidth。
+        setViewportHeight(window.innerHeight)
+        return
+      }
       setViewportWidth(window.innerWidth)
       setViewportHeight(window.innerHeight)
     }
@@ -937,7 +1190,7 @@ function App() {
     syncViewportSize()
     window.addEventListener('resize', syncViewportSize)
     return () => window.removeEventListener('resize', syncViewportSize)
-  }, [])
+  }, [isNative])
 
   useEffect(() => {
     document.documentElement.dataset.runtime = isNative ? 'tauri' : 'web'
@@ -1060,162 +1313,293 @@ function App() {
     }
   }, [isNative, fullAccess])
 
+  // 显示器插拔 / DPI 变化:低频轮询几何,签名变化才触发重定位。
+  // 正常状态下不产生任何窗口 API 调用,不干扰展开动画与把手拖动。
   useEffect(() => {
     if (!isNative) return
+    let cancelled = false
+    const check = async () => {
+      const g = await resolveDockTarget(settings.targetMonitor, settings.dockSide, {
+        panelWidth: settings.panelWidth,
+        tabWidth: settings.tabWidth,
+      })
+      if (cancelled || !g) return
+      const prev = dockGeomRef.current
+      if (prev && dockSignature(prev) === dockSignature(g) && prev.fallback === g.fallback) return
+      setDockTick((t) => t + 1)
+    }
+    const timer = window.setInterval(() => void check(), 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [isNative, settings.dockSide, settings.panelWidth, settings.tabWidth, settings.targetMonitor])
+
+  /**
+   * 主窗几何 + 展开/收起(0.4.62 动画重构)。
+   *
+   * ⚠️ 原生窗口**恒定使用完整展开矩形**,不再逐帧改 size/position。旧实现每帧
+   * 走一次 JS→Rust IPC,窗口每帧 resize 会逼 WebView2 重排 + 重绘,叠加 48ms
+   * 点击穿透轮询抢主线程,帧间隔忽长忽短 —— 这就是「不丝滑、感觉卡顿」的根因。
+   * 现在视觉过渡完全交给 .dock-layer 的 CSS transform(合成器动画、零 IPC、
+   * 零重排),方向由 dock-left / dock-right 决定,时长沿用设置页「动画时长」。
+   */
+  useEffect(() => {
+    if (!isNative) return
+    const token = ++dockAnimToken.current
+    let cancelled = false
+    let animTimer = 0
+    const alive = () => !cancelled && token === dockAnimToken.current
+
+    /** 原子写窗口矩形:size + position 在 Rust 同一命令的同步块里完成。 */
+    const bounds = (r: DockRect) =>
+      invoke('set_main_window_bounds', {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+      })
+    const nextFrame = () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const markAnimating = (on: boolean) => {
+      dockAnimatingRef.current = on
+    }
+    // 布局输入签名:只有这些值变化才需要重新解析显示器 / 重写窗口矩形。
+    const layoutKey = [
+      dockTick,
+      settings.dockSide,
+      settings.targetMonitor,
+      settings.panelWidth,
+      settings.tabWidth,
+    ].join('|')
+
     const syncNativeWindow = async () => {
+      // ⚠️ 零 RPC 快路径(0.4.62 丝滑度关键):布局输入没变 ⇒ 原生窗口矩形必然没变,
+      // 展开/收起 100% 交给 .dock-layer 的 CSS transform。这里只要发出任何一次
+      // Tauri IPC(显示器查询 / set_size / set_position / setFocus),WebView2 就会
+      // 在动画首帧重排,主线程排队 = 用户看到的「顿一下」。切屏 / 换边 / 改宽度
+      // 会改变签名,自动落到下方完整路径做无动画快照迁移。
+      if (
+        didNativeLayout.current &&
+        dockSettingsKeyRef.current === layoutKey &&
+        dockGeomRef.current
+      ) {
+        markAnimating(true)
+        // [0.4.57] 窗口可能被任务栏「关闭窗口」隐藏;展开时兜底 show()。
+        // 用 fire-and-forget,不 await、不阻塞 transform 首帧。
+        if (isOpen) {
+          void import('@tauri-apps/api/window')
+            .then(({ getCurrentWindow }) => getCurrentWindow().show())
+            .catch(() => undefined)
+        }
+        animTimer = window.setTimeout(() => {
+          if (!alive()) return
+          markAnimating(false)
+          // 抢焦点推迟到动画播完,避免这一次 IPC 撞上 transform 首帧。
+          if (isOpen) {
+            void import('@tauri-apps/api/window')
+              .then(({ getCurrentWindow }) => getCurrentWindow().setFocus())
+              .catch(() => undefined)
+          }
+        }, settings.motionMs + 50)
+        return
+      }
+      markAnimating(true)
       try {
-        const { PhysicalPosition, PhysicalSize, currentMonitor, getCurrentWindow } =
-          await import('@tauri-apps/api/window')
+        const { getCurrentWindow } = await import('@tauri-apps/api/window')
         const appWindow = getCurrentWindow()
-        const monitor = await currentMonitor()
-        if (!monitor) {
-          // [0.4.48] 拿不到显示器时也要显示窗口(系统默认位置),
-          // 否则会一直 visible:false 黑屏,只能等 Rust 侧 15s 看门狗。
+        // 目标屏由 src/dock.ts 统一解析(主屏 / 副屏 / 具体显示器,用户选择已持久化)。
+        const geom = await resolveDockTarget(settings.targetMonitor, settings.dockSide, {
+          panelWidth: settings.panelWidth,
+          tabWidth: settings.tabWidth,
+        })
+        if (!geom) {
+          // [0.4.48] 拿不到显示器时也要显示窗口,否则会一直 visible:false 黑屏。
           try {
             await invoke('show_main_window_ready')
           } catch {
             /* 交给 Rust 看门狗兜底 */
           }
+          markAnimating(false)
           return
         }
+        if (!alive()) return
 
-        const workArea = monitor.workArea
-        const scaleFactor = monitor.scaleFactor || 1
-        const fullCssWidth = Math.round(workArea.size.width / scaleFactor)
-        const panelCssWidth = Math.min(
-          settings.panelWidth,
-          Math.max(280, fullCssWidth - settings.tabWidth - 8),
-        )
-        const windowWidth = Math.round((settings.tabWidth + panelCssWidth) * scaleFactor)
-        const tabWidth = Math.round(settings.tabWidth * scaleFactor)
-        const openX = workArea.position.x + workArea.size.width - windowWidth
-        const closedX =
-          workArea.position.x + workArea.size.width - tabWidth + Math.round(2 * scaleFactor)
-        const openY = workArea.position.y
-        const targetX = isOpen ? openX : closedX
-        const startX = isOpen ? closedX : openX
-        const targetY = openY
-        const targetHeight = workArea.size.height
-        const fullCssHeight = Math.round(workArea.size.height / scaleFactor)
-
-        const setTarget = async () => {
-          await appWindow.setSize(new PhysicalSize(windowWidth, targetHeight))
-          await appWindow.setPosition(new PhysicalPosition(targetX, targetY))
+        const prevGeom = dockGeomRef.current
+        dockGeomRef.current = geom
+        // 只在几何真的变化时更新 state,避免每次开关都重渲染整个 App。
+        if (
+          !prevGeom ||
+          dockSignature(prevGeom) !== dockSignature(geom) ||
+          prevGeom.fallback !== geom.fallback
+        ) {
+          setDockGeom(geom)
         }
-        const didOpenStateChange = previousOpenState.current !== isOpen
-        previousOpenState.current = isOpen
+        setViewportWidth(geom.fullCssWidth)
+        setViewportHeight(geom.fullCssHeight)
+
+        // 窗口始终是完整展开矩形;收起只是 CSS 把内容层平移出可视区。
+        const fullRect = dockFrame(geom, 1)
+        const applied = appliedDockRef.current
+        // 切屏 / 换停靠边 / 改宽度 = 迁移:直接搬到新屏,不做滑动动画(会跨屏)。
+        const relocated = !applied ||
+          applied.geom.monitorKey !== geom.monitorKey ||
+          applied.geom.side !== geom.side ||
+          applied.geom.scaleFactor !== geom.scaleFactor ||
+          applied.geom.openX !== geom.openX ||
+          applied.geom.openY !== geom.openY ||
+          applied.geom.windowWidth !== geom.windowWidth ||
+          applied.geom.closedWidth !== geom.closedWidth ||
+          applied.geom.targetHeight !== geom.targetHeight
 
         if (!didNativeLayout.current) {
           didNativeLayout.current = true
-          if (monitor) {
-            setViewportWidth(fullCssWidth)
-            setViewportHeight(fullCssHeight)
-            await setTarget()
-          }
-          // [0.4.44] 启动残影根治:窗口 visible:false 启动,等「定位完成 + 双 rAF
-          // 首帧绘制」后再显示。此前在 page load 就显示,窗口会以 Windows 默认
-          // 位置(级联坐标)+ 未透明背景闪现 1.5~2.5s(工具残影 + 程序启动框)。
-          // monitor 拿不到时也照样显示(宁可短暂默认位置,不可 15s 黑屏)。
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          )
+          await bounds(fullRect)
+          // [0.4.44] 窗口 visible:false 启动,等「定位完成 + 双 rAF 首帧绘制」
+          // 后再显示,否则会以系统默认位置闪现 1.5~2.5s。
+          await nextFrame()
+          await nextFrame()
           try {
             await invoke('show_main_window_ready')
           } catch {
             /* 失败时由 Rust 侧 15s 看门狗兜底显示 */
           }
+          appliedDockRef.current = { geom }
+          dockSettingsKeyRef.current = layoutKey
+          markAnimating(false)
           return
         }
-        if (!didOpenStateChange) {
-          setViewportWidth(fullCssWidth)
-          setViewportHeight(fullCssHeight)
-          await setTarget()
+
+        // [0.4.57] 展开前兜底 show():窗口可能已被任务栏「关闭窗口」隐藏。
+        if (isOpen) await appWindow.show()
+
+        if (relocated) {
+          // Windows 跨不同 DPI 显示器会按「逻辑尺寸」重新缩放窗口,首次写入常被
+          // 吃掉,连写三次按新屏物理像素校正(修掉「切到副屏仍是主屏尺寸」)。
+          await bounds(fullRect)
+          await nextFrame()
+          if (!alive()) return
+          await bounds(fullRect)
+          await nextFrame()
+          if (!alive()) return
+          await bounds(fullRect)
+          appliedDockRef.current = { geom }
+          dockSettingsKeyRef.current = layoutKey
+          markAnimating(false)
+          if (isOpen) await appWindow.setFocus()
           return
         }
-        if (isOpen) {
-          setViewportWidth(fullCssWidth)
-          setViewportHeight(fullCssHeight)
-          // [0.4.57] 展开前兜底 show():窗口可能已被任务栏「关闭窗口」隐藏,
-          // 此前展开分支从不调用 show(),隐藏后的窗口只被移动、永远不可见,
-          // 表现为「托盘怎么点都打不开」。show 对已可见窗口是无害幂等操作。
-          await appWindow.show()
-          await Promise.all([
-            appWindow.setSize(new PhysicalSize(windowWidth, workArea.size.height)),
-            appWindow.setPosition(new PhysicalPosition(closedX, openY)),
-          ])
-          await animateNativeX(
-            appWindow,
-            (x, y) => new PhysicalPosition(x, y),
-            startX,
-            openX,
-            openY,
-            settings.motionMs,
-          )
-          await appWindow.setFocus()
-          return
-        }
-        setViewportWidth(fullCssWidth)
-        setViewportHeight(fullCssHeight)
-        await animateNativeX(
-          appWindow,
-          (x, y) => new PhysicalPosition(x, y),
-          startX,
-          closedX,
-          openY,
-          settings.motionMs,
-        )
-        await setTarget()
+
+        // 布局签名变了但几何没变(如显示器插拔后同名屏重新接入):不做任何窗口
+        // API 调用,只登记签名,动画继续由 CSS 承担。
+        if (!alive()) return
+        appliedDockRef.current = { geom }
+        dockSettingsKeyRef.current = layoutKey
+        if (isOpen) void appWindow.setFocus()
+        // CSS transition 播完再恢复「收起态可穿透」。动画期间保持可点,
+        // 否则面板还在滑出就把点击放给桌面了。
+        animTimer = window.setTimeout(() => {
+          if (alive()) markAnimating(false)
+        }, settings.motionMs + 50)
       } catch {
-        // Native window control can fail when inspected in a browser.
+        // 浏览器预览 / 窗口已销毁:忽略,但不能把动画标记留在页面上。
+        if (alive()) markAnimating(false)
       }
     }
     void syncNativeWindow()
-  }, [isNative, isOpen, settings.motionMs, settings.panelWidth, settings.tabWidth])
+    return () => {
+      cancelled = true
+      dockAnimToken.current++
+      window.clearTimeout(animTimer)
+      dockAnimatingRef.current = false
+    }
+  }, [
+    dockTick,
+    isNative,
+    isOpen,
+    settings.dockSide,
+    settings.motionMs,
+    settings.panelWidth,
+    settings.tabWidth,
+    settings.targetMonitor,
+  ])
+
+  // 切屏 / 换停靠边 / 改宽度时,内容层 transform 的目标值会从 +panelWidth 跳到
+  // -panelWidth(或幅度改变)。这一帧必须禁用 transition,否则会看到内容横穿窗口。
+  useLayoutEffect(() => {
+    const el = workspaceRef.current
+    if (!el) return
+    el.classList.add('is-dock-snap')
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => el.classList.remove('is-dock-snap'))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+      el.classList.remove('is-dock-snap')
+    }
+  }, [
+    dockGeom?.panelCssWidth,
+    settings.dockSide,
+    settings.targetMonitor,
+    settings.panelWidth,
+    settings.tabWidth,
+  ])
 
   useEffect(() => {
     if (!isNative) return
     let cancelled = false
     let isChecking = false
-    let lastIgnored: boolean | null = null
+    let checkingSince = 0
 
     const syncHitTest = async () => {
-      if (isChecking) return
+      const now = performance.now()
+      // 看门狗:若上一次 IPC 卡住不返回,isChecking 会永久为 true,后续轮询全被跳过,
+      // 穿透状态被冻结 → 窗口永远点不动。超过 1.5s 强制放行一轮。
+      if (isChecking && now - checkingSince < 1500) return
       isChecking = true
+      checkingSince = now
       try {
-        const { cursorPosition, currentMonitor, getCurrentWindow } =
-          await import('@tauri-apps/api/window')
+        const { cursorPosition, getCurrentWindow } = await import('@tauri-apps/api/window')
         const appWindow = getCurrentWindow()
-        const [cursor, position, monitor] = await Promise.all([
-          cursorPosition(),
-          appWindow.outerPosition(),
-          currentMonitor(),
-        ])
-        // 几何信息缺失(显示器/窗口位置拿不到)时,默认【不穿透】,确保主窗口始终可点击,
-        // 杜绝历史上「点不动 / 卡死」类回归(穿透状态被错误置位且无法恢复)。
-        if (!monitor || !position) {
+        // ⚠️ 0.4.62 丝滑度:展开态 / CSS 过渡期间判定恒为「不穿透」,无需每 48ms
+        // 三次坐标 IPC。此前光标 + 窗口位置 + 窗口尺寸的查询会与动画首帧抢
+        // 主线程,放大卡顿。仍无条件重发一次 false,保证竞态最多 48ms 自愈。
+        if (isOpen || dockAnimatingRef.current) {
           if (!cancelled) await appWindow.setIgnoreCursorEvents(false)
           return
         }
-        const scaleFactor = monitor?.scaleFactor || 1
-        const relativeX = cursor.x - position.x
-        const relativeY = cursor.y - position.y
-        const tabWidth = settings.tabWidth * scaleFactor
-        const panelWidth = effectivePanelWidth * scaleFactor
-        const handleTop = (nativeHandleCenter - settings.handleHeight / 2) * scaleFactor
-        const handleBottom = (nativeHandleCenter + settings.handleHeight / 2) * scaleFactor
-        const handleHitSlop = 3 * scaleFactor
-        const isOnHandle =
-          relativeX >= -handleHitSlop &&
-          relativeX <= tabWidth + handleHitSlop &&
-          relativeY >= handleTop - handleHitSlop &&
-          relativeY <= handleBottom + handleHitSlop
-        const isOnPanel =
-          isOpen && relativeX >= tabWidth && relativeX <= tabWidth + panelWidth && relativeY >= 0
-        const shouldIgnore = dragState.current ? false : !(isOnHandle || isOnPanel)
-        if (!cancelled && shouldIgnore !== lastIgnored) {
-          lastIgnored = shouldIgnore
-          await appWindow.setIgnoreCursorEvents(shouldIgnore)
+        const [cursor, position, size] = await Promise.all([
+          cursorPosition(),
+          appWindow.outerPosition(),
+          appWindow.outerSize(),
+        ])
+        // 几何信息缺失(目标屏还没解析出来 / 窗口位置拿不到)时,默认【不穿透】。
+        const geom = dockGeomRef.current
+        if (!geom || !position) {
+          if (!cancelled) await appWindow.setIgnoreCursorEvents(false)
+          return
         }
+        // CSS 展开/收起过渡期间内容仍在移动,按「展开态」处理(整窗可点),
+        // 否则面板还在滑出,点击就已经被放给桌面了。
+        const shouldIgnore = dragState.current
+          ? false
+          : dockShouldIgnore(
+              geom,
+              isOpen || dockAnimatingRef.current,
+              cursor.x - position.x,
+              cursor.y - position.y,
+              size.width,
+              size.height,
+              nativeHandleCenter,
+              settings.handleHeight,
+            )
+        // ⚠️ 不做「状态变化才发 IPC」的短路:旧实现一旦被误判成穿透(true),
+        // 或旧 effect cleanup 的 false 与新 effect 的 true 发生竞态,窗口会被
+        // 永久锁在 WS_EX_TRANSPARENT,用户完全点不动。每轮无条件重发当前状态,
+        // 任何竞态最多 48ms 内自愈。
+        if (!cancelled) await appWindow.setIgnoreCursorEvents(shouldIgnore)
       } catch {
         // Pointer passthrough is best-effort.
       } finally {
@@ -1223,7 +1607,7 @@ function App() {
       }
     }
     void syncHitTest()
-    const interval = window.setInterval(syncHitTest, 32)
+    const interval = window.setInterval(syncHitTest, 48)
     return () => {
       cancelled = true
       window.clearInterval(interval)
@@ -1231,7 +1615,7 @@ function App() {
         .then(({ getCurrentWindow }) => getCurrentWindow().setIgnoreCursorEvents(false))
         .catch(() => undefined)
     }
-  }, [isNative, isOpen, nativeHandleCenter, settings.handleHeight, settings.tabWidth, effectivePanelWidth])
+  }, [dockGeom, isNative, isOpen, nativeHandleCenter, settings.handleHeight])
 
   // ---- 主视图操作 ------------------------------------------------------------
 
@@ -1258,7 +1642,7 @@ function App() {
     if (!pending) return
     // 会员闸门:受限用户不能给重复事项添加子任务(- 与一次性事项同口径)。
     if (pending.kind === 'child' && !fullAccess) {
-      setToast({ kind: 'err', text: memberOnly('添加子任务') })
+      handleLocked('添加子任务')
       return
     }
     if (pending.kind === 'edit') {
@@ -1302,7 +1686,7 @@ function App() {
     // 会员闸门②:受限用户不能添加子任务 / 下级;主任务照常创建,只丢弃层级。
     if (!fullAccess) {
       if (subs.some((s) => s.title.trim())) {
-        setToast({ kind: 'err', text: memberOnly('添加子任务') })
+        handleLocked('添加子任务')
       }
       return
     }
@@ -1446,7 +1830,7 @@ function App() {
     onAddChild: (parentId: string, title: string) => {
       // 会员闸门:受限用户不能添加子任务。
       if (!fullAccess) {
-        setToast({ kind: 'err', text: memberOnly('添加子任务') })
+        handleLocked('添加子任务')
         return
       }
       // 重复事项的虚拟实例:弹出范围确认(仅本次 / 整组),否则直接加子任务。
@@ -1549,9 +1933,10 @@ function App() {
 
   return (
     <main
+      ref={workspaceRef}
       className={`workspace ${isNative ? 'is-native' : 'is-web-preview'} ${
         isOpen ? 'is-sidebar-open' : 'is-sidebar-closed'
-      } theme-${settings.theme} bg-${settings.background}`}
+      } dock-${settings.dockSide} theme-${settings.theme} bg-${settings.background}`}
       style={appStyle}
     >
       <section className="desktop-preview" aria-label="Tacco 桌面预览" aria-hidden={isNative}>
@@ -1588,6 +1973,10 @@ function App() {
         </section>
       </section>
 
+      {/* 原生贴边层:展开/收起只靠这一层的 transform 平移(合成器动画,零 IPC)。
+          原生窗口尺寸恒定;收起时内容整体移到屏边,只剩把手那一列可见。
+          非原生预览态该层为 display:contents,不影响原有布局。 */}
+      <div className="dock-layer">
       {isNative ? (
         <svg
           className="native-dock-surface"
@@ -1619,6 +2008,7 @@ function App() {
       </button>
 
       <aside
+        ref={setSidebarHost}
         className={`todo-sidebar ${isOpen ? 'is-open' : ''}`}
         aria-label="Tacco 侧栏"
         aria-hidden={!isOpen}
@@ -1642,14 +2032,19 @@ function App() {
               onSwitchProfile={store.switchAccountProfile}
               onSyncNow={store.triggerSync}
               onOpenRestore={() => setRestoreSheetOpen(true)}
-              onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
+              onLocked={handleLocked}
               onToast={(kind, text) => setToast({ kind, text })}
               store={store}
+              appVersion={appVersion}
+              updateState={updateState}
+              setUpdateState={setUpdateState}
+              topbarFocus={topbarFocus}
+              dockFallback={dockGeom?.fallback ?? false}
             />
             <ErrorBoundary label="截图与贴图">
               <ScreenshotSettingsPanel
                 onToast={(kind, text) => setToast({ kind, text })}
-                onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
+                onLocked={handleLocked}
               />
             </ErrorBoundary>
           </div>
@@ -1682,76 +2077,84 @@ function App() {
                 <strong>Tacco</strong>
               </div>
               <div className="icon-cluster">
-                {/* 录音机入口(牛马计薪器左侧),录音中亮红点 */}
-                <button
-                  type="button"
-                  className={`rec-entry ${recorderOpen ? 'is-active' : ''}`}
-                  aria-label="录音机"
-                  aria-pressed={recorderOpen}
-                  data-tip="录音机"
-                  onClick={toggleRecorder}
-                >
-                  <Mic size={16} />
-                  {recorderActive ? <i className="rec-dot" aria-hidden="true" /> : null}
-                </button>
-                <button
-                  type="button"
-                  className={salaryOpen ? 'is-active' : ''}
-                  aria-label="牛马计薪器"
-                  aria-pressed={salaryOpen}
-                  data-tip="牛马计薪器"
-                  onClick={toggleSalary}
-                >
-                  <Coins size={16} />
-                </button>
-                <button
-                  type="button"
-                  className={calculatorOpen ? 'is-active' : ''}
-                  aria-label="计算器"
-                  aria-pressed={calculatorOpen}
-                  data-tip="计算器"
-                  onClick={toggleCalculator}
-                >
-                  <Calculator size={16} />
-                </button>
-                <button
-                  type="button"
-                  className={huangliOpen ? 'is-active' : ''}
-                  aria-label="黄历"
-                  aria-pressed={huangliOpen}
-                  data-tip="黄历 · 万年历"
-                  onClick={toggleHuangli}
-                >
-                  <BookOpen size={16} />
-                </button>
-                <div className="sync-cluster">
+                {/* 动态槽位:按用户配置的顺序占用顶栏,装不下的收进「⋯ 更多」 */}
+                {topbar.shown.map((t) => {
+                  const active =
+                    t.id === 'calculator' ? calculatorOpen
+                      : t.id === 'huangli' ? huangliOpen
+                        : t.id === 'salary' ? salaryOpen
+                          : t.id === 'recorder' ? recorderOpen
+                            : false
+                  const cls = [
+                    t.id === 'recorder' ? 'rec-entry' : '',
+                    active ? 'is-active' : '',
+                    t.id === 'sync' && store.syncState.status === 'syncing' ? 'is-syncing' : '',
+                  ].filter(Boolean).join(' ')
+                  const button = (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={cls || undefined}
+                      aria-label={t.name}
+                      aria-pressed={active || undefined}
+                      data-tip={t.tip}
+                      onClick={() => runTopbarTool(t.id, t.name)}
+                    >
+                      <TopbarToolIcon id={t.id} />
+                      {t.id === 'recorder' && recorderActive ? (
+                        <i className="rec-dot" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                  )
+                  // 同步图标下方仍挂「上次同步时间」,沿用原 .sync-cluster 包装。
+                  if (t.id === 'sync') {
+                    return (
+                      <div className="sync-cluster" key={`wrap-${t.id}`}>
+                        {button}
+                        <em className="sync-cluster-time">{lastSyncLabel}</em>
+                      </div>
+                    )
+                  }
+                  return button
+                })}
+                {topbar.hidden.length > 0 ? (
                   <button
+                    ref={moreBtnRef}
                     type="button"
-                    className={store.syncState.status === 'syncing' ? 'is-syncing' : ''}
-                    aria-label="立即同步到云端"
-                    data-tip="立即同步到云端"
-                    onClick={onHeaderSync}
+                    className={moreOpen ? 'is-active' : ''}
+                    aria-label="更多工具"
+                    aria-expanded={moreOpen}
+                    aria-haspopup="menu"
+                    // 菜单展开时撤掉 tooltip:鼠标仍停在按钮上,气泡会盖住菜单头部。
+                    data-tip={moreOpen ? undefined : `更多工具 (${topbar.hidden.length})`}
+                    onClick={() => setMoreOpen((c) => !c)}
                   >
-                    <RefreshCw size={16} />
+                    <Ellipsis size={16} />
+                    <i className="more-dot" aria-hidden="true" />
                   </button>
-                  <em className="sync-cluster-time">{lastSyncLabel}</em>
-                </div>
+                ) : null}
                 <button
                   type="button"
                   className={isSettingsOpen ? 'is-active' : ''}
                   aria-label="侧栏设置"
                   aria-pressed={isSettingsOpen}
                   data-tip="设置"
-                  onClick={() =>
-                    setIsSettingsOpen((c) => {
-                      if (!c) trackPage('settings')
-                      return !c
-                    })
-                  }
+                  onClick={openSettingsPage}
                 >
                   <Settings size={16} />
                 </button>
               </div>
+
+              {/* 溢出菜单:absolute 相对 .todo-sidebar 定位,继承主题变量 */}
+              {moreOpen && topbar.hidden.length > 0 ? (
+                <TopbarMoreMenu
+                  hidden={topbar.hidden}
+                  shortcutLabels={shortcutLabels}
+                  onRun={runTopbarTool}
+                  onManage={manageTopbarTools}
+                  menuRef={moreMenuRef}
+                />
+              ) : null}
             </header>
 
             <div className="sidebar-pinned">
@@ -2003,7 +2406,7 @@ function App() {
                   onClick={() => {
                     // 会员闸门:受限用户不能新增生日(已有记录仍可查看编辑)。
                     if (!fullAccess) {
-                      setToast({ kind: 'err', text: memberOnly('添加生日') })
+                      handleLocked('添加生日')
                       return
                     }
                     setBirthdaySheet('new-birthday')
@@ -2018,7 +2421,7 @@ function App() {
                   onClick={() => {
                     // 会员闸门:受限用户不能新增纪念日。
                     if (!fullAccess) {
-                      setToast({ kind: 'err', text: memberOnly('添加纪念日') })
+                      handleLocked('添加纪念日')
                       return
                     }
                     setBirthdaySheet('new-anniversary')
@@ -2042,7 +2445,7 @@ function App() {
                 }
                 onClose={() => setAddSheetOpen(false)}
                 onSubmit={handleAddTree}
-                onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
+                onLocked={handleLocked}
               />
             )}
             {settingsTask && (
@@ -2074,7 +2477,7 @@ function App() {
                 onPinnedChange={(value) => store.setPinned(settingsTask.id, value)}
                 onSetRemind={(iso) => store.setRemindAt(settingsTask.id, iso, settingsOccurrenceKey)}
                 onSetDueRange={(dueIso, endIso) => store.setDueRange(settingsTask.id, dueIso, endIso)}
-                onLocked={(feature) => setToast({ kind: 'err', text: memberOnly(feature) })}
+                onLocked={handleLocked}
               />
             )}
             {recurScope && (
@@ -2131,12 +2534,9 @@ function App() {
                     store.updateBirthday(editingBirthday.id, draft)
                   } else if (!store.addBirthday(draft)) {
                     // 会员闸门兜底:入口已拦,这里防止其他路径绕过时静默失败。
-                    setToast({
-                      kind: 'err',
-                      text: memberOnly(
-                        birthdaySheet === 'new-anniversary' ? '添加纪念日' : '添加生日',
-                      ),
-                    })
+                    handleLocked(
+                      birthdaySheet === 'new-anniversary' ? '添加纪念日' : '添加生日',
+                    )
                   }
                   setBirthdaySheet(null)
                 }}
@@ -2197,6 +2597,72 @@ function App() {
           </div>
         )}
       </aside>
+      </div>
+      {/* /dock-layer */}
+
+      {/* 三个全局弹窗统一 portal 到 .todo-sidebar:absolute 遮罩 inset:0 只覆盖工具面板,
+          与设置页内登录弹窗的视觉基准一致,不压住左侧透明把手区;同时继承主题变量。 */}
+      {sidebarHost
+        ? createPortal(
+            loginModalOpen ? (
+              <AccountModal
+                view={loginView}
+                account={account}
+                onClose={() => setLoginModalOpen(false)}
+                onOpenReset={() => setLoginView('password')}
+                onLoggedIn={(acc) => {
+                  setLoginModalOpen(false)
+                  void (async () => {
+                    try {
+                      const migrated = (await store.switchAccountProfile(acc.email)) ?? 0
+                      if (migrated > 0)
+                        setToast({ kind: 'ok', text: `已把本地 ${migrated} 条数据并入账号` })
+                    } catch (e) {
+                      setToast({ kind: 'err', text: `切换账号数据失败: ${(e as Error).message}` })
+                    }
+                    store.setSyncConfig({ enabled: true, endpoint: AUTH_BASE, token: acc.token })
+                  })()
+                }}
+                onPasswordChanged={() => {
+                  setLoginModalOpen(false)
+                  store.setSyncConfig({ enabled: false, token: '' })
+                }}
+              />
+            ) : null,
+            sidebarHost,
+          )
+        : null}
+      {sidebarHost
+        ? createPortal(
+            <LoginGuideSheet
+              open={loginGuide.open}
+              onGoLogin={() => {
+                setLoginGuide({ open: false })
+                setLoginView('auth')
+                setLoginModalOpen(true)
+              }}
+              onClose={() => setLoginGuide({ open: false })}
+            />,
+            sidebarHost,
+          )
+        : null}
+      {/* 首页更新提示弹窗:状态与设置页共用,展示时机由 isOpen 控制 */}
+      {sidebarHost
+        ? createPortal(
+            updateNoticeOpen && updateNotice ? (
+              <UpdateNoticeSheet
+                notice={updateNotice}
+                currentVersion={appVersion}
+                update={updateState}
+                onClose={() => setUpdateNoticeOpen(false)}
+                onInstall={() =>
+                  void downloadAndInstall(updateNotice.version, updateNotice.url, setUpdateState)
+                }
+              />
+            ) : null,
+            sidebarHost,
+          )
+        : null}
     </main>
   )
 }
@@ -2208,7 +2674,350 @@ function PanelRightCloseIcon(props: { className?: string; size?: number }) {
   return <PanelRightClose {...props} />
 }
 
-/** 独立页面过场动画时长(与 CSS --page-ms 保持一致):右滑入展开 / 右滑出关闭。 */
+/** 顶栏工具的图标映射。注册表只存 id,避免纯数据模块依赖 React。 */
+function TopbarToolIcon({ id, size = 16 }: { id: TopbarToolId; size?: number }) {
+  switch (id) {
+    case 'screenshot':
+      return <Camera size={size} />
+    case 'note':
+      return <StickyNote size={size} />
+    case 'clipboard':
+      return <ClipboardList size={size} />
+    case 'calculator':
+      return <Calculator size={size} />
+    case 'huangli':
+      return <BookOpen size={size} />
+    case 'salary':
+      return <Coins size={size} />
+    case 'recorder':
+      return <Mic size={size} />
+    case 'sync':
+      return <RefreshCw size={size} />
+    default:
+      return null
+  }
+}
+
+/**
+ * 「⋯ 更多」菜单:列出按面板宽度装不下、被收起的工具。
+ * 直接渲染在 .sidebar-header 内(absolute 相对 .todo-sidebar 定位),因此能继承
+ * .workspace 的主题变量,暗色下不会像 portal 到 body 那样出现「侧栏黑、卡片白」。
+ */
+function TopbarMoreMenu({
+  hidden,
+  shortcutLabels,
+  onRun,
+  onManage,
+  menuRef,
+}: {
+  hidden: TopbarTool[]
+  shortcutLabels: Partial<Record<TopbarToolId, string>>
+  onRun: (id: TopbarToolId, name: string) => void
+  onManage: () => void
+  menuRef: { current: HTMLDivElement | null }
+}) {
+  return (
+    <div className="topbar-menu" ref={menuRef} role="menu" aria-label="更多工具">
+      <div className="tm-head">
+        <span>更多工具</span>
+        <em>已收起 {hidden.length} 个</em>
+      </div>
+      {hidden.map((t) => (
+        <button
+          type="button"
+          className="tm-item"
+          key={t.id}
+          role="menuitem"
+          onClick={() => onRun(t.id, t.name)}
+        >
+          <TopbarToolIcon id={t.id} size={15} />
+          <span className="nm">{t.name}</span>
+          {t.vip ? <span className="tm-vip">会员</span> : null}
+          {shortcutLabels[t.id] ? <span className="kd">{shortcutLabels[t.id]}</span> : null}
+        </button>
+      ))}
+      <div className="tm-sep" />
+      <button type="button" className="tm-manage" onClick={onManage}>
+        <Settings size={14} />
+        管理顶栏入口…
+      </button>
+    </div>
+  )
+}
+
+/**
+ * 设置页「顶栏快捷入口」入口行(0.4.62):8 行配置收进底部弹窗,
+ * 不再平铺占用设置页空间;弹窗内是 draft,点「保存」才写回配置。
+ */
+function TopbarToolsSetting({
+  pref,
+  panelWidth,
+  onChange,
+  focusToken,
+}: {
+  pref: TopbarToolsPref
+  panelWidth: number
+  onChange: (patch: Partial<SidebarSettings>) => void
+  focusToken: number
+}) {
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const { shown, hidden } = splitTopbarTools(pref, panelWidth)
+  const offCount = TOPBAR_TOOLS.length - pref.enabled.length
+
+  // 「⋯ 更多 → 管理顶栏入口…」:直接打开配置弹窗(不再滚动到平铺分组)。
+  useEffect(() => {
+    if (!focusToken) return
+    setSheetOpen(true)
+  }, [focusToken])
+
+  return (
+    <div className="settings-group" id="topbar-tools-group">
+      <div className="settings-group-title">顶栏快捷入口</div>
+      <button
+        type="button"
+        className="tt-entry"
+        onClick={() => setSheetOpen(true)}
+        aria-label="管理顶栏快捷入口"
+      >
+        <span className="tt-entry-ico"><Settings size={15} /></span>
+        <span className="tt-entry-text">
+          <strong>管理工具入口</strong>
+          <em>
+            顶栏 {shown.length} 个 · 更多 {hidden.length} 个
+            {offCount > 0 ? ` · 隐藏 ${offCount} 个` : ''}
+          </em>
+        </span>
+        <ChevronRight size={14} />
+      </button>
+      <p className="settings-hint">可调整顶部栏工具顺序</p>
+      {sheetOpen ? (
+        <TopbarToolsSheet
+          pref={pref}
+          panelWidth={panelWidth}
+          onSave={(next) => onChange({ topbarTools: next })}
+          onClose={() => setSheetOpen(false)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 底部弹窗:勾选启用 / 上下移动排序 / 恢复默认,全部改本地 draft,
+ * 只有点「保存」才提交;取消 / 点遮罩 / Esc 一律丢弃改动。
+ */
+function TopbarToolsSheet({
+  pref,
+  panelWidth,
+  onSave,
+  onClose,
+}: {
+  pref: TopbarToolsPref
+  panelWidth: number
+  onSave: (next: TopbarToolsPref) => void
+  onClose: () => void
+}) {
+  const { closing, requestClose } = useSheetClose(onClose)
+  const [draft, setDraft] = useState<TopbarToolsPref>(() => sanitizeTopbarTools(pref))
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') requestClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [requestClose])
+
+  const rows = draft.order
+    .map((id) => TOPBAR_TOOLS.find((t) => t.id === id))
+    .filter((t): t is TopbarTool => Boolean(t))
+
+  const toggle = (id: TopbarToolId) => {
+    const enabled = draft.enabled.includes(id)
+      ? draft.enabled.filter((x) => x !== id)
+      : draft.order.filter((x) => x === id || draft.enabled.includes(x))
+    // 至少留一个入口,避免顶栏只剩「设置」
+    if (enabled.length === 0) return
+    setDraft({ ...draft, enabled })
+  }
+
+  const move = (id: TopbarToolId, delta: -1 | 1) => {
+    const order = [...draft.order]
+    const i = order.indexOf(id)
+    const j = i + delta
+    if (i < 0 || j < 0 || j >= order.length) return
+    ;[order[i], order[j]] = [order[j], order[i]]
+    setDraft(sanitizeTopbarTools({ ...draft, order }))
+  }
+
+  const save = () => {
+    onSave(sanitizeTopbarTools(draft))
+    requestClose()
+  }
+
+  return (
+    <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onClick={requestClose}>
+      <div
+        className={`sheet tt-sheet ${closing ? 'is-closing' : ''}`}
+        role="dialog"
+        aria-label="顶栏快捷入口"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-title">顶栏快捷入口</div>
+        <p className="settings-hint">
+          勾选要显示的工具，用箭头调整顺序；靠前的优先占用顶栏，其余自动收进「⋯ 更多」。
+        </p>
+        <div className="tt-list">
+          {rows.map((t, i) => {
+            const on = draft.enabled.includes(t.id)
+            const pos = topbarPosition(draft, t.id, panelWidth)
+            return (
+              <div className={`tt-row ${on ? '' : 'is-off'}`} key={t.id}>
+                <button
+                  type="button"
+                  className={`tt-check ${on ? 'is-on' : ''}`}
+                  aria-pressed={on}
+                  aria-label={`${on ? '隐藏' : '显示'}${t.name}入口`}
+                  onClick={() => toggle(t.id)}
+                >
+                  {on ? <Check size={11} strokeWidth={3} /> : null}
+                </button>
+                <span className="tt-icon"><TopbarToolIcon id={t.id} size={15} /></span>
+                <span className="tt-nm">{t.name}</span>
+                <span className={`tt-pos ${pos === 'top' ? 'is-top' : ''}`}>
+                  {pos === 'top' ? '顶栏' : pos === 'more' ? '更多' : '隐藏'}
+                </span>
+                <span className="tt-move">
+                  <button
+                    type="button"
+                    aria-label={`上移${t.name}`}
+                    disabled={i === 0}
+                    onClick={() => move(t.id, -1)}
+                  >
+                    <ChevronUp size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`下移${t.name}`}
+                    disabled={i === rows.length - 1}
+                    onClick={() => move(t.id, 1)}
+                  >
+                    <ChevronDown size={11} />
+                  </button>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <div className="tt-sheet-actions">
+          <button
+            type="button"
+            className="tt-reset"
+            onClick={() => setDraft({ ...DEFAULT_TOPBAR_TOOLS })}
+          >
+            恢复默认
+          </button>
+          <div className="tt-sheet-buttons">
+            <button type="button" className="tt-btn" onClick={requestClose}>
+              取消
+            </button>
+            <button type="button" className="tt-btn is-primary" onClick={save}>
+              保存
+            </button>
+          </div>
+        </div>
+        <p className="settings-hint">保存后才会更新顶栏；取消则保留原配置。</p>
+      </div>
+    </div>
+  )
+}
+
+/** 设置页:窗口停靠边 + 目标屏幕。单屏时「显示屏幕」整行禁用(不隐藏)。 */
+function DockPositionSetting({
+  dockSide,
+  targetMonitor,
+  fallback,
+  onChange,
+}: {
+  dockSide: DockSide
+  targetMonitor: MonitorPref
+  fallback: boolean
+  onChange: (patch: Partial<SidebarSettings>) => void
+}) {
+  const [options, setOptions] = useState<DockMonitorOption[]>([
+    { value: 'primary', label: '主屏' },
+  ])
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const [opts, n] = await Promise.all([listDockMonitors(), dockMonitorCount()])
+      if (cancelled) return
+      setOptions(opts)
+      setCount(n)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const multi = count > 1
+  // 之前选过的屏被拔掉时,保留该项让用户看得见,配合「已回退」提示。
+  const shownOptions = options.some((o) => o.value === targetMonitor)
+    ? options
+    : [...options, { value: targetMonitor, label: '原屏幕（当前不可用）' }]
+
+  return (
+    <div className="settings-group" id="dock-position-group">
+      <div className="settings-group-title">窗口位置</div>
+      <div className="dock-setting-row">
+        <span>贴边方向</span>
+        <div className="segmented-control" aria-label="贴边方向">
+          <button
+            type="button"
+            className={dockSide === 'left' ? 'is-selected' : ''}
+            onClick={() => onChange({ dockSide: 'left' })}
+          >
+            桌面左侧
+          </button>
+          <button
+            type="button"
+            className={dockSide === 'right' ? 'is-selected' : ''}
+            onClick={() => onChange({ dockSide: 'right' })}
+          >
+            桌面右侧
+          </button>
+        </div>
+      </div>
+      <div className={`dock-setting-row ${multi ? '' : 'is-disabled'}`}>
+        <span>显示屏幕</span>
+        <select
+          className="dock-select"
+          value={targetMonitor}
+          disabled={!multi}
+          aria-label="显示屏幕"
+          onChange={(e) => onChange({ targetMonitor: e.target.value })}
+        >
+          {shownOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="settings-hint">
+        {fallback
+          ? '指定的屏幕当前不可用，已临时回退到主屏；重新接入后可切回。'
+          : multi
+            ? '切换后立即生效，无需重启。'
+            : '当前仅检测到 1 个显示器，接入副屏后可选择。'}
+      </p>
+    </div>
+  )
+}
+
+/** 独立页面过场动画时长(与 CSS --page-ms 保持一致):
+ *  右贴从右滑入、向右滑出;左贴由 .workspace.dock-left 的 CSS 整体镜像。 */
 const PAGE_EXIT_MS = 240
 
 /**
@@ -2273,131 +3082,32 @@ function PageShell({
   )
 }
 
-/** 官方下载页(国内直连),版本检查与安装包下载都走这里,无需 VPN。 */
-const OFFICIAL_SITE = 'https://todobar-app.app.workbuddy.host'
+/** 版本检查 / 安装 / 弹窗去重的实现统一放在 `src/update.ts`。 */
 
-type UpdateState =
-  | { status: 'idle' }
-  | { status: 'checking' }
-  | { status: 'latest' }
-  | { status: 'available'; version: string; url: string }
-  | { status: 'downloading'; version: string }
-  | { status: 'installing'; version: string }
-  | { status: 'error'; message: string; url?: string }
-
-/** 自动检查更新节流:每天最多 2 次(进入设置页触发,避免新版本被忽略)。 */
-const UPDATE_CHECK_LOG_KEY = 'ticktask.updateChecks.v1'
-function loadUpdateCheckLog(): number[] {
-  try {
-    const raw = localStorage.getItem(UPDATE_CHECK_LOG_KEY)
-    const arr = raw ? (JSON.parse(raw) as unknown) : []
-    return Array.isArray(arr) ? (arr.filter((n) => typeof n === 'number') as number[]) : []
-  } catch {
-    return []
-  }
-}
-function logUpdateCheck() {
-  const arr = loadUpdateCheckLog()
-  arr.push(Date.now())
-  try {
-    localStorage.setItem(UPDATE_CHECK_LOG_KEY, JSON.stringify(arr.slice(-10)))
-  } catch {
-    /* 忽略 */
-  }
-}
-function isSameLocalDay(ts: number, ref: number): boolean {
-  const a = new Date(ts)
-  const b = new Date(ref)
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-function updateChecksToday(): number {
-  const today = Date.now()
-  return loadUpdateCheckLog().filter((t) => isSameLocalDay(t, today)).length
-}
-
-/** 比较点分版本号 a 是否大于 b。 */
-function isNewerVersion(a: string, b: string): boolean {
-  const pa = a.replace(/^v/, '').split('.').map(Number)
-  const pb = b.replace(/^v/, '').split('.').map(Number)
-  for (let i = 0; i < 3; i++) {
-    const x = pa[i] ?? 0
-    const y = pb[i] ?? 0
-    if (x !== y) return x > y
-  }
-  return false
-}
-
-/** 账号分组:登录 / 注册 / 退出 / 改密 / 设备管理。登录后自动写入同步令牌。 */
-
-/** 设置页顶部的版本字段:显示当前版本,支持检查更新并站内下载安装。 */
-function VersionSetting() {
-  const [appVersion, setAppVersion] = useState('')
-  const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
-  const autoCheckedRef = useRef(false)
-
-  useEffect(() => {
-    void import('@tauri-apps/api/app')
-      .then((m) => m.getVersion())
-      .then(setAppVersion)
-      .catch(() => setAppVersion(''))
-    // 启动即拉取远程法定节假日(合并/缓存,失败静默降级到内置兜底)。
-    void loadHolidays()
-  }, [])
-
-  // 进入设置页(本组件挂载)即自动检查更新;每天最多 2 次,命中新版本直接展示安装入口。
-  useEffect(() => {
-    if (!appVersion || autoCheckedRef.current) return
-    autoCheckedRef.current = true
-    if (updateChecksToday() < 2) {
-      logUpdateCheck()
-      void checkUpdate()
-    }
-  }, [appVersion])
-
+/** 设置页顶部的版本字段:显示当前版本,支持检查更新并站内下载安装。
+ *  状态由 App 根持有(首页更新弹窗与这里共用),避免重复检查与状态分叉。 */
+function VersionSetting({
+  appVersion,
+  update,
+  setUpdate,
+}: {
+  appVersion: string
+  update: UpdateState
+  setUpdate: Dispatch<SetStateAction<UpdateState>>
+}) {
   async function checkUpdate() {
     setUpdate({ status: 'checking' })
     try {
-      const res = await fetch(`${OFFICIAL_SITE}/version.json?t=${Date.now()}`)
-      if (!res.ok) throw new Error(`服务器返回 ${res.status}`)
-      const data = (await res.json()) as { version?: string; url?: string }
-      if (!data.version || !data.url) throw new Error('版本信息格式错误')
-      if (isNewerVersion(data.version, appVersion || '0.0.0')) {
-        setUpdate({ status: 'available', version: data.version, url: data.url })
-      } else {
-        setUpdate({ status: 'latest' })
-      }
+      const data = await fetchLatestVersion()
+      setUpdate(
+        isNewerVersion(data.version, appVersion || '0.0.0')
+          ? { status: 'available', version: data.version, url: data.url }
+          : { status: 'latest' },
+      )
     } catch (err) {
       setUpdate({ status: 'error', message: `检查失败: ${(err as Error).message}` })
     }
   }
-
-  /** ArrayBuffer → Base64(把浏览器下载的安装包字节传给 Rust 落盘到临时目录)。 */
-  function arrayBufferToBase64(buf: ArrayBuffer): string {
-    const bytes = new Uint8Array(buf)
-    let binary = ''
-    const chunk = 0x8000
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)))
-    }
-    return btoa(binary)
-  }
-
-  async function installNewVersion(version: string, url: string) {
-    setUpdate({ status: 'downloading', version })
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      // 下载走浏览器(复用用户浏览器网络/代理/证书),避免此前 Rust 直连在特殊网络下失败。
-      const resp = await fetch(url)
-      if (!resp.ok) throw new Error(`下载失败: HTTP ${resp.status}`)
-      const b64 = arrayBufferToBase64(await resp.arrayBuffer())
-      const path = await invoke<string>('save_update_file', { data: b64 })
-      await invoke('install_update', { path })
-      setUpdate({ status: 'installing', version })
-    } catch (err) {
-      setUpdate({ status: 'error', message: `更新失败: ${(err as Error).message}`, url })
-    }
-  }
-
   return (
     <div className="settings-group settings-appearance">
       <div className="settings-group-title">版本</div>
@@ -2407,10 +3117,7 @@ function VersionSetting() {
           type="button"
           className="sync-now-button"
           style={{ width: 'auto', margin: 0 }}
-          onClick={() => {
-            logUpdateCheck()
-            void checkUpdate()
-          }}
+          onClick={() => void checkUpdate()}
           disabled={update.status === 'checking' || update.status === 'downloading' || !appVersion}
         >
           {update.status === 'checking' ? '检查中…' : update.status === 'downloading' ? '下载中…' : '检查更新'}
@@ -2420,7 +3127,7 @@ function VersionSetting() {
         <button
           type="button"
           className="sync-now-button"
-          onClick={() => installNewVersion(update.version, update.url)}
+          onClick={() => void downloadAndInstall(update.version, update.url, setUpdate)}
         >
           {`下载并安装 v${update.version}`}
         </button>
@@ -2833,7 +3540,19 @@ function SidebarSettingsPanel({
   onLocked,
   onToast,
   store,
+  appVersion,
+  updateState,
+  setUpdateState,
+  topbarFocus,
+  dockFallback,
 }: {
+  appVersion: string
+  updateState: UpdateState
+  setUpdateState: Dispatch<SetStateAction<UpdateState>>
+  /** 「⋯ 更多 → 管理顶栏入口…」的定位 token,变化即滚动到配置分组。 */
+  topbarFocus: number
+  /** 指定的目标屏幕当前不可用,设置页据此提示「已回退主屏」。 */
+  dockFallback: boolean
   settings: SidebarSettings
   onChange: (patch: Partial<SidebarSettings>) => void
   syncConfig: import('./types').SyncConfig
@@ -2867,12 +3586,28 @@ function SidebarSettingsPanel({
   // 会员闸门:受限用户不能上传云端 / 从云端恢复,同步区整体置灰。
   const { fullAccess, showVip } = useAccount()
   const syncLocked = !fullAccess
+  /** 自动同步开关的「生效值」:未登录 / 试用结束且未激活会员时一律显示为关,
+   *  即使之前(试用期内)是打开的。底层 syncConfig.autoSync 保留用户偏好、不写死
+   *  false —— 成为会员后开关与定时同步按原偏好自动恢复,不用用户重新打开。 */
+  const autoSyncOn = effectiveAutoSync(syncConfig.autoSync, fullAccess)
 
   return (
     // 嵌套在外层 .settings-scroll 内:底部 76px 预留由外层承担,内层清零。
     <div className="settings-scroll settings-scroll-nested">
       <AccountSetting onSyncChange={onSyncChange} onSwitchProfile={onSwitchProfile} />
-      <VersionSetting />
+      <VersionSetting appVersion={appVersion} update={updateState} setUpdate={setUpdateState} />
+      <TopbarToolsSetting
+        pref={settings.topbarTools}
+        panelWidth={settings.panelWidth}
+        onChange={onChange}
+        focusToken={topbarFocus}
+      />
+      <DockPositionSetting
+        dockSide={settings.dockSide}
+        targetMonitor={settings.targetMonitor}
+        fallback={dockFallback}
+        onChange={onChange}
+      />
       <div className="settings-group settings-appearance">
         <div className="settings-group-title">外观</div>
         <div className="segmented-control" aria-label="外观">
@@ -2940,46 +3675,6 @@ function SidebarSettingsPanel({
           suffix="px"
           onChange={(tabWidth) => onChange({ tabWidth })}
         />
-        <ShortcutField
-          label="打开窗口"
-          value={settings.toggleWindowShortcut}
-          conflictFor={(draft) => toggleWindowShortcutConflict(draft, settings.toggleWindowShortcut)}
-          onCommit={(v) => void commitToggleWindowShortcut(v, onChange, onToast)}
-        />
-        <p className="settings-hint">
-          双击编辑框即可修改快捷键,按下快捷键即打开 / 关闭 Tacco 主窗口。
-        </p>
-
-        <ShortcutField
-          label="新建便利签"
-          value={settings.noteShortcut}
-          conflictFor={(draft) => noteShortcutConflict(draft, settings.toggleWindowShortcut)}
-          onCommit={(v) => void commitNoteShortcut(v, onChange, onToast)}
-          locked={!fullAccess}
-          onLocked={() => onLocked?.('便利签')}
-          vip={showVip}
-        />
-        <p className="settings-hint">
-          双击编辑框即可修改快捷键,按下快捷键即可新建一张便利签。
-        </p>
-      </div>
-
-      <div className="settings-group">
-        <div className="settings-group-title">剪贴板历史</div>
-        <ShortcutField
-          label="打开剪贴板"
-          value={settings.clipboardShortcut}
-          conflictFor={(draft) =>
-            clipboardShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut)
-          }
-          onCommit={(v) => void commitClipboardShortcut(v, onChange, onToast)}
-          locked={!fullAccess}
-          onLocked={() => onLocked?.('剪贴板')}
-          vip={showVip}
-        />
-        <p className="settings-hint">
-          双击编辑框即可修改快捷键,按下快捷键即弹出剪贴板窗口,自动记录近 50 条复制内容。
-        </p>
       </div>
 
       <div className="settings-group">
@@ -3058,11 +3753,11 @@ function SidebarSettingsPanel({
         <div className="settings-group-title">同步</div>
         <ToggleSetting
           label="自动同步"
-          checked={syncConfig.autoSync}
+          checked={autoSyncOn}
           onLocked={syncLocked ? () => onLocked?.('云端同步') : undefined}
           onChange={(autoSync) => onSyncChange({ autoSync })}
         />
-        {syncConfig.autoSync ? (
+        {autoSyncOn ? (
           <OptionSetting
             label="自动间隔"
             value={
@@ -3140,6 +3835,40 @@ function SidebarSettingsPanel({
           suffix="%"
           onChange={(surfaceAlpha) => onChange({ surfaceAlpha })}
         />
+      </div>
+
+      {/* 三个全局快捷键与紧随其后的「截图 / 贴图」快捷键归在同一区块(0.4.62 用户反馈)。 */}
+      <div className="settings-group">
+        <div className="settings-group-title">快捷键</div>
+        <ShortcutField
+          label="打开窗口"
+          value={settings.toggleWindowShortcut}
+          conflictFor={(draft) => toggleWindowShortcutConflict(draft, settings.toggleWindowShortcut)}
+          onCommit={(v) => void commitToggleWindowShortcut(v, onChange, onToast)}
+        />
+        <ShortcutField
+          label="新建便利签"
+          value={settings.noteShortcut}
+          conflictFor={(draft) => noteShortcutConflict(draft, settings.toggleWindowShortcut)}
+          onCommit={(v) => void commitNoteShortcut(v, onChange, onToast)}
+          locked={!fullAccess}
+          onLocked={() => onLocked?.('便利签')}
+          vip={showVip}
+        />
+        <ShortcutField
+          label="打开剪贴板"
+          value={settings.clipboardShortcut}
+          conflictFor={(draft) =>
+            clipboardShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut)
+          }
+          onCommit={(v) => void commitClipboardShortcut(v, onChange, onToast)}
+          locked={!fullAccess}
+          onLocked={() => onLocked?.('剪贴板')}
+          vip={showVip}
+        />
+        <p className="settings-hint">
+          双击编辑框即可修改；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合。
+        </p>
       </div>
 
       {/* 悬浮入口:固定在设置页底部,滚动时始终可见,两个按钮同一行 */}
@@ -5247,6 +5976,198 @@ function BirthdaySheet({
           </button>
           <button type="button" className="is-primary" disabled={!name.trim()} onClick={submit}>
             保存
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 未登录引导弹窗:受限功能点击时,未登录用户先看到「去登录」引导,点按才打开登录弹窗。
+// 已登录但非会员(试用过期)不走这里,由 handleLocked 直接弹会员提示 toast。
+// ---------------------------------------------------------------------------
+/** 首页更新提示弹窗:每个新版本最多弹一次(去重在 App 根完成)。
+ *  内容来自后台版本记录里精确匹配最新版本的一条;后台漏录时回退 version.json.notes。
+ *  跨版本升级只列最新版更新项,中间版本给一行提示,完整记录可在弹窗内展开,
+ *  这样不依赖设置页的版本记录弹窗是否已挂载。 */
+function UpdateNoticeSheet({
+  notice,
+  currentVersion,
+  update,
+  onClose,
+  onInstall,
+}: {
+  notice: UpdateNotice
+  currentVersion: string
+  update: UpdateState
+  onClose: () => void
+  onInstall: () => void
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const busy = update.status === 'downloading' || update.status === 'installing'
+  const items = notice.items.slice(0, 5)
+  const extraCount = notice.items.length - items.length
+  const missed = notice.missed
+  const missedLabel =
+    missed.length === 1
+      ? `v${missed[0].version}`
+      : `v${missed[missed.length - 1].version} ~ v${missed[0].version}`
+  const allNew = notice.releases
+    .filter((r) => isNewerVersion(r.version, currentVersion))
+    .sort((a, b) => (isNewerVersion(a.version, b.version) ? -1 : 1))
+
+  return (
+    <div
+      className="account-modal-overlay update-notice-overlay"
+      onClick={busy ? undefined : onClose}
+      role="presentation"
+    >
+      <div
+        className="account-modal update-notice"
+        role="dialog"
+        aria-modal="true"
+        aria-label="发现新版本"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="account-modal-head">
+          <strong>发现新版本 v{notice.version}</strong>
+          <button
+            type="button"
+            className="account-modal-close"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="关闭"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="update-notice-body">
+          <div className="update-notice-meta">
+            <span>v{currentVersion || '—'} → v{notice.version}</span>
+            {notice.date ? <span>{notice.date}</span> : null}
+          </div>
+
+          {showAll ? (
+            <div className="update-notice-all">
+              <button type="button" className="account-link" onClick={() => setShowAll(false)}>
+                ← 返回新版本介绍
+              </button>
+              {allNew.length === 0 ? (
+                <div className="cl-empty">暂无版本记录</div>
+              ) : (
+                allNew.map((r) => (
+                  <div className="update-notice-group" key={r.version}>
+                    <div className="update-notice-group-head">
+                      <span className="cl-version">v{r.version}</span>
+                      <span className="cl-date">{r.release_date || '—'}</span>
+                    </div>
+                    <div className="update-notice-group-title">{r.title || '版本更新'}</div>
+                    {r.items.length > 0 ? (
+                      <ul className="update-notice-list">
+                        {r.items.map((t, i) => <li key={i}>{t}</li>)}
+                      </ul>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <>
+              {notice.title ? <div className="update-notice-title">{notice.title}</div> : null}
+              {items.length > 0 ? (
+                <ul className="update-notice-list">
+                  {items.map((t, i) => <li key={i}>{t}</li>)}
+                </ul>
+              ) : (
+                <p className="update-notice-notes">
+                  {notice.notes || '本次为稳定性优化与问题修复。'}
+                </p>
+              )}
+              {extraCount > 0 ? (
+                <div className="update-notice-extra">
+                  还有 {extraCount} 项更新，可在完整版本记录中查看
+                </div>
+              ) : null}
+              {missed.length > 0 ? (
+                <div className="update-notice-missed">
+                  期间还发布了 {missed.length} 个版本（{missedLabel}）
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="account-link update-notice-all-link"
+                onClick={() => setShowAll(true)}
+              >
+                查看完整版本记录 →
+              </button>
+            </>
+          )}
+
+          {update.status === 'error' ? (
+            <div className="update-notice-error">{update.message}</div>
+          ) : null}
+          {update.status === 'installing' ? (
+            <div className="update-notice-error is-ok">
+              安装程序即将启动，Tacco 会先退出以完成覆盖安装；请在安装向导中点「安装」。
+            </div>
+          ) : null}
+        </div>
+
+        <div className="login-guide-actions">
+          <button type="button" className="account-link" onClick={onClose} disabled={busy}>
+            稍后再说
+          </button>
+          <button type="button" className="vip-buy-btn" onClick={onInstall} disabled={busy}>
+            {update.status === 'downloading'
+              ? '下载中…'
+              : update.status === 'installing'
+                ? '即将安装…'
+                : '立即更新'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LoginGuideSheet({
+  open,
+  onGoLogin,
+  onClose,
+}: {
+  open: boolean
+  onGoLogin: () => void
+  onClose: () => void
+}) {
+  if (!open) return null
+  return (
+    <div className="account-modal-overlay" onClick={onClose} role="presentation">
+      <div
+        className="account-modal login-guide"
+        role="dialog"
+        aria-modal="true"
+        aria-label="登录"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="account-modal-head">
+          <strong>登录</strong>
+          <button type="button" className="account-modal-close" onClick={onClose} aria-label="关闭">
+            ✕
+          </button>
+        </div>
+        {/* ⚠️ 不再写「登录后即可使用 XX、解锁全部会员能力」:会员能力还要看账号
+            是否在试用期 / 已激活,登录本身不构成可用承诺。 */}
+        <div className="login-guide-body">
+          <p>登录后可解锁更多功能的使用，支持数据同步云端</p>
+        </div>
+        <div className="login-guide-actions">
+          <button type="button" className="account-link" onClick={onClose}>
+            暂不
+          </button>
+          <button type="button" className="vip-buy-btn" onClick={onGoLogin}>
+            去登录
           </button>
         </div>
       </div>
