@@ -365,6 +365,8 @@ function App() {
   }, [activeTab])
   const [selectedDateKey, setSelectedDateKey] = useState(() => dayKeyOf(new Date()))
   const [addSheetOpen, setAddSheetOpen] = useState(false)
+  // 周/月视图日期栏「+」指定的目标日期;null = 走底部「添加事项」原有默认行为。
+  const [addSheetDateKey, setAddSheetDateKey] = useState<string | null>(null)
   // 「恢复云端数据」的底部弹窗:true = 打开(展示覆盖/添加两种模式)
   const [restoreSheetOpen, setRestoreSheetOpen] = useState(false)
   const [settingsTaskId, setSettingsTaskId] = useState<string | null>(null)
@@ -901,6 +903,19 @@ function App() {
     return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY_CN[d.getDay()]}`
   }, [selectedDateKey])
 
+  // 周/月视图日期栏「+」:把点击的那一天带进添加弹窗(展示用),保存时按该日期落库。
+  const addSheetDateLabel = useMemo(() => {
+    if (!addSheetDateKey) return null
+    const d = parseDayKey(addSheetDateKey)
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY_CN[d.getDay()]}`
+  }, [addSheetDateKey])
+
+  const openAddSheetForDate = (key: string) => {
+    trackFeature('add-task')
+    setAddSheetDateKey(key)
+    setAddSheetOpen(true)
+  }
+
   const weekGroups = useMemo(() => {
     const monday = new Date(weekAnchor)
     const sunday = new Date(monday)
@@ -1361,6 +1376,22 @@ function App() {
       })
     const nextFrame = () =>
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    /**
+     * ⚠️ 混合 DPI 下窗口矩形必须隔帧连写多次:
+     * 窗口创建在 1.5x 主屏时,单次 set_size(PhysicalSize) 会被 Windows 按创建屏
+     * 的缩放解释成逻辑尺寸;随后 set_position 把窗口搬到 1.0x 副屏,物理尺寸就
+     * 整体缩水 1.5 倍(实测 394×1032 → 263×688),表现为面板右侧被裁切、收起后
+     * 把手跟着内容一起移出视口。第二次写入时窗口已在目标屏,口径就正确了。
+     * 只用于「启动定位 / 切屏迁移」这类低频路径,不碰展开/收起的零 RPC 动画。
+     */
+    const applyBounds = async (r: DockRect) => {
+      for (let i = 0; i < 3; i += 1) {
+        await bounds(r)
+        await nextFrame()
+        if (!alive()) return false
+      }
+      return true
+    }
     const markAnimating = (on: boolean) => {
       dockAnimatingRef.current = on
     }
@@ -1454,7 +1485,10 @@ function App() {
 
         if (!didNativeLayout.current) {
           didNativeLayout.current = true
-          await bounds(fullRect)
+          // 启动同样会跨 DPI(主屏创建 → 用户选的副屏),单次写入会被缩放吃掉。
+          // 注意:即使中途 effect 已被取消,下面也必须把窗口显示出来(启动时
+          // visible:false),否则会卡在黑屏,只能等 Rust 看门狗兜底。
+          await applyBounds(fullRect)
           // [0.4.44] 窗口 visible:false 启动,等「定位完成 + 双 rAF 首帧绘制」
           // 后再显示,否则会以系统默认位置闪现 1.5~2.5s。
           await nextFrame()
@@ -1476,13 +1510,7 @@ function App() {
         if (relocated) {
           // Windows 跨不同 DPI 显示器会按「逻辑尺寸」重新缩放窗口,首次写入常被
           // 吃掉,连写三次按新屏物理像素校正(修掉「切到副屏仍是主屏尺寸」)。
-          await bounds(fullRect)
-          await nextFrame()
-          if (!alive()) return
-          await bounds(fullRect)
-          await nextFrame()
-          if (!alive()) return
-          await bounds(fullRect)
+          if (!(await applyBounds(fullRect))) return
           appliedDockRef.current = { geom }
           dockSettingsKeyRef.current = layoutKey
           markAnimating(false)
@@ -1669,7 +1697,10 @@ function App() {
       setToast({ kind: 'err', text: quotaMsg })
       return
     }
-    const dueIso = activeTab === 'day' ? endOfDayForKey(selectedDateKey) : endOfDayForKey(todayKey)
+    // 周/月日期栏「+」指定了目标日期时优先用该日期;否则保持原有默认(日视图=选中日,周/月=今天)。
+    const targetKey =
+      addSheetDateKey ?? (activeTab === 'day' ? selectedDateKey : todayKey)
+    const dueIso = endOfDayForKey(targetKey)
     const listId = activeTab === 'month' ? 'month' : 'today'
     // 重复事项存为模板(无子任务结构),一次性事项保留子任务层级。
     if (recurrence) {
@@ -2319,7 +2350,17 @@ function App() {
                       <div className="range-group" key={group.key}>
                         <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
                           <span>{group.label}</span>
-                          <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                          <div className="range-group-actions">
+                            <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                            <button
+                              type="button"
+                              className="icon-button range-group-add"
+                              aria-label={`在 ${group.label} 添加事项`}
+                              onClick={() => openAddSheetForDate(group.key)}
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
                         </div>
                         <div className="tree-list">
                           {group.items.map((t) => (
@@ -2345,7 +2386,20 @@ function App() {
                     <div className="range-group" key={group.key}>
                       <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
                         <span>{group.label}</span>
-                        <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                        <div className="range-group-actions">
+                          <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                          {/* 「未安排日期」不是真实日期,不提供按日新增入口。 */}
+                          {group.key !== 'undated' && (
+                            <button
+                              type="button"
+                              className="icon-button range-group-add"
+                              aria-label={`在 ${group.label} 添加事项`}
+                              onClick={() => openAddSheetForDate(group.key)}
+                            >
+                              <Plus size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="tree-list">
                         {group.items.map((t) => (
@@ -2432,7 +2486,7 @@ function App() {
                 </button>
               </div>
             ) : (
-              <button type="button" className="fab-add" onClick={() => { trackFeature('add-task'); setAddSheetOpen(true) }}>
+              <button type="button" className="fab-add" onClick={() => { trackFeature('add-task'); setAddSheetDateKey(null); setAddSheetOpen(true) }}>
                 <Plus size={16} />
                 添加事项
               </button>
@@ -2441,9 +2495,13 @@ function App() {
             {addSheetOpen && (
               <AddTaskSheet
                 dateLabel={
-                  activeTab === 'day' ? selectedDateLabel : activeTab === 'week' ? '本周' : '本月'
+                  addSheetDateLabel ??
+                  (activeTab === 'day' ? selectedDateLabel : activeTab === 'week' ? '本周' : '本月')
                 }
-                onClose={() => setAddSheetOpen(false)}
+                onClose={() => {
+                  setAddSheetOpen(false)
+                  setAddSheetDateKey(null)
+                }}
                 onSubmit={handleAddTree}
                 onLocked={handleLocked}
               />

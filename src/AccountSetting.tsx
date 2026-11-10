@@ -569,17 +569,45 @@ export function AccountSetting({
 // sheet 一致:is-closing + 190ms 后卸载。
 // ---------------------------------------------------------------------------
 
-// 会员权益明细:用具体能力替代此前「全功能解锁 / 一次买断 / 持续更新」这类
-// 笼统卖点(买断与更新已由价格区、顶部横幅表达,不必在权益里重复)。
-// 最后一条是收尾提示,渲染时做淡化处理。
-const VIP_BENEFITS = [
-  '待办事项不限制每日新建数量，支持添加子任务，支持设置事项提醒',
-  '支持新增生日/纪念日，不设限制',
-  '可使用牛马计薪器桌面组件，漂亮的牛马组件尽情使用',
-  '支持本地录音、截图/贴图、新建便利签、剪贴板',
-  '支持待办事项云端同步',
-  '更多会员权益...',
+// 会员权益对比:三列列表(功能 / 普通用户 / 永久会员),每行只写差异,不再堆长句。
+// 数值与代码闸门保持一致:受限用户每日 3 条主任务(account.ts FREE_DAILY_TASK_LIMIT),
+// 其余条目均为 fullAccess 限定的能力;桌面套件四项各自独立成行。
+interface VipBenefit {
+  name: string
+  free: string
+  member: string
+}
+
+const VIP_BENEFITS: VipBenefit[] = [
+  { name: '每日新建待办', free: '3 条/日', member: '不限量' },
+  { name: '子任务 · 待办提醒', free: '不可用', member: '支持' },
+  { name: '生日 / 纪念日', free: '仅可查看', member: '不限新增' },
+  { name: '计薪器桌面组件', free: '不可用', member: '可用' },
+  { name: '截图贴图', free: '不可用', member: '可用' },
+  { name: '剪贴板', free: '不可用', member: '可用' },
+  { name: '便利签', free: '不可用', member: '可用' },
+  { name: '录音', free: '不可用', member: '可用' },
+  { name: '云端同步', free: '不可用', member: '自动同步' },
 ]
+
+/** 对比列表的行标记:绿色勾 = 会员可用,灰色叉 = 受限状态。 */
+function VipMark({ ok }: { ok: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={ok ? 2.8 : 2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={ok ? 'M20 6 9 17l-5-5' : 'M18 6 6 18M6 6l12 12'} />
+    </svg>
+  )
+}
 
 const VIP_STEPS = [
   '点击「立即购买」,在链动小铺中完成下单',
@@ -636,31 +664,31 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
         <div className="vip-sheet-scroll">
           <div className="vip-price">
             <span className="vip-price-num">￥29.9</span>
-            <span className="vip-price-note">永久买断 · 无订阅</span>
+            <span className="vip-price-note">永久买断 · 持续迭代</span>
           </div>
 
-          <div className="vip-benefits">
-            {VIP_BENEFITS.map((b, i) => (
-              <div
-                key={b}
-                className={`vip-benefit-item ${i === VIP_BENEFITS.length - 1 ? 'is-more' : ''}`}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                <span>{b}</span>
+          <div className="vip-benefits" role="table" aria-label="普通用户与永久会员功能对比">
+            <div className="vip-cmp-head" role="row">
+              <span role="columnheader">功能</span>
+              <span role="columnheader">普通用户</span>
+              <span className="vip-cmp-head-member" role="columnheader">永久会员</span>
+            </div>
+            {VIP_BENEFITS.map((b) => (
+              <div className="vip-cmp-row" role="row" key={b.name}>
+                <span className="vip-cmp-name" role="cell">{b.name}</span>
+                <span className="vip-cmp-free" role="cell">
+                  <VipMark ok={false} />
+                  {b.free}
+                </span>
+                <span className="vip-cmp-member" role="cell">
+                  <VipMark ok />
+                  {b.member}
+                </span>
               </div>
             ))}
+            <div className="vip-cmp-foot" role="row">
+              <span role="cell">更多会员权益持续更新中…</span>
+            </div>
           </div>
 
           <div className="vip-steps">

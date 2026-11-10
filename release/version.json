@@ -1,5 +1,5 @@
 {
-  "version": "0.4.62",
-  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.62",
-  "notes": "0.4.62 更新：①新增窗口位置配置——多屏使用时，允许用户自行选择工具窗口要显示在主屏还是副屏，且贴边方向支持选择要显示在屏幕右侧还是屏幕左侧；②顶部导航栏新增截图/新建便利签/剪贴板三个功能入口，且支持在设置页面中调整顶栏快捷入口的顺序及是否显示。"
+  "version": "0.4.63",
+  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.63",
+  "notes": "0.4.63 更新：周待办/月待办每个日期上新增添加按钮，支持选择任一日期添加待办事项。"
 }

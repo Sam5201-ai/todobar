@@ -2321,6 +2321,48 @@ kbd {
   font-weight: 500;
 }
 
+/* 周/月视图日期栏:按该日期新增事项的图标按钮(与任务树幽灵按钮同风格) */
+.range-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.range-group-title .range-group-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.range-group-title .range-group-add:hover {
+  opacity: 1;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.range-group-title .range-group-add:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.range-group-title .range-group-add svg {
+  stroke-width: 2.2;
+}
+
 /* ===== 三层任务树 ===== */
 
 .tree-list {
@@ -5577,56 +5619,114 @@ body.is-row-dragging * {
 
 .vip-price {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 0 0;
+  flex-direction: column; /* 「永久买断 · 持续迭代」移到价格正下方 */
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0 0;
 }
 
 .vip-price-num {
   font-size: 30px;
   font-weight: 800;
   color: #b45309;
+  line-height: 1.15;
 }
 
 .vip-price-note {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 
+/* 会员权益:三列对比列表(功能 / 普通用户 / 永久会员),每行只写差异。
+   会员列统一绿色纯文字 + 勾号,不套背景色;普通列灰字 + 叉号。 */
 .vip-benefits {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(245, 196, 97, 0.12);
-  border: 1px solid rgba(196, 145, 55, 0.3);
+  background: transparent; /* 跟随弹窗底色,浅色/暗色主题都一致 */
+  overflow: hidden;
 }
 
-.vip-benefit-item {
-  display: flex;
-  align-items: flex-start; /* 长权益会换行,勾与首行对齐而不是整块居中 */
-  gap: 8px;
+.vip-cmp-head,
+.vip-cmp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 76px;
+  align-items: center;
+  padding: 7px 9px;
+}
+
+.vip-cmp-head {
+  background: var(--control-bg);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.vip-cmp-head span:nth-child(2),
+.vip-cmp-head span:nth-child(3) {
+  text-align: center;
+}
+
+.vip-cmp-head-member {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.vip-cmp-row {
+  border-top: 1px solid var(--line);
+  min-height: 34px;
+}
+
+.vip-cmp-name {
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--ink);
+  padding-right: 6px;
   overflow-wrap: anywhere;
 }
 
-.vip-benefit-item svg {
-  color: #d97706;
-  flex-shrink: 0;
-  margin-top: 2px;
+.vip-cmp-free,
+.vip-cmp-member {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
-/* 「更多会员权益...」是收尾提示,不是已兑现的权益,做淡化以区分。 */
-.vip-benefit-item.is-more {
+.vip-cmp-free {
   color: var(--muted);
 }
-.vip-benefit-item.is-more svg {
+.vip-cmp-free svg {
   color: var(--muted);
   opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.vip-cmp-member {
+  color: #15803d;
+  font-weight: 700;
+}
+.vip-cmp-member svg {
+  color: #15803d;
+  flex-shrink: 0;
+}
+
+.vip-cmp-foot {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.8;
+  padding: 7px 0 8px;
+  border-top: 1px dashed var(--line);
+}
+
+/* 暗色主题下换更亮的绿,保证对比度。 */
+.workspace.theme-dark .vip-cmp-head-member,
+.workspace.theme-dark .vip-cmp-member,
+.workspace.theme-dark .vip-cmp-member svg {
+  color: #4ade80;
 }
 
 .vip-steps {
