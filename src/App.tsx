@@ -324,8 +324,12 @@ function App() {
   // 单日新建上限、提醒、生日纪念日均按此判定)。登录或激活后自动重渲染放行。
   const { fullAccess, account } = useAccount()
   const [isNative] = useState(() => isTauriRuntime())
+  // 启动默认展开:此前默认收起,冷启动首帧只有贴边把手;在混合 DPI 或窗口尚未
+  // 完成几何校正时把手会被裁出视口,表现为「托盘已有图标、桌面却什么都没有」,
+  // 必须再点一次托盘 toggle 才看得到。默认展开后首帧就是完整面板。
+  // 保留 ?open=0 作为调试用的强制收起入口。
   const [isOpen, setIsOpen] = useState(
-    () => new URLSearchParams(window.location.search).get('open') === '1',
+    () => new URLSearchParams(window.location.search).get('open') !== '0',
   )
   const [isSettingsOpen, setIsSettingsOpen] = useState(
     () => new URLSearchParams(window.location.search).get('settings') === '1',
@@ -540,8 +544,9 @@ function App() {
     }
   }, [appVersion])
 
-  // 仅侧栏展开、且没有其他全局弹窗占用时展示;展示那一刻写入去重标记
-  // (每版本最多一次),网络失败或用户没看到不会消耗额度。
+  // 仅侧栏展开、且没有其他全局弹窗占用时展示。去重标记改由弹窗组件在
+  // **真正渲染成功后**写入(见 UpdateNoticeSheet);以前在「决定展示」时就写,
+  // 弹窗自身渲染崩溃也会白耗这一版唯一一次机会,用户重启再也看不到更新说明。
   useEffect(() => {
     if (!updateNotice || updatePromptedRef.current) return
     if (isUpdateShown(updateNotice.version)) {
@@ -550,7 +555,6 @@ function App() {
     }
     if (!isOpen || loginGuide.open || loginModalOpen) return
     updatePromptedRef.current = true
-    markUpdateShown(updateNotice.version)
     setUpdateNoticeOpen(true)
   }, [isOpen, updateNotice, loginGuide.open, loginModalOpen])
 
@@ -2708,15 +2712,17 @@ function App() {
       {sidebarHost
         ? createPortal(
             updateNoticeOpen && updateNotice ? (
-              <UpdateNoticeSheet
-                notice={updateNotice}
-                currentVersion={appVersion}
-                update={updateState}
-                onClose={() => setUpdateNoticeOpen(false)}
-                onInstall={() =>
-                  void downloadAndInstall(updateNotice.version, updateNotice.url, setUpdateState)
-                }
-              />
+              <ErrorBoundary label="更新提示">
+                <UpdateNoticeSheet
+                  notice={updateNotice}
+                  currentVersion={appVersion}
+                  update={updateState}
+                  onClose={() => setUpdateNoticeOpen(false)}
+                  onInstall={() =>
+                    void downloadAndInstall(updateNotice.version, updateNotice.url, setUpdateState)
+                  }
+                />
+              </ErrorBoundary>
             ) : null,
             sidebarHost,
           )
@@ -6063,14 +6069,23 @@ function UpdateNoticeSheet({
   onInstall: () => void
 }) {
   const [showAll, setShowAll] = useState(false)
+  // 弹窗真正渲染成功才消耗「每版本最多一次」额度(幂等,StrictMode 双跑无副作用)。
+  useEffect(() => {
+    markUpdateShown(notice.version)
+  }, [notice.version])
   const busy = update.status === 'downloading' || update.status === 'installing'
   const items = notice.items.slice(0, 5)
   const extraCount = notice.items.length - items.length
   const missed = notice.missed
+  // ⚠️ missed 为空(当前版本正好是上一版,没有跳过的中间版本)时不能取
+  // missed[-1],否则抛 "Cannot read properties of undefined (reading 'version')",
+  // 顶层 ErrorBoundary 会把整个主界面换成错误页(0.4.62/0.4.63 的实际故障)。
   const missedLabel =
-    missed.length === 1
-      ? `v${missed[0].version}`
-      : `v${missed[missed.length - 1].version} ~ v${missed[0].version}`
+    missed.length === 0
+      ? ''
+      : missed.length === 1
+        ? `v${missed[0].version}`
+        : `v${missed[missed.length - 1].version} ~ v${missed[0].version}`
   const allNew = notice.releases
     .filter((r) => isNewerVersion(r.version, currentVersion))
     .sort((a, b) => (isNewerVersion(a.version, b.version) ? -1 : 1))

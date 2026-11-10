@@ -1,5 +1,5 @@
 {
-  "version": "0.4.63",
-  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.63",
-  "notes": "0.4.63 更新：周待办/月待办每个日期上新增添加按钮，支持选择任一日期添加待办事项。"
+  "version": "0.4.64",
+  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.64",
+  "notes": "0.4.64 更新：修复多屏模式下在桌面打开工具时没有即时显示窗口的问题；每次重启工具后，工具窗口默认展开。"
 }

@@ -81,7 +81,10 @@ export function missedVersions(
 
 // ---- 弹窗去重:每个最新版本号最多弹一次 ------------------------------------
 
-const UPDATE_PROMPT_KEY = 'ticktask.updatePrompt.v1'
+// [0.4.64] v1 里残留了「弹窗渲染崩溃却被提前标记」的版本号(0.4.63 的
+// missedLabel 崩溃),升级到 v2 让这些用户重新获得一次最新版提示机会。
+// 写入时机也改为弹窗真实渲染成功后(见 UpdateNoticeSheet),不再空耗额度。
+const UPDATE_PROMPT_KEY = 'ticktask.updatePrompt.v2'
 const MAX_SHOWN = 10
 
 export function readShownUpdates(): string[] {
@@ -98,7 +101,7 @@ export function isUpdateShown(version: string): boolean {
   return readShownUpdates().includes(version)
 }
 
-/** 在弹窗**实际展示那一刻**写入:网络失败 / 用户没看到不消耗额度。 */
+/** 由弹窗组件在渲染成功后调用:网络失败 / 弹窗崩溃 / 用户没看到都不消耗额度。 */
 export function markUpdateShown(version: string): void {
   try {
     const arr = readShownUpdates().filter((v) => v !== version)
