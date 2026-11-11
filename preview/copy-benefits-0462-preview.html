@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Tacco · 登录弹窗文案与会员权益（改后预览）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 22px 26px 18px;
+    background: #eef0f4; color: #17181c;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  }
+  .head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+  .head h1 { margin: 0; font-size: 19px; letter-spacing: .3px; }
+  .head span { font-size: 12px; color: #73767f; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+  .card {
+    background: #fff; border: 1px solid #e5e7ec; border-radius: 14px;
+    padding: 14px 16px 16px; box-shadow: 0 6px 20px rgba(24,28,40,.06);
+  }
+  .label { font-size: 12px; font-weight: 700; color: #4b4f5a; margin-bottom: 10px; }
+  .label b { color: #d97706; margin-right: 6px; }
+
+  /* ===== 左：登录引导弹窗 ===== */
+  .panel {
+    position: relative; height: 330px; border-radius: 12px; overflow: hidden;
+    background: #f7f8fa; border: 1px solid #e8eaf0;
+  }
+  .panel .rec-head { padding: 14px 16px; font-size: 14px; font-weight: 650; color: #444; }
+  .rec-box {
+    margin: 0 14px 12px; height: 108px; border-radius: 12px; background: #eceef3;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    gap: 8px; color: #8a8e99; font-size: 11px;
+  }
+  .rec-box .mic { font-size: 30px; }
+  .rec-row { margin: 0 14px 10px; height: 48px; border-radius: 10px; background: #eceef3; }
+  .overlay { position: absolute; inset: 0; background: rgba(0,0,0,.42); }
+  .dialog {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 300px; background: #f9f9fc; border-radius: 16px; padding: 16px;
+    display: grid; gap: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  }
+  .dialog-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700; }
+  .dialog-head span { color: #9a9da6; font-size: 12px; font-weight: 400; }
+  .dialog-body { font-size: 14px; line-height: 1.75; color: #3b3e46; }
+  .dialog-body .new { background: #fff2d9; border-radius: 6px; padding: 2px 5px; font-weight: 650; color: #a35b00; }
+  .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
+  .dialog-actions a { color: #1d7ef0; font-size: 12px; }
+  .dialog-actions button {
+    border: 0; border-radius: 12px; padding: 9px 20px; color: #fff; font-size: 13px; font-weight: 700;
+    background: linear-gradient(135deg,#f59e0b,#d97706);
+  }
+  .old {
+    margin-top: 12px; font-size: 11.5px; line-height: 1.7; color: #7d828d;
+    background: #f5f6f9; border-radius: 8px; padding: 10px 11px;
+  }
+  .old-title { color: #555a64; font-weight: 700; margin-bottom: 4px; }
+  .old del { color: #b45b5b; }
+  .old .arrow { color: #d97706; font-weight: 700; }
+  .rules { margin-top: 10px; display: grid; gap: 5px; font-size: 11.5px; line-height: 1.6; color: #61656e; }
+  .rules div { padding-left: 14px; position: relative; }
+  .rules div::before { content: '·'; position: absolute; left: 2px; color: #d97706; font-weight: 700; }
+
+  /* ===== 右：升级永久会员 bottom sheet ===== */
+  .sheets { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .sheet-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .sheet-cap { font-size: 11.5px; color: #6b707a; text-align: center; line-height: 1.5; }
+  .sheet-cap b { color: #d97706; }
+  .stage {
+    position: relative; width: 100%; height: 590px; border-radius: 12px; overflow: hidden;
+    background: #e8eaef; border: 1px solid #dfe2e9;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .stage::before {
+    content: '待办设置 · 背景页面'; position: absolute; top: 12px; left: 12px;
+    font-size: 11px; color: #9a9da6;
+  }
+  .stage.short { height: 470px; }
+  .sheet {
+    width: 100%; background: #fff; border-radius: 16px 16px 0 0;
+    padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 -18px 44px rgba(28,39,50,.24); position: relative;
+    max-height: 92%; overflow: hidden;
+  }
+  .grip { width: 38px; height: 4px; margin: 2px auto; border-radius: 999px; background: #d7dae1; }
+  .sheet-close { position: absolute; top: 8px; right: 10px; color: #9a9da6; font-size: 13px; }
+  .sheet-title { font-size: 14px; font-weight: 700; color: #25272d; }
+  .scroll {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px; padding-right: 2px;
+  }
+  .scroll::-webkit-scrollbar { width: 5px; }
+  .scroll::-webkit-scrollbar-thumb { background: #d7dae1; border-radius: 9px; }
+  /* 小屏示意：滚动区底部渐隐,暗示内容还能继续往下滚(按钮不会被盖住)。 */
+  .stage.short .scroll { mask-image: linear-gradient(to bottom, #000 90%, transparent 100%); }
+  .price { display: flex; align-items: baseline; justify-content: center; gap: 8px; padding: 4px 0 0; }
+  .price .num { font-size: 30px; font-weight: 800; color: #b45309; }
+  .price .note { font-size: 12px; color: #8a8e99; }
+  .benefits {
+    display: flex; flex-direction: column; gap: 7px; padding: 10px 12px;
+    border-radius: 10px; background: rgba(245,196,97,.12);
+    border: 1px solid rgba(196,145,55,.3);
+  }
+  .bi { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.55; color: #25272d; }
+  .bi svg { color: #d97706; flex: none; margin-top: 2px; }
+  .bi.more { color: #8a8e99; }
+  .bi.more svg { color: #8a8e99; opacity: .55; }
+  .steps { display: flex; flex-direction: column; gap: 7px; padding: 0 2px; }
+  .steps-title { font-size: 12px; font-weight: 700; color: #8a8e99; }
+  .step { display: flex; gap: 8px; font-size: 12px; line-height: 1.55; color: #25272d; }
+  .step-num {
+    flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%;
+    background: #d97706; color: #fff; font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .buy {
+    flex: none; padding: 10px 0; border: 0; border-radius: 12px; color: #fff;
+    font-size: 14px; font-weight: 700; background: linear-gradient(135deg,#f59e0b,#d97706);
+    text-align: center;
+  }
+  .foot { margin-top: 14px; font-size: 11px; color: #9a9da6; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>登录弹窗文案 &amp; 升级会员权益</h1>
+    <span>改后静态预览 · 未发布</span>
+  </div>
+
+  <div class="grid">
+    <!-- 左：登录引导弹窗 -->
+    <div class="card">
+      <div class="label"><b>01</b>登录引导弹窗 · 标题与正文</div>
+      <div class="panel">
+        <div class="rec-head">录音机</div>
+        <div class="rec-box"><span class="mic">🎙</span>点击开始录音</div>
+        <div class="rec-row"></div>
+        <div class="rec-row"></div>
+        <div class="overlay"></div>
+        <div class="dialog">
+          <div class="dialog-head">登录 <span>✕</span></div>
+          <div class="dialog-body"><span class="new">登录后可解锁更多功能的使用，支持数据同步云端</span></div>
+          <div class="dialog-actions"><a>暂不</a><button>去登录</button></div>
+        </div>
+      </div>
+      <div class="old">
+        <div class="old-title">本次改动</div>
+        <span class="old-line">标题：<del>登录后解锁更多功能</del> <span class="arrow">→</span> <b>登录</b></span><br />
+        <span class="old-line">正文：<del>登录后可解锁更多功能的使用</del></span><br />
+        <span class="old-line"><span class="arrow">→</span> <b>登录后可解锁更多功能的使用，支持数据同步云端</b></span>
+      </div>
+      <div class="rules">
+        <div>标题改为中性「登录」，不再暗示登录即等于会员</div>
+        <div>补上云端同步这一项登录收益，不承诺具体会员能力</div>
+        <div>「暂不 / 去登录」与弹窗宽度保持不变</div>
+      </div>
+    </div>
+
+    <!-- 右：会员权益 sheet -->
+    <div class="card">
+      <div class="label"><b>02</b>升级永久会员 · 权益明细（6 条 + 收尾提示）</div>
+      <div class="sheets">
+        <div class="sheet-wrap">
+          <div class="stage">
+            <div class="sheet">
+              <div class="grip"></div><div class="sheet-close">✕</div>
+              <div class="sheet-title">升级永久会员</div>
+              <div class="scroll">
+                <div class="price"><span class="num">￥29.9</span><span class="note">永久买断 · 无订阅</span></div>
+                <div class="benefits">
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>待办事项不限制每日新建数量，支持添加子任务，支持设置事项提醒</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持新增生日/纪念日，不设限制</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>可使用牛马计薪器桌面组件，漂亮的牛马组件尽情使用</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持本地录音、截图/贴图、新建便利签、剪贴板</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持待办事项云端同步</span></div>
+                  <div class="bi more"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>更多会员权益...</span></div>
+                </div>
+                <div class="steps">
+                  <div class="steps-title">如何激活</div>
+                  <div class="step"><span class="step-num">1</span><span>点击「立即购买」,在链动小铺中完成下单</span></div>
+                  <div class="step"><span class="step-num">2</span><span>支付后在链动小铺获取激活码</span></div>
+                  <div class="step"><span class="step-num">3</span><span>回到本页,把激活码粘贴到兑换框,点击「兑换」即升级会员</span></div>
+                </div>
+              </div>
+              <div class="buy">立即购买</div>
+            </div>
+          </div>
+          <div class="sheet-cap">高度充足时：<b>7 条权益 + 激活步骤全部一屏可见</b></div>
+        </div>
+
+        <div class="sheet-wrap">
+          <div class="stage short">
+            <div class="sheet">
+              <div class="grip"></div><div class="sheet-close">✕</div>
+              <div class="sheet-title">升级永久会员</div>
+              <div class="scroll">
+                <div class="price"><span class="num">￥29.9</span><span class="note">永久买断 · 无订阅</span></div>
+                <div class="benefits">
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>待办事项不限制每日新建数量，支持添加子任务，支持设置事项提醒</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持新增生日/纪念日，不设限制</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>可使用牛马计薪器桌面组件，漂亮的牛马组件尽情使用</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持本地录音、截图/贴图、新建便利签、剪贴板</span></div>
+                  <div class="bi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>支持待办事项云端同步</span></div>
+                  <div class="bi more"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>更多会员权益...</span></div>
+                </div>
+                <div class="steps">
+                  <div class="steps-title">如何激活</div>
+                  <div class="step"><span class="step-num">1</span><span>点击「立即购买」,在链动小铺中完成下单</span></div>
+                  <div class="step"><span class="step-num">2</span><span>支付后在链动小铺获取激活码</span></div>
+                  <div class="step"><span class="step-num">3</span><span>回到本页,把激活码粘贴到兑换框,点击「兑换」即升级会员</span></div>
+                </div>
+              </div>
+              <div class="buy">立即购买</div>
+            </div>
+          </div>
+          <div class="sheet-cap">小屏 / 高度不足时：<b>仅内容区滚动，购买按钮始终吸底可见</b></div>
+        </div>
+      </div>
+      <div class="foot">移除的旧文案：全功能永久解锁 / 一次买断 / 后续版本持续免费更新 / 不限设备数量多设备云同步（与价格区、顶部横幅重复，已换成具体权益）</div>
+    </div>
+  </div>
+</body>
+</html>

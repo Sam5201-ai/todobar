@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Tacco · 贴边动画与左贴阴影修复预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px; background: #eef0f3; color: #1a1d23;
+         font: 13px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: .2px; }
+  .sub { margin: 0 0 20px; color: #6c7480; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .card { background: #fff; border: 1px solid #e2e6eb; border-radius: 12px; padding: 12px; }
+  .card h2 { margin: 0 0 2px; font-size: 13px; }
+  .card p { margin: 0 0 10px; color: #7a828d; font-size: 11px; }
+  .desk { position: relative; height: 216px; border-radius: 9px; overflow: hidden;
+          background: linear-gradient(180deg, #e9e7e2 0%, #dcd9d3 58%, #b9b5ac 59%, #9d9a93 100%); }
+  .desk::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 84px;
+                 background: repeating-linear-gradient(100deg, rgba(255,255,255,.15) 0 8px, transparent 8px 22px); opacity: .5; }
+  .panel { position: absolute; top: 0; bottom: 0; width: 150px; background: #fafaf9;
+           border-left: 1px solid rgba(24,26,32,.08); border-right: 1px solid rgba(24,26,32,.08); }
+  .panel .bar { height: 26px; margin: 10px 10px 0; border-radius: 6px; background: #f0f1f0; }
+  .panel .chip { display: inline-block; margin: 9px 0 0 10px; padding: 3px 9px; border-radius: 5px;
+                 background: #1b1d21; color: #fff; font-size: 9px; }
+  .panel .row { height: 17px; margin: 8px 10px 0; border-radius: 5px; background: #eceeec; }
+  .panel .row.short { width: 62%; }
+  .handle { position: absolute; top: 50%; width: 22px; height: 54px; transform: translateY(-50%);
+            border-radius: 9px; background: #fff; border: 1px solid #dfe3e7;
+            display: grid; place-items: center; color: #667; font-size: 10px; }
+  .tag { position: absolute; bottom: 7px; left: 9px; padding: 2px 7px; border-radius: 5px;
+         background: rgba(20,24,30,.72); color: #fff; font-size: 10px; z-index: 5; }
+  .arrow { position: absolute; top: 46%; color: #d8483f; font-size: 17px; font-weight: 700; z-index: 5; }
+  /* 修复前:左贴面板右侧的 30px 竖向阴影(原生模式下被镜像规则误带入) */
+  .shadow-strip { position: absolute; top: 0; bottom: 0; width: 34px; z-index: 1;
+                  background: linear-gradient(90deg, rgba(28,39,50,.22), rgba(28,39,50,0)); }
+  .callout { position: absolute; z-index: 6; font-size: 10px; color: #d8483f; font-weight: 600; }
+  .ok { color: #2b8a5b; }
+  .legend { margin-top: 18px; padding: 11px 14px; background: #fff; border: 1px solid #e2e6eb;
+            border-radius: 10px; font-size: 12px; color: #4a5059; }
+  .legend b { color: #1a1d23; }
+  .legend code { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>贴边展开 / 收起动画 + 左贴竖向阴影修复</h1>
+  <p class="sub">静态示意（非真实窗口截图）：原生窗口尺寸恒定，动画只由内容层的 transform 平移完成。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>桌面右侧 · 展开</h2>
+      <p>内容层 translateX(0)，把手在面板左缘</p>
+      <div class="desk">
+        <div style="position:absolute;right:0;top:0;bottom:0;width:172px;">
+          <div class="handle" style="left:0;">‹</div>
+          <div class="panel" style="left:22px;">
+            <div class="bar"></div><div class="chip">日待办</div>
+            <div class="row"></div><div class="row short"></div><div class="row"></div>
+          </div>
+        </div>
+        <div class="arrow" style="left:44%;">←</div>
+        <div class="tag">展开：整体向左滑入</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>桌面右侧 · 收起过程</h2>
+      <p>内容层 translateX(+面板宽)，面板逐步移出视口</p>
+      <div class="desk">
+        <div style="position:absolute;right:-74px;top:0;bottom:0;width:172px;">
+          <div class="handle" style="left:0;">›</div>
+          <div class="panel" style="left:22px;">
+            <div class="bar"></div><div class="chip">日待办</div>
+            <div class="row"></div><div class="row short"></div><div class="row"></div>
+          </div>
+        </div>
+        <div class="arrow" style="left:78%;">→</div>
+        <div class="tag">收起：整体向右滑出，只剩把手</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>桌面左侧 · 修复前 <span style="color:#d8483f">(有竖阴影)</span></h2>
+      <p>预览态镜像规则的 box-shadow 泄漏到原生模式</p>
+      <div class="desk">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:172px;">
+          <div class="panel" style="left:0;">
+            <div class="bar"></div><div class="chip">日待办</div>
+            <div class="row"></div><div class="row short"></div><div class="row"></div>
+          </div>
+          <div class="shadow-strip" style="left:150px;"></div>
+          <div class="handle" style="right:0;left:auto;">›</div>
+        </div>
+        <div class="callout" style="left:186px;top:96px;">← 竖向阴影条</div>
+        <div class="tag">把手旁一条灰带</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>桌面左侧 · 修复后 <span class="ok">(无阴影)</span></h2>
+      <p>原生左贴显式 box-shadow: none</p>
+      <div class="desk">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:172px;">
+          <div class="panel" style="left:0;">
+            <div class="bar"></div><div class="chip">日待办</div>
+            <div class="row"></div><div class="row short"></div><div class="row"></div>
+          </div>
+          <div class="handle" style="right:0;left:auto;">›</div>
+        </div>
+        <div class="tag" style="background:rgba(31,120,76,.9);color:#fff;">把手区域干净，无灰带</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>动画实现</b>：原生窗口恒定使用完整展开矩形，不再逐帧 <code>set_size/set_position</code>（每帧一次 IPC + WebView2 重排是卡顿根因）。
+    右贴收起 <code>translateX(+面板宽)</code>、展开回 <code>0</code>；左贴收起 <code>translateX(-面板宽)</code>、展开回 <code>0</code>。
+    曲线 <code>cubic-bezier(0.22, 1, 0.36, 1)</code>，时长沿用设置页「动画时长」。切屏 / 换边时临时禁用过渡，避免内容横穿窗口。
+  </div>
+</body>
+</html>

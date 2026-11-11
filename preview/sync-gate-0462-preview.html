@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Tacco · 登录引导文案与自动同步闸门（改后预览）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 28px 20px;
+    background: #eef0f4;
+    color: #17181c;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  }
+  .head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }
+  .head h1 { margin: 0; font-size: 19px; letter-spacing: .3px; }
+  .head span { font-size: 12px; color: #73767f; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; }
+  .card {
+    background: #fff; border: 1px solid #e5e7ec; border-radius: 14px;
+    padding: 14px 16px 16px; box-shadow: 0 6px 20px rgba(24,28,40,.06);
+  }
+  .label { font-size: 12px; font-weight: 700; color: #4b4f5a; margin-bottom: 10px; }
+  .label b { color: #d97706; margin-right: 6px; }
+
+  /* 左侧：面板 + 弹窗 */
+  .panel {
+    position: relative; height: 440px; border-radius: 12px; overflow: hidden;
+    background: #f7f8fa; border: 1px solid #e8eaf0;
+  }
+  .panel .rec-head { padding: 14px 16px; font-size: 14px; font-weight: 650; color: #444; }
+  .rec-box {
+    margin: 0 14px 12px; height: 118px; border-radius: 12px; background: #eceef3;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    gap: 8px; color: #8a8e99; font-size: 11px;
+  }
+  .rec-box .mic { font-size: 30px; }
+  .rec-row { margin: 0 14px 10px; height: 52px; border-radius: 10px; background: #eceef3; }
+  .overlay { position: absolute; inset: 0; background: rgba(0,0,0,.42); }
+  .dialog {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 300px; background: #f9f9fc; border-radius: 16px; padding: 16px;
+    display: grid; gap: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  }
+  .dialog-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700; }
+  .dialog-head span { color: #9a9da6; font-size: 12px; font-weight: 400; }
+  .dialog-body { font-size: 14px; line-height: 1.7; color: #3b3e46; }
+  .dialog-body .new { background: #fff2d9; border-radius: 6px; padding: 2px 5px; font-weight: 650; color: #a35b00; }
+  .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
+  .dialog-actions a { color: #1d7ef0; font-size: 12px; }
+  .dialog-actions button {
+    border: 0; border-radius: 12px; padding: 9px 20px; color: #fff; font-size: 13px; font-weight: 700;
+    background: linear-gradient(135deg,#f59e0b,#d97706);
+  }
+  .old {
+    margin-top: 10px; font-size: 11px; line-height: 1.65; color: #8a8e99;
+    background: #f5f6f9; border-radius: 8px; padding: 9px 10px;
+  }
+  .old-title { color: #6b6f78; font-weight: 700; margin-bottom: 3px; }
+  .old-line { display: block; }
+  .old del { color: #b45b5b; }
+  .old-reason { margin-top: 6px; }
+
+  /* 右侧：三态对照 */
+  .states { display: grid; gap: 10px; }
+  .state {
+    border: 1px solid #e8eaf0; border-radius: 12px; padding: 12px 14px;
+    display: grid; grid-template-columns: 142px 1fr; gap: 12px; align-items: center;
+    background: #fafbfc;
+  }
+  .state.is-on { border-color: #f0d7a5; background: #fffaf0; }
+  .state .who { font-size: 12px; font-weight: 700; color: #33363d; }
+  .state .who small { display: block; margin-top: 4px; font-weight: 400; font-size: 11px; color: #8a8e99; }
+  .sync-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sync-row .nm { font-size: 12px; font-weight: 650; color: #33363d; }
+  .sync-row .hint { font-size: 11px; color: #8a8e99; margin-top: 3px; }
+  .toggle { position: relative; width: 38px; height: 22px; border-radius: 999px; border: 1px solid #d9dce3; background: #e9ebf0; flex: none; }
+  .toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #a8acb6; }
+  .toggle.on { background: #15161a; border-color: #15161a; }
+  .toggle.on::after { background: #fff; transform: translateX(16px); }
+  .interval { margin-top: 9px; font-size: 11px; color: #7b7f89; }
+  .interval .chip { display: inline-block; padding: 3px 9px; border-radius: 8px; background: #1d7ef0; color: #fff; margin-right: 6px; }
+  .interval.hidden { color: #b6bac2; text-decoration: line-through; }
+  .interval.hidden .chip { background: #dfe2e8; color: #9a9da6; }
+  .rules { margin-top: 12px; display: grid; gap: 6px; font-size: 11.5px; line-height: 1.65; color: #61656e; }
+  .rules div { padding-left: 14px; position: relative; }
+  .rules div::before { content: '·'; position: absolute; left: 2px; color: #d97706; font-weight: 700; }
+  .foot { margin-top: 14px; font-size: 11px; color: #9a9da6; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>登录引导文案 &amp; 自动同步闸门</h1>
+    <span>改后静态预览 · 未发布</span>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="label"><b>01</b>登录引导弹窗 · 文案修正</div>
+      <div class="panel">
+        <div class="rec-head">←　录音机</div>
+        <div class="rec-box"><div class="mic">🎙</div>最长可录 2h，超限自动结束保存</div>
+        <div class="rec-row"></div><div class="rec-row"></div><div class="rec-row"></div>
+        <div class="overlay"></div>
+        <div class="dialog">
+          <div class="dialog-head"><strong>登录后解锁更多功能</strong><span>✕</span></div>
+          <div class="dialog-body"><span class="new">登录后可解锁更多功能的使用</span></div>
+          <div class="dialog-actions"><a>暂不</a><button>去登录</button></div>
+        </div>
+      </div>
+      <div class="old">
+        <div class="old-title">已下线的旧文案</div>
+        <span class="old-line"><del>登录后即可使用「录音」功能，并解锁全部会员能力（云同步、截图贴图…）</del></span>
+        <div class="old-reason">原因：会员能力还要看账号是否在试用期 / 已激活，登录本身不构成可用承诺。</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="label"><b>02</b>设置页「自动同步」· 按账号状态自动关闭 / 启用</div>
+      <div class="states">
+        <div class="state">
+          <div class="who">未登录<small>无账号 / 已登出</small></div>
+          <div>
+            <div class="sync-row">
+              <div><div class="nm">自动同步</div><div class="hint">点击开关 → 弹「去登录」引导</div></div>
+              <div class="toggle"></div>
+            </div>
+            <div class="interval hidden"><span class="chip">5分钟</span>10分钟　30分钟　1小时</div>
+          </div>
+        </div>
+        <div class="state">
+          <div class="who">试用结束 · 未激活<small>即使试用期内原本是打开的</small></div>
+          <div>
+            <div class="sync-row">
+              <div><div class="nm">自动同步</div><div class="hint">自动关闭，定时同步停止</div></div>
+              <div class="toggle"></div>
+            </div>
+            <div class="interval hidden"><span class="chip">5分钟</span>10分钟　30分钟　1小时</div>
+          </div>
+        </div>
+        <div class="state is-on">
+          <div class="who">已激活会员 / 试用中<small>按原偏好自动恢复</small></div>
+          <div>
+            <div class="sync-row">
+              <div><div class="nm">自动同步</div><div class="hint">自动启用，无需手动重开</div></div>
+              <div class="toggle on"></div>
+            </div>
+            <div class="interval"><span class="chip">5分钟</span>10分钟　30分钟　1小时</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules">
+        <div>底层 autoSync 偏好不改写为 false，成为会员后按原偏好自动恢复；用户主动关闭过的仍保持关闭。</div>
+        <div>设置页开关、自动间隔、定时同步引擎共用同一生效值，三者不再分叉。</div>
+        <div>修掉关闭开关时 startAuto(0) 被解释成「每 5 秒同步一次」的隐患；关闭即彻底不启动定时器。</div>
+        <div>试用期在应用常驻期间自然到期（没有账号刷新事件）时，界面与引擎也会自动收敛到关闭。</div>
+      </div>
+    </section>
+  </div>
+  <div class="foot">静态模拟预览，仅用于确认文案与状态表现；实际界面以重启后的 Tauri 窗口为准。</div>
+</body>
+</html>

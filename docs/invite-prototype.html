@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=420" />
+<title>Tacco 邀请有礼 原型 v7（合并计时 + 标记分类展示）</title>
+<style>
+  * { box-sizing: border-box; }
+  :root{
+    --ink:#111318; --ink-2:#4b5563; --ink-3:#8a909b;
+    --line:#eef1f6; --line-2:#e7e9ee;
+    --bg:#ffffff; --soft:#f7f8fa;
+    --brand:#1d7ef0; --brand-2:#6a5cff; --brand-ink:#1565c8;
+    --gold:#f5a623; --success:#16a34a; --warn:#f59e0b;
+    --r-sm:10px; --r-md:14px; --r-lg:16px; --r-full:999px;
+    --sh-sm:0 2px 10px rgba(15,23,42,.05);
+    --sh-md:0 10px 26px rgba(29,126,240,.16);
+    --font:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  body { margin:0; padding:22px; background:#e9edf2; font-family:var(--font); color:var(--ink); -webkit-font-smoothing:antialiased; }
+
+  /* 预览切换（非产品界面） */
+  .switchbar { text-align:center; margin-bottom:16px; }
+  .switchbar .lbl { font-size:11px; color:#94a3b8; display:block; margin-bottom:8px; }
+  .seg-ctrl { display:inline-flex; gap:4px; background:#eef2f7; padding:4px; border-radius:11px; }
+  .seg-ctrl button { border:0; background:transparent; padding:7px 15px; border-radius:8px; font-size:12.5px; font-weight:600; color:#64748b; cursor:pointer; font-family:inherit; }
+  .seg-ctrl button.on { background:#15161a; color:#fff; }
+  .stage { display:flex; justify-content:center; }
+  .view { display:none; }
+  .view.show { display:block; }
+
+  /* ====== 通用面板外壳（还原真实停靠面板 360 宽） ====== */
+  .panel { position:relative; width:360px; height:740px; background:var(--bg); border:1px solid #dfe3e9; border-radius:16px; box-shadow:0 18px 50px rgba(28,39,50,.16); overflow:hidden; display:flex; flex-direction:column; }
+  .panel.flash { animation:flash 1.1s ease; }
+  @keyframes flash { 0%,100%{box-shadow:0 18px 50px rgba(28,39,50,.16);} 30%{box-shadow:0 0 0 3px var(--brand),0 18px 50px rgba(28,39,50,.16);} }
+  .hd { flex:none; display:flex; align-items:center; gap:10px; padding:15px 16px 11px; border-bottom:1px solid #f0f1f4; font-size:15px; font-weight:700; }
+  .hd .back { font-size:17px; color:#6b7280; width:20px; cursor:pointer; }
+  .scroll { flex:1; overflow-y:auto; padding:14px 16px 78px; display:grid; gap:15px; align-content:start; }
+  .scroll::-webkit-scrollbar { width:0; }
+  .gt { font-size:12px; font-weight:700; color:#2b3038; letter-spacing:.2px; margin:2px 0 -3px; display:flex; align-items:center; gap:7px; }
+  .gt::before { content:""; width:3px; height:12px; border-radius:2px; background:var(--brand); }
+  .hint { margin:0; font-size:10.5px; line-height:1.6; color:#8a909b; }
+
+  /* ====== 设置页（真实样式，Banner 入口在用户卡正下方） ====== */
+  .vip-marquee { display:block; width:100%; border:0; cursor:pointer; background:#fff7e0; color:#8a6d1f; border-radius:10px; padding:9px 11px; font-size:11px; font-family:inherit; text-align:left; }
+  .account-card { background:var(--soft); border-radius:14px; padding:18px 14px 14px; display:grid; gap:8px; justify-items:center; text-align:center; }
+  .account-avatar { width:62px; height:62px; border-radius:50%; border:3px solid var(--brand); background:#fff; display:grid; place-items:center; overflow:hidden; }
+  .account-avatar svg { width:38px; height:38px; fill:#c4ccd6; }
+  .account-nick { font-size:15px; font-weight:700; display:flex; align-items:center; gap:5px; }
+  .account-nick .pen { font-size:11px; color:#9aa1ad; }
+  .account-email { font-size:11.5px; color:var(--ink-3); }
+  .account-status { font-size:11px; color:var(--ink-3); }
+  .account-redeem { display:flex; gap:6px; width:100%; }
+  .account-redeem input { flex:1; height:30px; border:1px solid var(--line-2); background:#fff; border-radius:8px; padding:0 8px; font-size:11px; font-family:inherit; color:#2b3038; }
+  .account-redeem button { padding:0 12px; height:30px; background:#15161a; color:#fff; border:0; border-radius:8px; font-size:11px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .account-redeem .buy { background:#fff; color:#15161a; border:1px solid var(--line-2); }
+  .account-actions { display:flex; gap:8px; width:100%; }
+  .account-actions button { flex:1; height:30px; background:#fff; border:1px solid var(--line-2); border-radius:8px; font-size:11px; color:#4b5563; font-family:inherit; cursor:pointer; }
+  .invite-banner { display:flex; align-items:center; gap:12px; width:100%; padding:13px 14px; border:0; border-radius:14px; cursor:pointer; background:linear-gradient(135deg,var(--brand) 0%,var(--brand-2) 100%); color:#fff; text-align:left; font-family:inherit; box-shadow:var(--sh-md); position:relative; transition:transform .15s ease; }
+  .invite-banner:hover { transform:translateY(-1px); }
+  .invite-banner .ib-ico { width:42px; height:42px; flex:none; border-radius:12px; background:rgba(255,255,255,.2); display:grid; place-items:center; font-size:22px; }
+  .invite-banner .ib-txt { flex:1; min-width:0; display:grid; gap:2px; }
+  .invite-banner .ib-txt strong { font-size:14px; font-weight:700; }
+  .invite-banner .ib-txt em { font-style:normal; font-size:10.5px; opacity:.92; }
+  .invite-banner .ib-go { font-size:18px; opacity:.9; }
+  .invite-banner .ib-tag { position:absolute; top:-7px; left:14px; font-size:9px; font-weight:700; background:var(--warn); color:#fff; padding:2px 7px; border-radius:999px; }
+  .entry { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border:1px solid var(--line-2); border-radius:10px; background:var(--soft); text-align:left; cursor:pointer; font-family:inherit; }
+  .entry .ico { width:28px; height:28px; flex:none; display:grid; place-items:center; border-radius:8px; background:#eef1f6; color:#6b7280; font-size:14px; }
+  .entry .txt { flex:1; min-width:0; display:grid; gap:2px; }
+  .entry .txt strong { font-size:12px; font-weight:700; }
+  .entry .txt em { font-style:normal; font-size:10.5px; color:var(--ink-3); }
+  .entry .chev { color:#9aa1ad; font-size:18px; }
+  .row { display:flex; align-items:center; gap:8px; min-height:32px; }
+  .row > span { flex:0 0 62px; font-size:11.5px; color:#7d8490; }
+  .seg { flex:1; display:flex; padding:3px; gap:3px; background:#f2f3f6; border-radius:9px; }
+  .seg button { flex:1; padding:6px 4px; border:0; border-radius:7px; background:transparent; font-family:inherit; font-size:11px; color:#6b7280; cursor:pointer; }
+  .seg button.on { background:#15161a; color:#fff; font-weight:700; }
+  select { flex:1; height:30px; padding:0 8px; font-family:inherit; font-size:11.5px; color:#2b3038; background:var(--soft); border:1px solid var(--line-2); border-radius:8px; }
+  .bg-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .bg-tile { height:46px; border-radius:10px; border:2px solid transparent; position:relative; overflow:hidden; }
+  .bg-tile.on { border-color:#fff; box-shadow:0 0 0 2px var(--brand); }
+  .bg-tile span { position:absolute; left:0; right:0; bottom:0; font-size:9px; color:#fff; background:rgba(0,0,0,.35); text-align:center; padding:2px 0; }
+  .fab { position:absolute; left:0; right:0; bottom:14px; display:flex; justify-content:center; gap:8px; }
+  .fab span { background:#fff; border:1px solid var(--line-2); border-radius:999px; padding:7px 14px; font-size:11px; color:#4b5563; box-shadow:0 4px 14px rgba(0,0,0,.08); }
+  .fab span:last-child { background:#15161a; color:#fff; border-color:#15161a; }
+
+  /* ====== ② 邀请有礼落地页（精致重做） ====== */
+  .hero { position:relative; border-radius:var(--r-lg); padding:18px; background:linear-gradient(135deg,var(--brand) 0%,var(--brand-2) 100%); box-shadow:var(--sh-md); }
+  .hero .hero-bg { position:absolute; inset:0; border-radius:var(--r-lg); background:radial-gradient(circle at 86% 12%, rgba(255,255,255,.20), transparent 42%), radial-gradient(circle at 8% 115%, rgba(255,255,255,.14), transparent 40%); }
+  .hero-inner { position:relative; z-index:1; display:flex; flex-direction:column; gap:10px; }
+  .hero-title { margin:0; color:#fff; font-size:19px; font-weight:800; letter-spacing:-.01em; }
+  .hero-desc { margin:0; color:rgba(255,255,255,.92); font-size:11.5px; line-height:1.6; }
+  .code-pill { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.25); border-radius:11px; padding:8px 10px; }
+  .code-pill .cl { font-size:10.5px; color:rgba(255,255,255,.9); }
+  .code-pill .cv { font-size:16px; font-weight:800; letter-spacing:1px; color:#fff; }
+  .code-pill .cc { margin-left:auto; background:#fff; color:var(--brand); border:0; border-radius:8px; padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .hero-actions { display:flex; gap:8px; }
+  .hero-actions button { flex:1; height:38px; border:0; border-radius:10px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; transition:transform .15s ease, box-shadow .15s ease; }
+  .hero-actions button:active { transform:scale(.98); }
+  .hero-actions .p { background:#fff; color:var(--brand); box-shadow:0 6px 16px rgba(0,0,0,.14); }
+  .hero-actions .g { background:rgba(255,255,255,.22); color:#fff; border:1px solid rgba(255,255,255,.55); }
+  .hero-note { margin:0; font-size:10px; color:rgba(234,243,255,.92); }
+  /* 落地页底部固定操作栏 */
+  #invitePanel .scroll { padding-bottom:14px; }
+  .invite-footer { flex:none; display:flex; align-items:center; gap:12px; padding:12px 16px; background:#fff; border-top:1px solid var(--line); box-shadow:0 -6px 18px rgba(15,23,42,.06); }
+  .invite-footer .bal { font-size:12px; color:#4b5563; }
+  .invite-footer .bal b { color:var(--success); font-size:15px; font-weight:800; margin-left:2px; }
+  .invite-footer .wd-btn { flex:1; height:40px; border:0; border-radius:11px; background:linear-gradient(135deg,var(--brand),#3f8bff); color:#fff; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit; box-shadow:0 6px 16px rgba(29,126,240,.3); transition:transform .15s ease; }
+  .invite-footer .wd-btn:active { transform:scale(.98); }
+
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:var(--r-md); padding:14px 8px; text-align:center; box-shadow:var(--sh-sm); }
+  .stat .num { font-size:21px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1; }
+  .stat .num small { font-size:11px; font-weight:700; color:var(--ink-3); }
+  .stat .lbl { font-size:10px; color:var(--ink-3); margin-top:6px; }
+
+  .reward { display:flex; gap:12px; padding:14px; background:#fff; border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--sh-sm); transition:transform .15s ease, box-shadow .15s ease; }
+  .reward:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(15,23,42,.08); }
+  .reward .bar { width:4px; border-radius:4px; background:var(--brand); flex:none; }
+  .reward.b2 .bar { background:var(--brand-2); }
+  .reward.b3 .bar { background:var(--warn); }
+  .reward .body { flex:1; min-width:0; display:grid; gap:7px; }
+  .reward .r-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .reward .r-badge { font-size:10px; font-weight:700; color:var(--brand); background:#e8f2fe; padding:2px 8px; border-radius:999px; }
+  .reward.b2 .r-badge { color:var(--brand-2); background:#efeaff; }
+  .reward.b3 .r-badge { color:#d97706; background:#fdf3e3; }
+  .reward .r-title { font-size:13px; font-weight:700; color:var(--ink); }
+  .reward .r-detail { font-size:11.5px; color:var(--ink-2); line-height:1.7; }
+  .reward .r-detail b { color:var(--ink); font-weight:700; }
+
+  .inv-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:var(--sh-sm); }
+  .inv-row .av { width:32px; height:32px; border-radius:50%; background:#e8f2fe; color:var(--brand); display:grid; place-items:center; font-size:12px; font-weight:700; flex:none; }
+  .inv-row .nm { flex:1; font-size:12.5px; font-weight:600; color:var(--ink); }
+  .inv-row .st { font-size:10px; color:var(--ink-3); }
+  .inv-row .rw { font-size:11px; color:var(--success); font-weight:700; text-align:right; white-space:nowrap; }
+
+  .wd-card { background:#fff; border:1px solid var(--line); border-radius:var(--r-md); padding:15px; display:grid; gap:12px; box-shadow:var(--sh-sm); }
+  .wd-line { display:flex; align-items:center; justify-content:space-between; }
+  .wd-line .k { font-size:11.5px; color:#6b7280; }
+  .wd-line .v { font-size:16px; font-weight:800; color:var(--ink); }
+  .wd-line .v.cash { color:var(--success); }
+  .wd-btn { height:42px; border:0; border-radius:11px; background:linear-gradient(135deg,var(--brand),#3f8bff); color:#fff; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit; box-shadow:0 6px 16px rgba(29,126,240,.3); transition:transform .15s ease; }
+  .wd-btn:active { transform:scale(.98); }
+
+  .backdrop { position:absolute; inset:0; z-index:20; display:none; align-items:flex-end; background:rgba(28,39,50,.34); }
+  .panel.with-sheet .backdrop { display:flex; }
+  .sheet { width:100%; max-height:80%; overflow-y:auto; display:grid; gap:12px; padding:8px 16px 18px; background:#fff; border-radius:16px 16px 0 0; box-shadow:0 -18px 44px rgba(28,39,50,.24); }
+  .grip { width:38px; height:4px; margin:2px auto; border-radius:999px; background:#d8dce3; }
+  .sheet h3 { margin:0; font-size:14px; font-weight:700; }
+  .qr-up { display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px; border:1px dashed #c4ccd6; border-radius:12px; color:#8a909b; font-size:11px; }
+  .qr-up .box { width:88px; height:88px; border-radius:10px; background:#f0f1f4; display:grid; place-items:center; font-size:28px; color:#9aa1ad; }
+  .field-row { display:grid; gap:5px; }
+  .field-row label { font-size:11px; color:#6b7280; }
+  .field-row input { height:34px; border:1px solid var(--line-2); border-radius:9px; padding:0 10px; font-size:12px; font-family:inherit; }
+  .sheet .submit { height:38px; border:0; border-radius:10px; background:var(--brand); color:#fff; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .sheet .cancel { height:34px; border:1px solid var(--line-2); background:#fff; border-radius:10px; font-size:12px; color:#6b7280; cursor:pointer; font-family:inherit; }
+
+  .toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%); background:rgba(20,24,30,.92); color:#fff; padding:9px 16px; border-radius:999px; font-size:12px; z-index:99; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:1; }
+
+  /* ====== ③ 后台（深色侧栏 SPA，还原 release/admin） ====== */
+  .admin { display:none; width:min(1120px,96%); height:760px; background:#f4f6fa; border-radius:14px; overflow:hidden; box-shadow:0 24px 70px rgba(20,30,45,.25); }
+  .admin.show { display:flex; }
+  .sidebar { width:208px; flex-shrink:0; background:#0f1b2d; color:#cbd5e1; display:flex; flex-direction:column; }
+  .brand { display:flex; align-items:center; gap:10px; padding:18px 16px; font-size:15px; font-weight:700; color:#fff; border-bottom:1px solid rgba(255,255,255,.08); }
+  .brand .logo { width:26px; height:26px; border-radius:7px; background:var(--brand); display:grid; place-items:center; color:#fff; font-size:14px; font-weight:800; }
+  .nav { padding:10px; display:flex; flex-direction:column; gap:2px; flex:1; overflow-y:auto; }
+  .nav a { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#a8b4c5; font-size:13.5px; cursor:pointer; }
+  .nav a:hover { background:rgba(255,255,255,.06); color:#fff; }
+  .nav a.active { background:var(--brand); color:#fff; font-weight:500; }
+  .nav .grp { font-size:11px; color:#5b6b82; padding:12px 12px 4px; }
+  .sidebar .foot { padding:12px 16px; font-size:11px; color:#5b6b82; border-top:1px solid rgba(255,255,255,.08); line-height:1.6; }
+  .main { flex:1; min-width:0; padding:22px 26px 36px; overflow-y:auto; }
+  .page-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px; }
+  .page-head h1 { font-size:19px; font-weight:700; }
+  .page-head .sub { font-size:12.5px; color:#64748b; margin-top:3px; }
+  .tabs { display:flex; gap:6px; margin-bottom:18px; }
+  .tabs button { border:1px solid #e5e9f0; background:#fff; color:#64748b; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; }
+  .tabs button.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+  .kpi { background:#fff; border:1px solid #e5e9f0; border-radius:12px; padding:14px 16px; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  .kpi .label { font-size:12px; color:#64748b; }
+  .kpi .value { font-size:23px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; }
+  .kpi .value small { font-size:12px; color:#94a3b8; }
+  .card { background:#fff; border:1px solid #e5e9f0; border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  .card-title { font-size:14px; font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .card-title .hint { font-size:12px; color:#94a3b8; font-weight:400; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid #e5e9f0; background:#fff; color:#1e293b; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; }
+  .btn:hover { border-color:#cbd5e1; background:#f8fafc; }
+  .btn-primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .btn-primary:hover { background:var(--brand-ink); border-color:var(--brand-ink); }
+  .btn-sm { padding:5px 10px; font-size:12px; border-radius:6px; }
+
+  /* 后台 Banner 配置（含稳定高度的预览图 + 可换图/可隐藏） */
+  .banner-cfg { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .banner-prev { border:1px solid #e5e9f0; border-radius:12px; overflow:hidden; }
+  .banner-prev .img { position:relative; height:152px; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:flex; align-items:center; gap:14px; padding:0 20px; overflow:hidden; }
+  .banner-prev .img::after { content:""; position:absolute; right:-24px; top:-30px; width:130px; height:130px; border-radius:50%; background:rgba(255,255,255,.14); }
+  .banner-prev .img::before { content:""; position:absolute; right:40px; bottom:-36px; width:96px; height:96px; border-radius:50%; background:rgba(255,255,255,.10); }
+  .banner-prev .img .g { position:relative; z-index:1; width:52px; height:52px; border-radius:15px; background:rgba(255,255,255,.22); display:grid; place-items:center; font-size:27px; flex:none; }
+  .banner-prev .img .t { position:relative; z-index:1; }
+  .banner-prev .img .t strong { font-size:19px; font-weight:800; display:block; letter-spacing:-.01em; }
+  .banner-prev .img .t span { font-size:12px; opacity:.92; display:block; margin-top:4px; }
+  .banner-prev .img .cta { position:relative; z-index:1; margin-left:auto; background:#fff; color:var(--brand); border:0; border-radius:999px; padding:7px 16px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .banner-prev .cap { padding:9px 12px; font-size:11.5px; color:#64748b; background:#f8fafc; border-top:1px solid #e5e9f0; }
+  .cfg-side { display:grid; gap:14px; }
+  .field { display:grid; gap:6px; }
+  .field label { font-size:12.5px; color:#475569; font-weight:500; }
+  .field .desc { font-size:11.5px; color:#94a3b8; }
+  .upload-row { display:flex; gap:8px; }
+  .switch { position:relative; display:inline-block; width:44px; height:24px; flex:none; }
+  .switch input { display:none; }
+  .switch .sl { position:absolute; inset:0; background:#cbd5e1; border-radius:999px; transition:.2s; cursor:pointer; }
+  .switch .sl::before { content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .switch input:checked + .sl { background:var(--brand); }
+  .switch input:checked + .sl::before { transform:translateX(20px); }
+  .switch-line { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background:#f8fafc; border:1px solid #e5e9f0; border-radius:10px; }
+  .switch-line .txt strong { font-size:13px; }
+  .switch-line .txt span { font-size:11.5px; color:#94a3b8; display:block; margin-top:2px; }
+  .rw-edit { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center; padding:12px; border:1px solid #e5e9f0; border-radius:10px; margin-bottom:10px; }
+  .rw-edit .cond { font-size:12.5px; font-weight:700; color:#1e293b; }
+  .rw-edit .cond small { display:block; font-size:11px; color:#94a3b8; font-weight:400; margin-top:2px; }
+  .rw-edit .fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .rw-edit input { width:100%; }
+  .rw-edit .mini { font-size:11px; }
+
+  /* ====== 后台 · 一页式可交互 SPA 补充组件（对齐 release/admin 真实样式） ====== */
+  .admin { position:relative; }
+  .banner-prev .img .t { flex:1; min-width:0; }
+  .banner-prev .img .cta { white-space:nowrap; flex:none; }
+
+  /* tab：改为下划线式，点击真实切换 */
+  .tabs { gap:0; border-bottom:1px solid #e5e9f0; margin-bottom:16px; }
+  .tabs button { border:0; border-bottom:2px solid transparent; background:transparent; border-radius:0; color:#64748b; padding:9px 16px; font-size:13px; }
+  .tabs button:hover { color:var(--brand); background:transparent; }
+  .tabs button.on { background:transparent; border-color:var(--brand); color:var(--brand); font-weight:600; }
+  .tabpane { display:none; }
+  .tabpane.show { display:block; animation:pane-in .18s ease; }
+  @keyframes pane-in { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+
+  /* 工具栏 / 分段 / 分页 */
+  .toolbar { display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin-bottom:13px; }
+  .toolbar .spacer { flex:1; }
+  .toolbar input[type="search"] { flex:0 0 200px; min-width:200px; height:32px; padding:0 10px; font-size:12px; font-family:inherit; color:#1e293b; border:1px solid #e5e9f0; border-radius:8px; background:#fff; outline:none; }
+  .toolbar input[type="search"]:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(29,126,240,.12); }
+  .aseg { display:inline-flex; border:1px solid #e5e9f0; border-radius:8px; overflow:hidden; background:#fff; }
+  .aseg button { border:0; background:#fff; padding:6px 12px; font-size:11.5px; color:#64748b; cursor:pointer; font-family:inherit; }
+  .aseg button + button { border-left:1px solid #e5e9f0; }
+  .aseg button.on { background:var(--brand); color:#fff; font-weight:500; }
+  .pager { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 2px 2px; font-size:12px; color:#64748b; }
+  .pager .pg { border:1px solid #e5e9f0; background:#fff; border-radius:6px; padding:4px 10px; font-size:11.5px; color:#1e293b; cursor:pointer; font-family:inherit; }
+  .pager .pg:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* 表格 */
+  .atable-wrap { overflow-x:auto; }
+  table.atable { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .atable th { text-align:left; font-size:11.5px; font-weight:600; color:#64748b; padding:9px 8px; border-bottom:1px solid #e5e9f0; background:#fafbfd; white-space:nowrap; }
+  .atable td { padding:9px 8px; border-bottom:1px solid #f1f4f8; vertical-align:middle; white-space:nowrap; color:#1e293b; }
+  .atable tbody tr:last-child td { border-bottom:none; }
+  .atable tbody tr:hover { background:#f8fafc; }
+  /* 操作列固定在右侧，永不被横向裁掉 */
+  .atable th:nth-last-child(2), .atable td:nth-last-child(2) { min-width:86px; }
+  .atable th:last-child, .atable td:last-child { position:sticky; right:0; z-index:1; background:#fff; box-shadow:-6px 0 12px -10px rgba(15,23,42,.35); min-width:96px; }
+  .atable th:last-child { background:#fafbfd; }
+  .atable tbody tr:hover td:last-child { background:#f8fafc; }
+  .atable .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#475569; }
+  .cell-u { display:flex; align-items:center; gap:8px; }
+  .cell-u .av { width:28px; height:28px; border-radius:8px; background:var(--brand); color:#fff; display:grid; place-items:center; font-size:11px; font-weight:600; flex:none; }
+  .cell-u .meta .n { font-weight:600; font-size:12.5px; }
+  .cell-u .meta .e { font-size:11px; color:#94a3b8; }
+  .bdg { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:500; white-space:nowrap; }
+  .bdg-green { background:#e8f7ee; color:#16a34a; }
+  .bdg-blue  { background:#e8f2fe; color:#1565c8; }
+  .bdg-amber { background:#fdf3e3; color:#d97706; }
+  .bdg-red   { background:#fdecec; color:#dc2626; }
+  .bdg-slate { background:#eef2f7; color:#64748b; }
+  .row-acts { display:flex; gap:6px; }
+  .abtn { border:1px solid #e5e9f0; background:#fff; color:#1e293b; border-radius:6px; padding:4px 10px; font-size:11.5px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .abtn:hover { border-color:#cbd5e1; background:#f8fafc; }
+  .abtn.ok { color:#16a34a; border-color:#bbe7c9; }
+  .abtn.ok:hover { background:#e8f7ee; }
+  .abtn.no { color:#dc2626; border-color:#f3c8c8; }
+  .abtn.no:hover { background:#fdecec; }
+  .abtn.link { color:var(--brand); border-color:#cfe2fd; }
+  .abtn.link:hover { background:#e8f2fe; }
+  .abtn:disabled { opacity:.45; cursor:not-allowed; }
+  .empty-row { padding:34px; text-align:center; color:#94a3b8; font-size:12.5px; }
+  .rw-del { border:0; background:none; color:#cbd5e1; font-size:16px; cursor:pointer; line-height:1; padding:2px 4px; }
+  .rw-del:hover { color:#dc2626; }
+
+  /* 居中弹窗（限后台容器内，避免遮挡预览切换器） */
+  .modal-mask { position:absolute; inset:0; z-index:120; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
+  .modal-mask.show { display:flex; }
+  .amodal { background:#fff; border-radius:14px; width:100%; max-width:460px; max-height:86%; overflow:auto; box-shadow:0 24px 60px -12px rgba(15,23,42,.3); animation:modal-in .18s ease; }
+  @keyframes modal-in { from{opacity:0;transform:translateY(-8px) scale(.98)} to{opacity:1;transform:none} }
+  .amodal .m-head { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; border-bottom:1px solid #e5e9f0; font-size:14px; font-weight:600; color:#1e293b; }
+  .amodal .m-x { border:0; background:none; font-size:19px; color:#94a3b8; cursor:pointer; line-height:1; padding:0 2px; }
+  .amodal .m-x:hover { color:#1e293b; }
+  .amodal .m-body { padding:18px 20px; font-size:12.5px; line-height:1.75; color:#475569; }
+  .amodal .m-foot { display:flex; justify-content:flex-end; gap:8px; padding:13px 20px; border-top:1px solid #e5e9f0; }
+  .m-field { display:grid; gap:5px; margin-bottom:12px; }
+  .m-field label { font-size:12px; font-weight:500; color:#64748b; }
+  .m-field input, .m-field textarea { width:100%; border:1px solid #e5e9f0; border-radius:8px; padding:8px 10px; font-size:12.5px; font-family:inherit; color:#1e293b; outline:none; }
+  .m-field input:focus, .m-field textarea:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(29,126,240,.12); }
+  .m-field textarea { min-height:74px; resize:vertical; }
+  .m-info { display:grid; grid-template-columns:86px 1fr; gap:9px 12px; font-size:12.5px; }
+  .m-info .k { color:#94a3b8; }
+  .m-info .v { color:#1e293b; font-weight:500; word-break:break-all; }
+  .m-banner { height:132px; border-radius:12px; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; display:flex; align-items:center; gap:14px; padding:0 20px; margin-bottom:12px; position:relative; overflow:hidden; }
+  .m-banner::after { content:""; position:absolute; right:-20px; top:-26px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.14); }
+  .m-banner .g { width:46px; height:46px; border-radius:14px; background:rgba(255,255,255,.22); display:grid; place-items:center; font-size:24px; position:relative; z-index:1; flex:none; }
+  .m-banner .t { position:relative; z-index:1; }
+  .m-banner .t strong { display:block; font-size:18px; }
+  .m-banner .t span { font-size:11.5px; opacity:.92; }
+  .m-qr { width:150px; height:150px; margin:0 auto 12px; border:1px dashed #cbd5e1; border-radius:12px; background:#f8fafc; display:grid; place-items:center; color:#94a3b8; font-size:12px; }
+  .m-warn { background:#fff7e0; color:#8a6d1f; border-radius:9px; padding:9px 12px; font-size:11.5px; margin-bottom:12px; }
+
+  /* 后台 toast：顶部居中，绿/橙/红三色（对齐真实后台） */
+  .admin-toasts { position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; }
+  .atst { padding:9px 18px; border-radius:10px; font-size:12.5px; color:#fff; box-shadow:0 8px 24px -6px rgba(15,23,42,.3); animation:tin .2s ease; white-space:nowrap; }
+  .atst.ok { background:#15803d; } .atst.warn { background:#b45309; } .atst.err { background:#b91c1c; }
+  @keyframes tin { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+  .card-pad { padding:18px; }
+  .rw-edit { position:relative; }
+  .rw-del { position:absolute; right:8px; top:8px; z-index:2; }
+  .rw-edit .fields { padding-right:20px; }
+
+  /* ====== 活动配置 · 结构化表单（替代整句文本录入） ====== */
+  .btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
+  .sf { display:grid; gap:5px; min-width:0; }
+  .sf > label { font-size:11.5px; color:#64748b; font-weight:500; }
+  .sf select, .sf input, .m-field select { width:100%; height:34px; border:1px solid #e5e9f0; border-radius:8px; padding:0 9px; font-size:12.5px; font-family:inherit; color:#1e293b; background:#fff; outline:none; }
+  .m-field select { padding:0 10px; }
+  .sf select:focus, .sf input:focus, .m-field select:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(29,126,240,.12); }
+  .sf-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .num-wrap { position:relative; }
+  .num-wrap input { padding-right:36px; -moz-appearance:textfield; }
+  .num-wrap input::-webkit-outer-spin-button, .num-wrap input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .num-wrap .unit { position:absolute; right:11px; top:50%; transform:translateY(-50%); font-size:12px; color:#94a3b8; pointer-events:none; }
+
+  /* 发放策略（flat / tiered） */
+  .strategy { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .strategy .opt { flex:1; min-width:230px; border:1px solid #e5e9f0; border-radius:10px; padding:11px 13px; cursor:pointer; background:#fff; transition:border-color .15s, background .15s, box-shadow .15s; }
+  .strategy .opt:hover { border-color:#c7dbfb; }
+  .strategy .opt.on { border-color:var(--brand); background:#f2f8ff; box-shadow:0 0 0 2px rgba(29,126,240,.10); }
+  .strategy .opt strong { font-size:13px; color:#1e293b; display:flex; align-items:center; gap:8px; font-weight:600; }
+  .strategy .opt .radio { width:15px; height:15px; border:2px solid #cbd5e1; border-radius:50%; flex:none; position:relative; }
+  .strategy .opt.on .radio { border-color:var(--brand); }
+  .strategy .opt.on .radio::after { content:""; position:absolute; inset:2.5px; border-radius:50%; background:var(--brand); }
+  .strategy .opt span.desc { font-size:11.5px; color:#94a3b8; display:block; margin:5px 0 0 23px; line-height:1.5; }
+
+  .sub-tit { font-size:12px; font-weight:600; color:#475569; margin:2px 0 12px; display:flex; align-items:center; gap:7px; }
+  .sub-tit::before { content:""; width:3px; height:11px; border-radius:2px; background:var(--brand); }
+
+  /* 奖励槽卡片：每个字段独立控件 */
+  .slot-card { border:1px solid #e5e9f0; border-radius:11px; padding:13px 14px; margin-bottom:11px; background:#fcfdff; transition:border-color .15s, box-shadow .15s; }
+  .slot-card:hover { border-color:#d6e4fa; box-shadow:0 4px 14px rgba(15,23,42,.05); }
+  .slot-card:last-child { margin-bottom:0; }
+  .slot-head { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+  .slot-idx { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; color:#1e293b; }
+  .slot-idx .no { width:21px; height:21px; border-radius:6px; background:var(--brand); color:#fff; font-size:11px; display:grid; place-items:center; font-weight:700; }
+  .slot-head .spacer { flex:1; }
+  .slot-tier { display:flex; align-items:center; gap:6px; font-size:11.5px; color:#64748b; white-space:nowrap; }
+  .slot-tier select { height:29px; font-size:11.5px; padding:0 8px; border:1px solid #e5e9f0; border-radius:7px; background:#fff; color:#1e293b; font-family:inherit; outline:none; }
+  .slot-tier select:focus { border-color:var(--brand); }
+  .slot-del { width:26px; height:26px; border:1px solid #e5e9f0; background:#fff; color:#cbd5e1; border-radius:7px; font-size:16px; line-height:1; cursor:pointer; padding:0; }
+  .slot-del:hover { color:#dc2626; border-color:#f3c8c8; background:#fdecec; }
+  .slot-preview { margin-top:12px; background:#eef6ff; border:1px solid #dbeeff; border-radius:8px; padding:8px 11px; font-size:11.5px; color:#1d4ed8; line-height:1.6; }
+  .slot-preview b { font-weight:700; color:#1246b8; }
+  .slot-preview .arw { color:#93b4e8; margin:0 6px; }
+
+  /* 阶梯档位行 */
+  .tier-row { display:grid; grid-template-columns:1fr 1fr 1.25fr auto; gap:12px; align-items:end; padding:12px; border:1px solid #e5e9f0; border-radius:10px; margin-bottom:10px; background:#fff; }
+  .tier-row:last-child { margin-bottom:0; }
+  .tier-row .sf-2 { display:flex; align-items:center; gap:7px; }
+  .tier-row .sf-2 input { flex:1; min-width:0; width:auto; }
+  .tier-row .sf-2 .unit { font-size:12px; color:#94a3b8; white-space:nowrap; }
+  .tier-del { width:34px; height:34px; border:1px solid #e5e9f0; background:#fff; color:#cbd5e1; border-radius:8px; font-size:16px; line-height:1; cursor:pointer; padding:0; }
+  .tier-del:hover { color:#dc2626; border-color:#f3c8c8; background:#fdecec; }
+  .cfg-foot { font-size:11.5px; color:#94a3b8; margin:10px 0 0; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="switchbar">
+  <span class="lbl">原型预览切换（非产品界面）：</span>
+  <div class="seg-ctrl">
+    <button class="on" data-view="settings">① 设置页（含 Banner 入口）</button>
+    <button data-view="landing">② 邀请有礼落地页</button>
+    <button data-view="admin">③ 后台 · 活动配置</button>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- ===================== ① 设置页（真实样式，Banner 入口） ===================== -->
+  <div class="view show" id="view-settings">
+    <div class="panel" id="settingsPanel">
+      <div class="hd"><span class="back">←</span><strong>待办设置</strong></div>
+      <div class="scroll">
+        <button class="vip-marquee" type="button">会员 ¥29.9，一次买断，持续更新，不限设备数量</button>
+
+        <div class="account-card">
+          <div class="account-avatar"><svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.4 0-8 2.7-8 6v2h16v-2c0-3.3-3.6-6-8-6Z"/></svg></div>
+          <div class="account-nick">刘聪 <span class="pen">✎</span></div>
+          <div class="account-email">396770760@qq.com</div>
+          <div class="account-status">会员有效期 · 剩 21 天</div>
+          <div class="account-redeem">
+            <input placeholder="输入激活码,兑换会员" />
+            <button type="button">兑换</button>
+            <button class="buy" type="button">购买激活码</button>
+          </div>
+          <div class="account-actions">
+            <button type="button">修改密码</button>
+            <button type="button">设备</button>
+            <button type="button">退出登录</button>
+          </div>
+        </div>
+
+        <!-- ★ 邀请有礼 Banner 入口（用户卡正下方，后台可配置图/可隐藏） -->
+        <button class="invite-banner" id="inviteBanner" type="button">
+          <span class="ib-tag">奖励</span>
+          <span class="ib-ico">🎁</span>
+          <span class="ib-txt"><strong>邀请有礼</strong><em>邀好友得会员天数或现金</em></span>
+          <span class="ib-go">›</span>
+        </button>
+
+        <div class="gt">版本</div>
+        <div class="row"><span style="flex:0 0 auto;font-size:12px;font-weight:700;color:#1b1e24;">当前版本 v0.4.62</span>
+          <button class="account-redeem" style="flex:1;justify-content:flex-end;background:transparent;border:0;gap:6px;">
+            <span style="font-size:11px;color:#8a909b;">已是最新版本</span>
+            <span style="font-size:11px;padding:5px 12px;border:1px solid #e7e9ee;border-radius:8px;background:#fff;color:#4b5563;">检查更新</span>
+          </button>
+        </div>
+
+        <div class="gt">顶栏快捷入口</div>
+        <div class="entry"><span class="ico">⚙</span><span class="txt"><strong>管理工具入口</strong><em>顶栏 4 个 · 更多 4 个</em></span><span class="chev">›</span></div>
+        <p class="hint">可调整顶部栏工具顺序</p>
+
+        <div class="gt">窗口位置</div>
+        <div class="row"><span>贴边方向</span><div class="seg"><button>桌面左侧</button><button class="on">桌面右侧</button></div></div>
+        <div class="row"><span>显示屏幕</span><select><option>副屏</option><option>默认 · 跟随窗口所在屏</option><option>主屏 · 显示器 1</option></select></div>
+        <p class="hint">切换后立即生效，无需重启。</p>
+
+        <div class="gt">外观</div>
+        <div class="seg"><button class="on">浅色</button><button>深色</button></div>
+
+        <div class="gt">背景</div>
+        <div class="bg-grid">
+          <div class="bg-tile on" style="background:#eef1f6;"><span>纯色</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#7b5cff,#4f9bff);"><span>极光</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#36d1dc,#5b86e5);"><span>清蓝</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#b7c6d6,#6b7d8c);"><span>远山</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#2bc0e4,#1a5f9e);"><span>海浪</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#7cb342,#3e7d2e);"><span>枝叶</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#3a3f58,#111318);"><span>星空</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#f0f0f0,#cfcfcf);"><span>简约</span></div>
+          <div class="bg-tile" style="background:linear-gradient(135deg,#ff8a5c,#ff5c8a);"><span>活力</span></div>
+        </div>
+      </div>
+      <div class="fab"><span>◷ 版本记录</span><span>◌ 联系客服</span></div>
+    </div>
+  </div>
+
+  <!-- ===================== ② 邀请有礼落地页（精致重做） ===================== -->
+  <div class="view" id="view-landing">
+    <div class="panel" id="invitePanel">
+      <div class="hd"><span class="back">←</span><strong>邀请有礼</strong></div>
+      <div class="scroll">
+
+        <!-- 主视觉 / Banner -->
+        <div class="hero">
+          <div class="hero-bg"></div>
+          <div class="hero-inner">
+            <h2 class="hero-title">邀好友，双方领奖励</h2>
+            <p class="hero-desc">好友通过你的邀请链接注册，或注册时填写邀请码，自动绑定关系，双方立即发奖。</p>
+            <div class="code-pill">
+              <span class="cl">我的邀请码</span>
+              <span class="cv">TK-A3F9</span>
+              <button class="cc" data-copy="TK-A3F9">复制</button>
+            </div>
+            <div class="hero-actions">
+              <button class="p" data-copy="https://todobar.app/r/TK-A3F9">复制链接</button>
+              <button class="g" data-copy="TK-A3F9">复制邀请码</button>
+            </div>
+            <p class="hero-note">桌面端无需海报 / 二维码，复制链接或邀请码即可分享。</p>
+          </div>
+        </div>
+
+        <!-- 数据概览 -->
+        <div class="stats">
+          <div class="stat"><div class="num">8</div><div class="lbl">已邀请人数</div></div>
+          <div class="stat"><div class="num">6</div><div class="lbl">邀请注册人数</div></div>
+          <div class="stat"><div class="num">4</div><div class="lbl">邀请会员人数</div></div>
+          <div class="stat"><div class="num">¥120</div><div class="lbl">已赚活动奖金</div></div>
+          <div class="stat"><div class="num">¥46</div><div class="lbl">可提现金额</div></div>
+          <div class="stat"><div class="num">56<small>天</small></div><div class="lbl">奖励会员天数</div></div>
+        </div>
+
+        <!-- 奖励明细 -->
+        <div class="gt">奖励明细</div>
+        <div class="reward">
+          <span class="bar"></span>
+          <div class="body">
+            <div class="r-head"><span class="r-badge">奖励槽 1</span><span class="r-title">好友注册成功</span></div>
+            <div class="r-detail">你获得 <b>7 天会员</b>，好友获得 <b>3 天会员</b></div>
+          </div>
+        </div>
+        <div class="reward b2">
+          <span class="bar"></span>
+          <div class="body">
+            <div class="r-head"><span class="r-badge">奖励槽 2</span><span class="r-title">好友开通会员</span></div>
+            <div class="r-detail">你获得 <b>15 天会员</b> + <b>¥10 现金</b>，好友获得 <b>7 天会员</b></div>
+          </div>
+        </div>
+        <div class="reward b3">
+          <span class="bar"></span>
+          <div class="body">
+            <div class="r-head"><span class="r-badge">阶梯奖励</span><span class="r-title">累计满 10 人</span></div>
+            <div class="r-detail">额外奖励 <b>30 天会员</b>（门槛与奖励后台可配）</div>
+          </div>
+        </div>
+
+        <!-- 邀请记录 -->
+        <div class="gt">邀请记录</div>
+        <div class="inv-row"><span class="av">明</span><span class="nm">小明</span><span class="st">已开通会员</span><span class="rw">+15天 ¥10</span></div>
+        <div class="inv-row"><span class="av">红</span><span class="nm">小红</span><span class="st">已注册</span><span class="rw">+3天</span></div>
+        <div class="inv-row"><span class="av">强</span><span class="nm">小强</span><span class="st">已开通会员</span><span class="rw">+15天 ¥10</span></div>
+        <div class="inv-row"><span class="av">丽</span><span class="nm">小丽</span><span class="st">已注册</span><span class="rw">+3天</span></div>
+      </div>
+
+      <div class="invite-footer">
+        <span class="bal">可提现<b>¥46</b></span>
+        <button class="wd-btn" id="withdrawBtn">申请提现</button>
+      </div>
+
+      <div class="backdrop" id="wdBackdrop">
+        <div class="sheet">
+          <div class="grip"></div>
+          <h3>申请提现</h3>
+          <div class="qr-up"><div class="box">＋</div>上传支付宝收款码</div>
+          <div class="field-row"><label>收款人姓名</label><input placeholder="与支付宝实名一致" /></div>
+          <div class="field-row"><label>支付宝账号</label><input placeholder="手机号 / 邮箱" /></div>
+          <div class="field-row"><label>提现金额</label><input value="¥46.00" /></div>
+          <button class="submit" id="wdSubmit">提交申请</button>
+          <button class="cancel" id="wdCancel">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ③ 后台 · 邀请有礼（一页式可交互 SPA） ===================== -->
+  <div class="view" id="view-admin">
+    <div class="admin show">
+      <div class="sidebar">
+        <div class="brand"><span class="logo">T</span> Tacco 后台</div>
+        <div class="nav">
+          <a>数据概览</a>
+          <a>用户管理</a>
+          <a>激活码管理</a>
+          <a>版本记录</a>
+          <a>用户反馈</a>
+          <a>服务监控</a>
+          <div class="grp">运营</div>
+          <a class="active">邀请有礼</a>
+        </div>
+        <div class="foot">登录：396770760@qq.com<br>权限：超级管理员</div>
+      </div>
+
+      <div class="main">
+        <div class="page-head">
+          <div>
+            <h1>邀请有礼</h1>
+            <div class="sub">活动配置 · 邀请记录 · 提现审核（保存后 App 即时生效）</div>
+          </div>
+          <button class="btn btn-primary" id="saveCfg">保存配置</button>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="label">累计邀请人数</div><div class="value">1,284</div></div>
+          <div class="kpi"><div class="label">已发会员天数</div><div class="value">9,860<small> 天</small></div></div>
+          <div class="kpi"><div class="label">已发现金</div><div class="value">¥6,420</div></div>
+          <div class="kpi"><div class="label">待审核提现</div><div class="value" id="kpiPending">23</div></div>
+        </div>
+
+        <div class="tabs" id="adminTabs">
+          <button class="on" data-tab="cfg">活动配置</button>
+          <button data-tab="invites">邀请记录</button>
+          <button data-tab="withdrawals">提现审核</button>
+        </div>
+
+        <!-- ============ Tab 1 · 活动配置 ============ -->
+        <div class="tabpane show" id="pane-cfg">
+          <div class="card card-pad">
+            <div class="card-title">Banner 配置 <span class="hint">App 设置页「用户信息卡」下方展示</span></div>
+            <div class="banner-cfg">
+              <div class="banner-prev">
+                <div class="img" id="bannerImg">
+                  <span class="g">🎁</span>
+                  <span class="t"><strong>邀请有礼</strong><span>邀好友得会员天数或现金</span></span>
+                  <button class="cta" id="previewBanner">去看看</button>
+                </div>
+                <div class="cap" id="bannerCap">当前 Banner（默认图，可上传替换）</div>
+              </div>
+              <div class="cfg-side">
+                <div class="field">
+                  <label>Banner 图片</label>
+                  <div class="upload-row">
+                    <button class="btn btn-sm" id="uploadBanner">上传图片</button>
+                    <button class="btn btn-sm" id="resetBanner">恢复默认图</button>
+                    <button class="btn btn-sm" id="openPreview">预览大图</button>
+                  </div>
+                  <span class="desc">建议尺寸 720×200，支持 PNG/JPG，不大于 500KB。</span>
+                </div>
+                <div class="switch-line">
+                  <div class="txt"><strong>显示入口</strong><span>关闭后 App 设置页不再展示该 Banner</span></div>
+                  <label class="switch"><input type="checkbox" id="entrySwitch" checked><span class="sl"></span></label>
+                </div>
+                <div class="switch-line">
+                  <div class="txt"><strong>活动状态</strong><span>关闭后停止发奖，落地页提示活动已结束</span></div>
+                  <label class="switch"><input type="checkbox" id="activitySwitch" checked><span class="sl"></span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 活动规则（对应 invite_activity_config） -->
+          <div class="card card-pad">
+            <div class="card-title">活动规则 <span class="hint">对应 invite_activity_config</span></div>
+            <div class="strategy" id="strategySeg">
+              <div class="opt" data-strategy="flat">
+                <strong><span class="radio"></span>扁平发放 · flat</strong>
+                <span class="desc">每个有效邀请按固定奖励槽发奖，不区分档位</span>
+              </div>
+              <div class="opt on" data-strategy="tiered">
+                <strong><span class="radio"></span>阶梯发放 · tiered</strong>
+                <span class="desc">按邀请人累计有效邀请数分档，不同档套用不同奖励</span>
+              </div>
+            </div>
+            <div class="sf-grid">
+              <div class="sf"><label>单邀请人上限</label><div class="num-wrap"><input type="number" min="1" id="cfgMax" value="100" /><span class="unit">人</span></div></div>
+              <div class="sf"><label>现金预算上限</label><div class="num-wrap"><input type="number" min="0" id="cfgBudget" value="20000" placeholder="留空不限" /><span class="unit">元</span></div></div>
+              <div class="sf"><label>活动开始</label><input type="date" id="cfgStart" /></div>
+              <div class="sf"><label>活动结束</label><input type="date" id="cfgEnd" /></div>
+            </div>
+            <p class="cfg-foot">触顶自动停发现金（仍记录绑定）；起止时间留空表示长期有效。</p>
+          </div>
+
+          <!-- 奖励配置（结构化字段，替代整句文本录入） -->
+          <div class="card card-pad">
+            <div class="card-title">奖励配置
+              <span class="hint"><button class="btn btn-sm btn-primary" id="addSlot">+ 新增奖励槽</button></span>
+            </div>
+            <div class="sub-tit">每个槽独立配置：作用对象 / 触发条件 / 奖励类型 / 数值 / 归属档位</div>
+            <div id="slotList"></div>
+          </div>
+
+          <!-- 阶梯档位（仅 tiered 显示） -->
+          <div class="card card-pad" id="tierCard">
+            <div class="card-title">阶梯档位
+              <span class="hint"><button class="btn btn-sm btn-primary" id="addTier">+ 新增档位</button></span>
+            </div>
+            <div class="sub-tit">累计有效邀请数达标进入该档；奖励槽通过「归属档位」关联本档</div>
+            <div id="tierList"></div>
+          </div>
+
+          <!-- 风控设置（结构化数字，替代整句文本录入） -->
+          <div class="card card-pad">
+            <div class="card-title">风控设置 <span class="hint">防刷与提现门槛，保存后生效</span></div>
+            <div class="sf-grid">
+              <div class="sf"><label>同设备限制</label><div class="num-wrap"><input type="number" min="1" id="rkDev" value="1" /><span class="unit">次</span></div></div>
+              <div class="sf"><label>统计窗口</label><div class="num-wrap"><input type="number" min="1" id="rkHours" value="24" /><span class="unit">时</span></div></div>
+              <div class="sf"><label>提现门槛</label><div class="num-wrap"><input type="number" min="0" id="rkMin" value="50" /><span class="unit">元</span></div></div>
+              <div class="sf"><label>单人现金上限</label><div class="num-wrap"><input type="number" min="0" id="rkCashCap" value="500" /><span class="unit">元</span></div></div>
+            </div>
+            <p class="cfg-foot">同一设备指纹在统计窗口内仅计 1 次有效邀请；低于提现门槛不可申请。</p>
+          </div>
+        </div>
+
+        <!-- ============ Tab 2 · 邀请记录 ============ -->
+        <div class="tabpane" id="pane-invites">
+          <div class="card card-pad">
+            <div class="toolbar">
+              <input type="search" id="invSearch" placeholder="搜索邀请人 / 邀请码" />
+              <div class="aseg" id="invSeg">
+                <button class="on" data-st="all">全部</button>
+                <button data-st="reg">已注册</button>
+                <button data-st="vip">已开通会员</button>
+                <button data-st="expired">已失效</button>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-sm" id="invExport">导出 Excel</button>
+            </div>
+            <div class="atable-wrap">
+              <table class="atable">
+                <thead><tr>
+                  <th>邀请人</th><th>被邀请人</th><th>邀请码</th><th>触发事件</th><th>发放奖励</th><th>绑定时间</th><th>状态</th><th>操作</th>
+                </tr></thead>
+                <tbody id="invBody"></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <span id="invPagerInfo"></span>
+              <button class="pg" id="invPrev">上一页</button>
+              <button class="pg" id="invNext">下一页</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ Tab 3 · 提现审核 ============ -->
+        <div class="tabpane" id="pane-withdrawals">
+          <div class="card card-pad">
+            <div class="toolbar">
+              <input type="search" id="wdSearch" placeholder="搜索单号 / 申请人" />
+              <div class="aseg" id="wdSeg">
+                <button class="on" data-st="all">全部</button>
+                <button data-st="pending">待审核</button>
+                <button data-st="passed">已通过</button>
+                <button data-st="rejected">已驳回</button>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-sm" id="wdExport">导出 Excel</button>
+            </div>
+            <div class="atable-wrap">
+              <table class="atable">
+                <thead><tr>
+                  <th>申请单号</th><th>申请人</th><th>提现金额</th><th>支付宝账号</th><th>申请时间</th><th>状态</th><th>操作</th>
+                </tr></thead>
+                <tbody id="wdBody"></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <span id="wdPagerInfo"></span>
+              <button class="pg" id="wdPrev">上一页</button>
+              <button class="pg" id="wdNext">下一页</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 后台专属 toast -->
+      <div class="admin-toasts" id="adminToasts"></div>
+
+      <!-- 通用居中弹窗 -->
+      <div class="modal-mask" id="adminModal">
+        <div class="amodal">
+          <div class="m-head"><span id="mTitle">提示</span><button class="m-x" id="mX">×</button></div>
+          <div class="m-body" id="mBody"></div>
+          <div class="m-foot" id="mFoot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">已复制</div>
+
+<script>
+  // 视图切换
+  document.querySelectorAll('.seg-ctrl button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.seg-ctrl button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      var v = b.getAttribute('data-view');
+      document.querySelectorAll('.view').forEach(function (el) { el.classList.remove('show'); });
+      document.getElementById('view-' + v).classList.add('show');
+    });
+  });
+
+  // 设置页 Banner → 跳到落地页并高亮
+  document.getElementById('inviteBanner').addEventListener('click', function () {
+    document.querySelector('.seg-ctrl button[data-view="landing"]').click();
+    var p = document.getElementById('invitePanel');
+    p.classList.remove('flash'); void p.offsetWidth; p.classList.add('flash');
+  });
+
+  // 复制
+  function showToast(t) { var el = document.getElementById('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(function(){ el.classList.remove('show'); }, 1600); }
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () { var v = b.getAttribute('data-copy'); if (navigator.clipboard) navigator.clipboard.writeText(v).catch(function(){}); showToast('已复制：' + v); });
+  });
+
+  // 落地页：申请提现（固定底部按钮 → 底部弹窗）
+  document.getElementById('withdrawBtn').addEventListener('click', function () { document.getElementById('invitePanel').classList.add('with-sheet'); });
+  document.getElementById('wdCancel').addEventListener('click', function () { document.getElementById('invitePanel').classList.remove('with-sheet'); });
+  document.getElementById('wdSubmit').addEventListener('click', function () { document.getElementById('invitePanel').classList.remove('with-sheet'); showToast('提现申请已提交，等待审核'); });
+  document.getElementById('wdBackdrop').addEventListener('click', function (e) { if (e.target === this) this.parentElement.classList.remove('with-sheet'); });
+
+  // ===== 后台 · 一页式可交互 SPA =====
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function atoast(msg, type) {
+    var wrap = document.getElementById('adminToasts');
+    var el = document.createElement('div');
+    el.className = 'atst ' + (type || 'ok');
+    el.textContent = msg;
+    wrap.appendChild(el);
+    setTimeout(function () { el.style.transition = 'opacity .25s'; el.style.opacity = '0'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260); }, 2200);
+  }
+
+  var modalMask = document.getElementById('adminModal');
+  function openModal(title, bodyHtml, footHtml, onMount) {
+    document.getElementById('mTitle').textContent = title;
+    document.getElementById('mBody').innerHTML = bodyHtml;
+    document.getElementById('mFoot').innerHTML = footHtml || '<button class="btn" data-mclose>关闭</button>';
+    modalMask.classList.add('show');
+    if (onMount) onMount();
+  }
+  function closeModal() { modalMask.classList.remove('show'); }
+  document.getElementById('mX').addEventListener('click', closeModal);
+  modalMask.addEventListener('click', function (e) {
+    if (e.target === this) { closeModal(); return; }
+    var b = e.target.closest && e.target.closest('[data-mclose]');
+    if (b) closeModal();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+  // Tab 切换（同一页面内）
+  document.querySelectorAll('#adminTabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#adminTabs button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('show'); });
+      document.getElementById('pane-' + b.getAttribute('data-tab')).classList.add('show');
+    });
+  });
+
+  // ---------- 活动配置：结构化奖励槽 + 阶梯档位（对齐 PRD 第七节 / invite_reward_slots） ----------
+  var TARGET  = { inviter:'邀请人', invitee:'被邀请人' };
+  var TRIGGER = { register:'注册即奖励', member:'成为会员才奖励' };
+  var RTYPE   = { days:'会员天数', cash:'现金' };
+  var BONUS   = { once:'首次达到一次性发', every:'每单按本档发' };
+  var cfg = { strategy:'tiered' };
+
+  // 每个槽 = 独立字段：作用对象 / 触发条件 / 奖励类型 / 数值 / 归属档位
+  var slots = [
+    { target:'invitee', trigger:'register', type:'days', value:3,  tier:'default' },
+    { target:'inviter', trigger:'register', type:'days', value:7,  tier:'default' },
+    { target:'inviter', trigger:'member',   type:'days', value:15, tier:'default' },
+    { target:'inviter', trigger:'member',   type:'cash', value:10, tier:'default' },
+    { target:'invitee', trigger:'member',   type:'days', value:7,  tier:'default' },
+    { target:'inviter', trigger:'member',   type:'days', value:30, tier:'t1' }
+  ];
+  var tiers = [ { id:'t1', label:'达人', min:10, bonus:'once' } ];
+
+  function opts(map, cur) {
+    return Object.keys(map).map(function (k) {
+      return '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + map[k] + '</option>';
+    }).join('');
+  }
+  function tierLabel(id) { var t = tiers.filter(function (x) { return x.id === id; })[0]; return t ? t.label : ''; }
+  function tierOptions(cur) {
+    var o = '<option value="default"' + (cur === 'default' ? ' selected' : '') + '>默认档</option>';
+    tiers.forEach(function (t) { o += '<option value="' + esc(t.id) + '"' + (cur === t.id ? ' selected' : '') + '>' + esc(t.label) + '档</option>'; });
+    return o;
+  }
+  function slotPreview(s) {
+    var val = s.type === 'days' ? '<b>' + s.value + ' 天会员</b>' : '<b>¥' + s.value + ' 现金</b>';
+    var tier = (s.tier && s.tier !== 'default' && cfg.strategy === 'tiered') ? ' <span style="color:#64748b">· ' + esc(tierLabel(s.tier)) + '档</span>' : '';
+    return TRIGGER[s.trigger] + tier + '<span class="arw">→</span>' + TARGET[s.target] + '获得 ' + val;
+  }
+  function sfSelect(i, f, label, map, cur) {
+    return '<div class="sf"><label>' + label + '</label><select data-f="' + f + '" data-i="' + i + '">' + opts(map, cur) + '</select></div>';
+  }
+  function sfNum(i, s) {
+    return '<div class="sf"><label>数值</label><div class="num-wrap"><input type="number" min="1" data-f="value" data-i="' + i + '" value="' + s.value + '" /><span class="unit" data-unit>' + (s.type === 'days' ? '天' : '元') + '</span></div></div>';
+  }
+
+  function renderSlots() {
+    document.getElementById('slotList').innerHTML = slots.length ? slots.map(function (s, i) {
+      return '<div class="slot-card" data-si="' + i + '">' +
+        '<div class="slot-head">' +
+          '<span class="slot-idx"><span class="no">' + (i + 1) + '</span>奖励槽 ' + (i + 1) + '</span>' +
+          '<span class="spacer"></span>' +
+          '<span class="slot-tier" data-tier-wrap>归属档位 <select data-f="tier" data-i="' + i + '">' + tierOptions(s.tier) + '</select></span>' +
+          '<button class="slot-del" data-del="' + i + '" title="删除该槽">×</button>' +
+        '</div>' +
+        '<div class="sf-grid">' +
+          sfSelect(i, 'target', '作用对象', TARGET, s.target) +
+          sfSelect(i, 'trigger', '触发条件', TRIGGER, s.trigger) +
+          sfSelect(i, 'type', '奖励类型', RTYPE, s.type) +
+          sfNum(i, s) +
+        '</div>' +
+        '<div class="slot-preview" data-prev>' + slotPreview(s) + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty-row" style="padding:26px">暂无奖励槽，点击「+ 新增奖励槽」添加</div>';
+    bindSlots();
+    applyStrategy();
+  }
+
+  function bindSlots() {
+    document.querySelectorAll('#slotList [data-f]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var i = +el.getAttribute('data-i'), f = el.getAttribute('data-f'), card = el.closest('.slot-card');
+        if (f === 'value') {
+          var n = parseInt(el.value, 10); if (!n || n < 1) n = 1;
+          slots[i].value = n; el.value = n;
+        } else {
+          slots[i][f] = el.value;
+          if (f === 'type') card.querySelector('[data-unit]').textContent = slots[i].type === 'days' ? '天' : '元';
+        }
+        card.querySelector('[data-prev]').innerHTML = slotPreview(slots[i]);
+      });
+    });
+    document.querySelectorAll('#slotList [data-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = +btn.getAttribute('data-del');
+        openModal('删除奖励槽',
+          '<p>确认删除「奖励槽 ' + (i + 1) + '」吗？删除后该槽不再发奖，<b>已发放的奖励不受影响</b>。</p>',
+          '<button class="btn" data-mclose>取消</button><button class="btn btn-danger" id="delOk">确认删除</button>',
+          function () {
+            document.getElementById('delOk').addEventListener('click', function () {
+              slots.splice(i, 1); renderSlots(); closeModal(); atoast('已删除奖励槽', 'warn');
+            });
+          });
+      });
+    });
+  }
+
+  // 阶梯档位（仅 tiered 模式）
+  function renderTiers() {
+    document.getElementById('tierList').innerHTML = tiers.length ? tiers.map(function (t, i) {
+      return '<div class="tier-row" data-ti="' + i + '">' +
+        '<div class="sf"><label>档位名</label><input data-tf="label" data-ti="' + i + '" value="' + esc(t.label) + '" /></div>' +
+        '<div class="sf"><label>累计有效邀请</label><div class="sf-2"><input type="number" min="1" data-tf="min" data-ti="' + i + '" value="' + t.min + '" /><span class="unit">人</span></div></div>' +
+        '<div class="sf"><label>发放方式</label><select data-tf="bonus" data-ti="' + i + '">' + opts(BONUS, t.bonus) + '</select></div>' +
+        '<button class="tier-del" data-tdel="' + i + '" title="删除该档">×</button>' +
+      '</div>';
+    }).join('') : '<div class="empty-row" style="padding:22px">暂无阶梯档位，点击「+ 新增档位」添加</div>';
+    bindTiers();
+  }
+  function bindTiers() {
+    document.querySelectorAll('#tierList [data-tf]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var i = +el.getAttribute('data-ti'), f = el.getAttribute('data-tf');
+        if (f === 'min') { var n = parseInt(el.value, 10); if (!n || n < 1) n = 1; tiers[i].min = n; el.value = n; }
+        else if (f === 'label') { var v = el.value.trim(); if (v) { tiers[i].label = v; renderSlots(); } }
+        else tiers[i][f] = el.value;
+      });
+    });
+    document.querySelectorAll('#tierList [data-tdel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = +btn.getAttribute('data-tdel'), t = tiers[i];
+        openModal('删除阶梯档位',
+          '<p>确认删除档位「' + esc(t.label) + '」吗？归属本档的奖励槽将自动回到<b>默认档</b>。</p>',
+          '<button class="btn" data-mclose>取消</button><button class="btn btn-danger" id="tdelOk">确认删除</button>',
+          function () {
+            document.getElementById('tdelOk').addEventListener('click', function () {
+              slots.forEach(function (s) { if (s.tier === t.id) s.tier = 'default'; });
+              tiers.splice(i, 1); renderTiers(); renderSlots(); closeModal(); atoast('已删除档位「' + t.label + '」', 'warn');
+            });
+          });
+      });
+    });
+  }
+
+  // 发放策略联动：tiered 才显示阶梯档位卡与「归属档位」字段
+  function applyStrategy() {
+    var tiered = cfg.strategy === 'tiered';
+    document.getElementById('tierCard').style.display = tiered ? '' : 'none';
+    document.querySelectorAll('#slotList [data-tier-wrap]').forEach(function (el) { el.style.display = tiered ? '' : 'none'; });
+  }
+  document.querySelectorAll('#strategySeg .opt').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#strategySeg .opt').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); cfg.strategy = b.getAttribute('data-strategy');
+      renderSlots();
+      atoast(cfg.strategy === 'tiered' ? '已切换阶梯发放：可配置档位与归属' : '已切换扁平发放：按固定槽发奖', 'ok');
+    });
+  });
+
+  // 新增奖励槽：结构化字段（下拉 + 数字），不再整句录入
+  document.getElementById('addSlot').addEventListener('click', function () {
+    openModal('新增奖励槽',
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">' +
+        '<div class="m-field"><label>作用对象</label><select id="nsTarget">' + opts(TARGET, 'inviter') + '</select></div>' +
+        '<div class="m-field"><label>触发条件</label><select id="nsTrigger">' + opts(TRIGGER, 'register') + '</select></div>' +
+        '<div class="m-field"><label>奖励类型</label><select id="nsType">' + opts(RTYPE, 'days') + '</select></div>' +
+        '<div class="m-field"><label>数值</label><input id="nsValue" type="number" min="1" value="3" /></div>' +
+      '</div>' +
+      '<div class="m-field"><label>归属档位</label><select id="nsTier">' + tierOptions('default') + '</select></div>' +
+      '<div class="m-warn">天数累加到会员有效期、不覆盖；现金进入可提现余额，需后台审核人工转账。</div>',
+      '<button class="btn" data-mclose>取消</button><button class="btn btn-primary" id="nsOk">确认新增</button>',
+      function () {
+        document.getElementById('nsOk').addEventListener('click', function () {
+          var v = parseInt(document.getElementById('nsValue').value, 10);
+          if (!v || v < 1) { atoast('请填写大于 0 的数值', 'err'); return; }
+          slots.push({
+            target: document.getElementById('nsTarget').value,
+            trigger: document.getElementById('nsTrigger').value,
+            type: document.getElementById('nsType').value,
+            value: v,
+            tier: document.getElementById('nsTier').value
+          });
+          renderSlots(); closeModal(); atoast('已新增奖励槽', 'ok');
+        });
+      });
+  });
+
+  // 新增阶梯档位
+  document.getElementById('addTier').addEventListener('click', function () {
+    openModal('新增阶梯档位',
+      '<div class="m-field"><label>档位名</label><input id="ntLabel" placeholder="如：合伙人" /></div>' +
+      '<div class="m-field"><label>累计有效邀请数</label><input id="ntMin" type="number" min="1" value="20" /></div>' +
+      '<div class="m-field"><label>发放方式</label><select id="ntBonus">' + opts(BONUS, 'once') + '</select></div>' +
+      '<div class="m-warn">新增后，在「奖励配置」把奖励槽的「归属档位」选到本档即可关联。</div>',
+      '<button class="btn" data-mclose>取消</button><button class="btn btn-primary" id="ntOk">确认新增</button>',
+      function () {
+        document.getElementById('ntOk').addEventListener('click', function () {
+          var label = document.getElementById('ntLabel').value.trim();
+          var min = parseInt(document.getElementById('ntMin').value, 10);
+          if (!label) { atoast('请填写档位名', 'err'); return; }
+          if (!min || min < 1) { atoast('请填写有效的邀请人数', 'err'); return; }
+          tiers.push({ id: 't' + Date.now(), label: label, min: min, bonus: document.getElementById('ntBonus').value });
+          renderTiers(); renderSlots(); closeModal(); atoast('已新增档位「' + label + '」', 'ok');
+        });
+      });
+  });
+
+  renderTiers();
+  renderSlots();
+
+  // ---------- Banner 配置 ----------
+  var bannerCustom = false;
+  document.getElementById('uploadBanner').addEventListener('click', function () {
+    var img = document.getElementById('bannerImg');
+    img.style.background = 'linear-gradient(135deg,#f59e0b,#ff7a3d)';
+    img.querySelector('.t strong').textContent = '限时活动';
+    img.querySelector('.t span').textContent = '上传的自定义 Banner 图';
+    document.getElementById('bannerCap').textContent = '当前 Banner（自定义上传图）';
+    bannerCustom = true;
+    atoast('已替换为上传图，保存后 App 即时生效', 'ok');
+  });
+  document.getElementById('resetBanner').addEventListener('click', function () {
+    var img = document.getElementById('bannerImg');
+    img.style.background = 'linear-gradient(135deg,#1d7ef0,#6a5cff)';
+    img.querySelector('.t strong').textContent = '邀请有礼';
+    img.querySelector('.t span').textContent = '邀好友得会员天数或现金';
+    document.getElementById('bannerCap').textContent = '当前 Banner（默认图，可上传替换）';
+    bannerCustom = false;
+    atoast('已恢复默认 Banner', 'ok');
+  });
+  function showBannerPreview() {
+    openModal('Banner 预览',
+      '<div class="m-banner"><span class="g">🎁</span><span class="t"><strong>' + (bannerCustom ? '限时活动' : '邀请有礼') + '</strong><span>' + (bannerCustom ? '上传的自定义 Banner 图' : '邀好友得会员天数或现金') + '</span></span></div>' +
+      '<div class="m-info"><span class="k">展示位置</span><span class="v">App 设置页 · 用户信息卡下方</span>' +
+      '<span class="k">入口状态</span><span class="v">' + (document.getElementById('entrySwitch').checked ? '显示' : '已隐藏') + '</span>' +
+      '<span class="k">图片来源</span><span class="v">' + (bannerCustom ? '自定义上传图' : '系统默认图') + '</span></div>',
+      '<button class="btn btn-primary" data-mclose>知道了</button>');
+  }
+  document.getElementById('openPreview').addEventListener('click', showBannerPreview);
+  document.getElementById('previewBanner').addEventListener('click', showBannerPreview);
+  document.getElementById('entrySwitch').addEventListener('change', function () {
+    atoast(this.checked ? '入口已开启，App 设置页将展示 Banner' : '入口已隐藏，App 设置页不再展示 Banner', this.checked ? 'ok' : 'warn');
+  });
+  document.getElementById('activitySwitch').addEventListener('change', function () {
+    atoast(this.checked ? '活动已开启，恢复发奖' : '活动已结束，落地页将提示活动已结束', this.checked ? 'ok' : 'warn');
+  });
+  document.getElementById('saveCfg').addEventListener('click', function () {
+    openModal('保存活动配置',
+      '<p>确认将以下配置发布到线上吗？保存后 <b>App 端即时生效</b>。</p>' +
+      '<div class="m-info" style="margin-top:12px">' +
+      '<span class="k">Banner 图</span><span class="v">' + (bannerCustom ? '自定义上传图' : '系统默认图') + '</span>' +
+      '<span class="k">显示入口</span><span class="v">' + (document.getElementById('entrySwitch').checked ? '开启' : '关闭') + '</span>' +
+      '<span class="k">活动状态</span><span class="v">' + (document.getElementById('activitySwitch').checked ? '进行中' : '已结束') + '</span>' +
+      '<span class="k">发放策略</span><span class="v">' + (cfg.strategy === 'tiered' ? '阶梯发放 tiered' : '扁平发放 flat') + '</span>' +
+      '<span class="k">奖励槽 / 档位</span><span class="v">' + slots.length + ' 个 / ' + (cfg.strategy === 'tiered' ? tiers.length + ' 档' : '—') + '</span>' +
+      '<span class="k">单邀请人上限</span><span class="v">' + (document.getElementById('cfgMax').value || '100') + ' 人</span>' +
+      '<span class="k">现金预算上限</span><span class="v">' + (document.getElementById('cfgBudget').value ? '¥' + document.getElementById('cfgBudget').value : '不限') + '</span>' +
+      '<span class="k">提现门槛</span><span class="v">¥' + (document.getElementById('rkMin').value || '0') + ' 起提</span></div>',
+      '<button class="btn" data-mclose>取消</button><button class="btn btn-primary" id="saveOk">确认保存</button>',
+      function () {
+        document.getElementById('saveOk').addEventListener('click', function () { closeModal(); atoast('配置已保存，App 即时生效', 'ok'); });
+      });
+  });
+
+  // ---------- 邀请记录 ----------
+  var invData = [
+    { id:'IV20261110001', u:'刘聪', ue:'396770760@qq.com', v:'小明', ve:'xiaoming@163.com', code:'TK-A3F9', ev:'好友开通会员', rw:'+15天 / ¥10', t:'2026-11-10 14:22', st:'vip' },
+    { id:'IV20261109012', u:'王敏', ue:'wangmin@163.com', v:'小红', ve:'xhong@qq.com', code:'TK-B7K2', ev:'好友注册成功', rw:'+7天 / ¥0', t:'2026-11-09 09:41', st:'reg' },
+    { id:'IV20261108007', u:'刘聪', ue:'396770760@qq.com', v:'小强', ve:'qiang@foxmail.com', code:'TK-A3F9', ev:'好友开通会员', rw:'+15天 / ¥10', t:'2026-11-08 18:05', st:'vip' },
+    { id:'IV20261107021', u:'陈晨', ue:'chenchen@126.com', v:'阿杰', ve:'ajie@163.com', code:'TK-C9M4', ev:'好友注册成功', rw:'+7天 / ¥0', t:'2026-11-07 11:30', st:'reg' },
+    { id:'IV20261105003', u:'王敏', ue:'wangmin@163.com', v:'小雨', ve:'xiaoyu@qq.com', code:'TK-B7K2', ev:'阶梯奖励 · 满 10 人', rw:'+30天 / ¥0', t:'2026-11-05 16:12', st:'vip' },
+    { id:'IV20261102015', u:'赵磊', ue:'zhaolei@163.com', v:'小周', ve:'zhou@126.com', code:'TK-D2P8', ev:'好友注册成功', rw:'已失效', t:'2026-11-02 08:20', st:'expired' }
+  ];
+  var invStLabel = { reg:'已注册', vip:'已开通会员', expired:'已失效' };
+  var invStBdg = { reg:'bdg-blue', vip:'bdg-green', expired:'bdg-slate' };
+  var invPage = 1, invPer = 4, invFilter = 'all', invKey = '';
+  function invFiltered() {
+    return invData.filter(function (d) {
+      if (invFilter !== 'all' && d.st !== invFilter) return false;
+      if (invKey && (d.u + d.v + d.code + d.id + d.ev + d.ue).toLowerCase().indexOf(invKey) < 0) return false;
+      return true;
+    });
+  }
+  function renderInv() {
+    var list = invFiltered();
+    var pages = Math.max(1, Math.ceil(list.length / invPer));
+    if (invPage > pages) invPage = pages;
+    var rows = list.slice((invPage - 1) * invPer, invPage * invPer);
+    document.getElementById('invBody').innerHTML = rows.length ? rows.map(function (d) {
+      return '<tr>' +
+        '<td><div class="cell-u"><span class="av">' + esc(d.u.charAt(0)) + '</span><span class="meta"><span class="n">' + esc(d.u) + '</span></span></div></td>' +
+        '<td>' + esc(d.v) + '</td><td class="mono">' + esc(d.code) + '</td><td>' + esc(d.ev) + '</td>' +
+        '<td style="color:' + (d.st === 'expired' ? '#94a3b8' : '#16a34a') + ';font-weight:600">' + esc(d.rw) + '</td>' +
+        '<td>' + esc(d.t.slice(5)) + '</td><td><span class="bdg ' + invStBdg[d.st] + '">' + invStLabel[d.st] + '</span></td>' +
+        '<td><button class="abtn link" data-inv-detail="' + d.id + '">详情</button></td></tr>';
+    }).join('') : '<tr><td colspan="8" class="empty-row">没有符合条件的记录</td></tr>';
+    document.getElementById('invPagerInfo').textContent = '共 ' + list.length + ' 条 · 第 ' + invPage + '/' + pages + ' 页';
+    document.getElementById('invPrev').disabled = invPage <= 1;
+    document.getElementById('invNext').disabled = invPage >= pages;
+    document.querySelectorAll('#invBody [data-inv-detail]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = invData.filter(function (x) { return x.id === b.getAttribute('data-inv-detail'); })[0];
+        openModal('邀请记录详情',
+          '<div class="m-info">' +
+          '<span class="k">记录编号</span><span class="v mono">' + esc(d.id) + '</span>' +
+          '<span class="k">邀请人</span><span class="v">' + esc(d.u) + '（' + esc(d.ue) + '）</span>' +
+          '<span class="k">被邀请人</span><span class="v">' + esc(d.v) + '（' + esc(d.ve) + '）</span>' +
+          '<span class="k">邀请码</span><span class="v mono">' + esc(d.code) + '</span>' +
+          '<span class="k">触发事件</span><span class="v">' + esc(d.ev) + '</span>' +
+          '<span class="k">发放奖励</span><span class="v" style="color:#16a34a">' + esc(d.rw) + '</span>' +
+          '<span class="k">绑定时间</span><span class="v">' + esc(d.t) + '</span>' +
+          '<span class="k">当前状态</span><span class="v"><span class="bdg ' + invStBdg[d.st] + '">' + invStLabel[d.st] + '</span></span></div>',
+          '<button class="btn btn-primary" data-mclose>关闭</button>');
+      });
+    });
+  }
+  document.getElementById('invSearch').addEventListener('input', function () { invKey = this.value.trim().toLowerCase(); invPage = 1; renderInv(); });
+  document.querySelectorAll('#invSeg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#invSeg button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); invFilter = b.getAttribute('data-st'); invPage = 1; renderInv();
+    });
+  });
+  document.getElementById('invPrev').addEventListener('click', function () { if (invPage > 1) { invPage--; renderInv(); } });
+  document.getElementById('invNext').addEventListener('click', function () { invPage++; renderInv(); });
+  document.getElementById('invExport').addEventListener('click', function () { atoast('已导出 Excel，共 ' + invFiltered().length + ' 条', 'ok'); });
+  renderInv();
+
+  // ---------- 提现审核 ----------
+  var wdData = [
+    { id:'WD20261109008', u:'王敏', ue:'wangmin@163.com', amt:'¥120.00', name:'王敏', ali:'138****6621', t:'2026-11-09 10:12', st:'pending', note:'' },
+    { id:'WD20261109006', u:'刘聪', ue:'396770760@qq.com', amt:'¥46.00', name:'刘聪', ali:'186****3390', t:'2026-11-09 09:03', st:'pending', note:'' },
+    { id:'WD20261108004', u:'陈晨', ue:'chenchen@126.com', amt:'¥230.00', name:'陈晨', ali:'159****7782', t:'2026-11-08 20:41', st:'pending', note:'' },
+    { id:'WD20261107011', u:'赵磊', ue:'zhaolei@163.com', amt:'¥88.00', name:'赵磊', ali:'137****4415', t:'2026-11-07 15:26', st:'passed', note:'审核通过 · 已人工转账' },
+    { id:'WD20261105009', u:'孙倩', ue:'sunqian@qq.com', amt:'¥30.00', name:'孙倩', ali:'135****9901', t:'2026-11-05 11:08', st:'rejected', note:'未达 ¥50 起提门槛' }
+  ];
+  var wdStLabel = { pending:'待审核', passed:'已通过', rejected:'已驳回' };
+  var wdStBdg = { pending:'bdg-amber', passed:'bdg-green', rejected:'bdg-red' };
+  var wdPage = 1, wdPer = 4, wdFilter = 'all', wdKey = '';
+  var pendingTotal = 23;
+  function wdFiltered() {
+    return wdData.filter(function (d) {
+      if (wdFilter !== 'all' && d.st !== wdFilter) return false;
+      if (wdKey && (d.id + d.u + d.ali + d.name + d.ue).toLowerCase().indexOf(wdKey) < 0) return false;
+      return true;
+    });
+  }
+  function wdInfo(d) {
+    return '<div class="m-info">' +
+      '<span class="k">申请单号</span><span class="v mono">' + esc(d.id) + '</span>' +
+      '<span class="k">申请人</span><span class="v">' + esc(d.u) + '（' + esc(d.ue) + '）</span>' +
+      '<span class="k">提现金额</span><span class="v" style="color:#16a34a;font-weight:700">' + esc(d.amt) + '</span>' +
+      '<span class="k">收款人</span><span class="v">' + esc(d.name) + '</span>' +
+      '<span class="k">支付宝账号</span><span class="v mono">' + esc(d.ali) + '</span>' +
+      '<span class="k">申请时间</span><span class="v">' + esc(d.t) + '</span></div>';
+  }
+  function findWd(id) { return wdData.filter(function (x) { return x.id === id; })[0]; }
+  function renderWd() {
+    var list = wdFiltered();
+    var pages = Math.max(1, Math.ceil(list.length / wdPer));
+    if (wdPage > pages) wdPage = pages;
+    var rows = list.slice((wdPage - 1) * wdPer, wdPage * wdPer);
+    document.getElementById('wdBody').innerHTML = rows.length ? rows.map(function (d) {
+      var acts;
+      if (d.st === 'pending') {
+        acts = '<button class="abtn ok" data-pass="' + d.id + '">通过</button>' +
+               '<button class="abtn no" data-reject="' + d.id + '">驳回</button>' +
+               '<button class="abtn link" data-qr="' + d.id + '">收款码</button>';
+      } else {
+        acts = '<button class="abtn link" data-wdview="' + d.id + '">查看</button>';
+      }
+      return '<tr>' +
+        '<td class="mono">' + esc(d.id) + '</td>' +
+        '<td><div class="cell-u"><span class="av">' + esc(d.u.charAt(0)) + '</span><span class="meta"><span class="n">' + esc(d.u) + '</span></span></div></td>' +
+        '<td style="font-weight:700;color:#1e293b">' + esc(d.amt) + '</td>' +
+        '<td class="mono">' + esc(d.ali) + '</td><td>' + esc(d.t.slice(5)) + '</td>' +
+        '<td><span class="bdg ' + wdStBdg[d.st] + '">' + wdStLabel[d.st] + '</span></td>' +
+        '<td><div class="row-acts">' + acts + '</div></td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty-row">没有符合条件的申请</td></tr>';
+    document.getElementById('wdPagerInfo').textContent = '共 ' + list.length + ' 条 · 第 ' + wdPage + '/' + pages + ' 页';
+    document.getElementById('wdPrev').disabled = wdPage <= 1;
+    document.getElementById('wdNext').disabled = wdPage >= pages;
+    bindWdActions();
+  }
+  function bindWdActions() {
+    document.querySelectorAll('#wdBody [data-pass]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = findWd(b.getAttribute('data-pass'));
+        openModal('审核通过确认',
+          '<div class="m-warn">请核对收款信息后再确认。通过后状态变为「已通过」，需由财务人工转账。</div>' + wdInfo(d),
+          '<button class="btn" data-mclose>取消</button><button class="btn btn-primary" id="passOk">确认通过</button>',
+          function () {
+            document.getElementById('passOk').addEventListener('click', function () {
+              d.st = 'passed'; d.note = '审核通过 · 待人工转账';
+              pendingTotal--; document.getElementById('kpiPending').textContent = pendingTotal;
+              renderWd(); closeModal(); atoast('审核通过，已加入人工转账队列', 'ok');
+            });
+          });
+      });
+    });
+    document.querySelectorAll('#wdBody [data-reject]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = findWd(b.getAttribute('data-reject'));
+        openModal('驳回申请',
+          '<div class="m-warn">驳回后用户可修改资料重新申请，请填写明确的驳回原因。</div>' + wdInfo(d) +
+          '<div class="m-field" style="margin-top:14px"><label>驳回原因（必填）</label><textarea id="rjReason" placeholder="如：收款码与实名不一致"></textarea></div>',
+          '<button class="btn" data-mclose>取消</button><button class="btn btn-danger" id="rjOk">确认驳回</button>',
+          function () {
+            document.getElementById('rjOk').addEventListener('click', function () {
+              var reason = document.getElementById('rjReason').value.trim();
+              if (!reason) { atoast('请填写驳回原因', 'err'); return; }
+              d.st = 'rejected'; d.note = reason;
+              pendingTotal--; document.getElementById('kpiPending').textContent = pendingTotal;
+              renderWd(); closeModal(); atoast('已驳回该申请', 'warn');
+            });
+          });
+      });
+    });
+    document.querySelectorAll('#wdBody [data-qr]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = findWd(b.getAttribute('data-qr'));
+        openModal('支付宝收款码',
+          '<div class="m-qr">收款码占位图</div>' +
+          '<div class="m-info"><span class="k">收款人</span><span class="v">' + esc(d.name) + '</span>' +
+          '<span class="k">支付宝账号</span><span class="v mono">' + esc(d.ali) + '</span>' +
+          '<span class="k">提现金额</span><span class="v">' + esc(d.amt) + '</span></div>',
+          '<button class="btn btn-primary" data-mclose>关闭</button>');
+      });
+    });
+    document.querySelectorAll('#wdBody [data-wdview]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = findWd(b.getAttribute('data-wdview'));
+        openModal('审核结果',
+          wdInfo(d) + '<div class="m-info" style="margin-top:12px"><span class="k">处理结果</span><span class="v">' + esc(d.note) + '</span>' +
+          '<span class="k">当前状态</span><span class="v"><span class="bdg ' + wdStBdg[d.st] + '">' + wdStLabel[d.st] + '</span></span></div>',
+          '<button class="btn btn-primary" data-mclose>关闭</button>');
+      });
+    });
+  }
+  document.getElementById('wdSearch').addEventListener('input', function () { wdKey = this.value.trim().toLowerCase(); wdPage = 1; renderWd(); });
+  document.querySelectorAll('#wdSeg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#wdSeg button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); wdFilter = b.getAttribute('data-st'); wdPage = 1; renderWd();
+    });
+  });
+  document.getElementById('wdPrev').addEventListener('click', function () { if (wdPage > 1) { wdPage--; renderWd(); } });
+  document.getElementById('wdNext').addEventListener('click', function () { wdPage++; renderWd(); });
+  document.getElementById('wdExport').addEventListener('click', function () { atoast('已导出 Excel，共 ' + wdFiltered().length + ' 条', 'ok'); });
+  renderWd();
+</script>
+</body>
+</html>

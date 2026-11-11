@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Tacco 设置页 0.4.62 预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 26px;
+    background: #e9edf2;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    color: #1b1e24;
+  }
+  .stage { display: flex; gap: 26px; align-items: flex-start; }
+  .panel {
+    position: relative;
+    width: 340px; height: 700px;
+    background: #fff;
+    border: 1px solid #dfe3e9;
+    border-radius: 16px;
+    box-shadow: 0 18px 50px rgba(28,39,50,.16);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .hd {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 16px 16px 11px;
+    border-bottom: 1px solid #f0f1f4;
+    font-size: 15px; font-weight: 700;
+  }
+  .hd .back { font-size: 17px; color: #6b7280; width: 20px; }
+  .scroll { flex: 1; overflow-y: auto; padding: 15px 16px 80px; display: grid; gap: 18px; align-content: start; }
+  .scroll::-webkit-scrollbar { width: 0; }
+  .group { display: grid; gap: 9px; }
+  .gt { font-size: 12px; font-weight: 700; color: #2b3038; letter-spacing: .2px; }
+  .hint { margin: 0; font-size: 10.5px; line-height: 1.6; color: #8a909b; }
+  .entry {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 9px 10px; border: 1px solid #e7e9ee; border-radius: 10px;
+    background: #f8f9fb; text-align: left; cursor: pointer; font-family: inherit;
+  }
+  .entry .ico {
+    width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+    border-radius: 8px; background: #eef1f6; color: #6b7280; font-size: 14px;
+  }
+  .entry .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .entry .txt strong { font-size: 12px; font-weight: 700; }
+  .entry .txt em { font-style: normal; font-size: 10.5px; color: #8a909b; }
+  .entry .chev { color: #9aa1ad; font-size: 18px; }
+  .row { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+  .row > span { flex: 0 0 62px; font-size: 11.5px; color: #7d8490; }
+  .seg { flex: 1; display: flex; padding: 3px; gap: 3px; background: #f2f3f6; border-radius: 9px; }
+  .seg button {
+    flex: 1; padding: 6px 4px; border: 0; border-radius: 7px; background: transparent;
+    font-family: inherit; font-size: 11px; color: #6b7280; cursor: pointer;
+  }
+  .seg button.on { background: #15161a; color: #fff; font-weight: 700; }
+  select {
+    flex: 1; height: 30px; padding: 0 8px; font-family: inherit; font-size: 11.5px;
+    color: #2b3038; background: #f8f9fb; border: 1px solid #e7e9ee; border-radius: 8px;
+  }
+  .sf {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; background: #f8f9fb; border-radius: 9px; font-size: 11.5px;
+  }
+  .sf kbd {
+    font-family: inherit; font-size: 10.5px; color: #4b5563;
+    background: #fff; border: 1px solid #e3e6ec; border-radius: 6px; padding: 3px 7px;
+  }
+  .toggle { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; }
+  .toggle i { width: 32px; height: 18px; border-radius: 999px; background: #15161a; position: relative; }
+  .toggle i::after { content: ""; position: absolute; right: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .fab {
+    position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 8px;
+  }
+  .fab span {
+    background: #fff; border: 1px solid #e7e9ee; border-radius: 999px;
+    padding: 7px 14px; font-size: 11px; color: #4b5563; box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  }
+  .fab span:last-child { background: #15161a; color: #fff; border-color: #15161a; }
+
+  /* ===== 底部 popup ===== */
+  .backdrop {
+    position: absolute; inset: 0; z-index: 10; display: none;
+    align-items: flex-end; background: rgba(28,39,50,.34);
+  }
+  body.with-sheet .backdrop { display: flex; }
+  .sheet {
+    width: 100%; max-height: 82%; overflow-y: auto;
+    display: grid; gap: 10px; padding: 8px 16px 16px;
+    background: #fff; border-radius: 16px 16px 0 0;
+    box-shadow: 0 -18px 44px rgba(28,39,50,.24);
+  }
+  .grip { width: 38px; height: 4px; margin: 2px auto; border-radius: 999px; background: #d8dce3; }
+  .sheet h3 { margin: 0; font-size: 14px; font-weight: 700; }
+  .tt-list { display: grid; gap: 4px; max-height: 400px; overflow-y: auto; }
+  .tt-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+    border-radius: 9px; background: #f8f9fb;
+  }
+  .tt-check { width: 16px; height: 16px; flex: none; border-radius: 5px; background: #15161a; color: #fff; display: grid; place-items: center; font-size: 11px; }
+  .tt-ico { width: 16px; flex: none; text-align: center; color: #8a909b; font-size: 12px; }
+  .tt-nm { flex: 1; font-size: 11.5px; font-weight: 600; }
+  .tt-pos { flex: none; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; background: #eceef2; color: #6b7280; }
+  .tt-pos.on { color: #1b1e24; }
+  .tt-move { flex: none; display: grid; gap: 1px; }
+  .tt-move b { width: 17px; height: 13px; display: grid; place-items: center; border: 1px solid #e3e6ec; border-radius: 4px; font-size: 8px; color: #8a909b; font-weight: 400; }
+  .actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .reset { border: 1px solid #e7e9ee; background: transparent; border-radius: 8px; padding: 5px 11px; font-family: inherit; font-size: 11px; font-weight: 600; color: #6b7280; }
+  .btns { display: flex; gap: 8px; }
+  .btns b { min-width: 64px; text-align: center; padding: 7px 14px; border: 1px solid #e7e9ee; border-radius: 9px; font-size: 11.5px; font-weight: 700; }
+  .btns b.primary { background: #15161a; border-color: #15161a; color: #fff; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="panel">
+    <div class="hd"><span class="back">←</span><strong>待办设置</strong></div>
+    <div class="scroll">
+      <div class="group">
+        <div class="gt">顶栏快捷入口</div>
+        <div class="entry">
+          <span class="ico">⚙</span>
+          <span class="txt"><strong>管理工具入口</strong><em>顶栏 4 个 · 更多 4 个</em></span>
+          <span class="chev">›</span>
+        </div>
+        <p class="hint">可调整顶部栏工具顺序</p>
+      </div>
+
+      <div class="group">
+        <div class="gt">窗口位置</div>
+        <div class="row"><span>贴边方向</span><div class="seg"><button>桌面左侧</button><button class="on">桌面右侧</button></div></div>
+        <div class="row"><span>显示屏幕</span><select><option>副屏</option><option>默认 · 跟随窗口所在屏</option><option>主屏 · 显示器 1</option></select></div>
+        <p class="hint">切换后立即生效，无需重启。新建便利签会跟随工具面板所在屏幕。</p>
+        <p class="hint">「默认」不指定固定屏幕，工具停在启动 / 当前所在的屏幕；想固定在某块屏，请明确选择主屏或副屏。</p>
+      </div>
+
+      <div class="group">
+        <div class="gt">外观</div>
+        <div class="seg"><button class="on">浅色</button><button>深色</button></div>
+      </div>
+
+      <div class="group">
+        <div class="gt">快捷键</div>
+        <div class="sf"><span>打开窗口</span><kbd>Ctrl + Shift + T</kbd></div>
+        <div class="sf"><span>新建便利签</span><kbd>Alt + N</kbd></div>
+        <div class="sf"><span>打开剪贴板</span><kbd>Ctrl + Shift + V</kbd></div>
+        <p class="hint">双击编辑框即可修改；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合。</p>
+      </div>
+
+      <div class="group">
+        <div class="gt">截图 / 贴图</div>
+        <div class="toggle"><span>启用截图 / 贴图</span><i></i></div>
+        <div class="sf"><span>截图快捷键</span><kbd>Ctrl + Shift + A</kbd></div>
+        <div class="sf"><span>贴图快捷键</span><kbd>Ctrl + Shift + S</kbd></div>
+      </div>
+    </div>
+    <div class="fab"><span>◷ 版本记录</span><span>◌ 联系客服</span></div>
+
+    <div class="backdrop">
+      <div class="sheet">
+        <div class="grip"></div>
+        <h3>顶栏快捷入口</h3>
+        <p class="hint">勾选要显示的工具，用箭头调整顺序；靠前的优先占用顶栏，其余自动收进「⋯ 更多」。</p>
+        <div class="tt-list">
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">▣</span><span class="tt-nm">录音机</span><span class="tt-pos on">顶栏</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">▤</span><span class="tt-nm">计算器</span><span class="tt-pos on">顶栏</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">◈</span><span class="tt-nm">牛马计薪器</span><span class="tt-pos on">顶栏</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">▦</span><span class="tt-nm">黄历</span><span class="tt-pos on">顶栏</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">◎</span><span class="tt-nm">截图</span><span class="tt-pos">更多</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">▧</span><span class="tt-nm">便利签</span><span class="tt-pos">更多</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">▥</span><span class="tt-nm">剪贴板</span><span class="tt-pos">更多</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+          <div class="tt-row"><span class="tt-check">✓</span><span class="tt-ico">↻</span><span class="tt-nm">同步</span><span class="tt-pos">更多</span><span class="tt-move"><b>▲</b><b>▼</b></span></div>
+        </div>
+        <div class="actions">
+          <button class="reset">恢复默认</button>
+          <div class="btns"><b>取消</b><b class="primary">保存</b></div>
+        </div>
+        <p class="hint">保存后才会更新顶栏；取消则保留原配置。</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  if (new URLSearchParams(location.search).get('sheet') === '1') {
+    document.body.classList.add('with-sheet')
+  }
+</script>
+</body>
+</html>
