@@ -17,6 +17,7 @@ mod notes;
 mod screenshot;
 mod clipboard;
 mod ocr;
+mod clothesline;
 
 /// **所有窗口**共用的 WebView2 启动参数。
 ///
@@ -1650,12 +1651,17 @@ pub fn run() {
         .manage(notes::NoteShortcutState::default())
         .manage(notes::NotePoolState::default())
         .manage(clipboard::ClipboardState::default())
+        .manage(clothesline::ClotheslineState::default())
         // 窗口生命周期日志 + 主窗口关闭拦截(改为隐藏,托盘应用标准做法):
         // 之前截图流程若误触发主窗口关闭,进程随最后一个窗口销毁直接退出,
         // 表现为「应用整个消失」。现在主窗口 close 一律拦截成 hide 并留日志。
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 append_app_log(&format!("window close-requested: {}", window.label()));
+                // 只有 main 的关闭拦截成隐藏（托盘应用标准做法，且它是常驻窗口）。
+                // ⚠️ 晾衣绳窗口**不拦截**：main 始终存在（只是 hide），绳窗真销毁不会让
+                //    进程退出；反而若拦截成 hide，重新开启时组件已挂载、不会重跑定位
+                //    effect → 窗口永远不 show。销毁走 clothesline_set_enabled(false)。
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
@@ -1762,7 +1768,27 @@ pub fn run() {
             recording_rename,
             recordings_default_dir,
             open_mic_privacy_settings,
-            screenshot_log
+            screenshot_log,
+            clothesline::clothesline_get_settings,
+            clothesline::clothesline_set_enabled,
+            clothesline::clothesline_update_settings,
+            clothesline::clothesline_set_always_on_top,
+            clothesline::clothesline_apply_bounds_and_show,
+            clothesline::clothesline_set_hit_rects,
+            clothesline::clothesline_set_force_clickable,
+            clothesline::clothesline_capture_suspend,
+            clothesline::clothesline_capture_resume,
+            clothesline::clothesline_get_monitors,
+            clothesline::clothesline_get_restore_state,
+            clothesline::clothesline_save_session,
+            clothesline::clothesline_reorder_cards,
+            clothesline::clothesline_add_card,
+            clothesline::clothesline_update_card,
+            clothesline::clothesline_remove_card,
+            clothesline::clothesline_restore_card,
+            clothesline::clothesline_save_preview,
+            clothesline::clothesline_read_preview,
+            clothesline::clothesline_get_card_usage
         ])
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -1841,6 +1867,10 @@ pub fn run() {
                 std::thread::sleep(std::time::Duration::from_millis(1800));
                 notes::spawn_pool_window(pool_app);
             });
+
+            // 晾衣绳:仅当上次总开关为「开」时延迟建窗;默认关 → 老用户升级后
+            // 无窗口 / 无线程 / 无 emit / 无数据目录写入(进程级零残留,PRD R68)。
+            clothesline::spawn_if_enabled(app.handle().clone());
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(

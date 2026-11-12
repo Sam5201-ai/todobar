@@ -1,0 +1,974 @@
+/* 晾衣绳窗口样式 · v2 与 preview/clothesline-preview.html 1:1 对齐
+ *
+ * 设计基线（原型 clothesline-preview.html:76~260）：
+ *   - 麻绳是 SVG 下垂细曲线，不是 12px 粗横条；两端有固定钉。
+ *   - 卡片是「纸」：纹理 + 内高光 + 分层投影 + 微倾角；悬停 1.35× 弹簧放大。
+ *   - 木夹是立体木纹 + 金属箍，不是扁平色块。
+ *   - 不同来源的卡片有各自的纸色与内容版式（便利签 / 待办 / 番茄 / 图片 / 文字）。
+ *   - 顶部有计数 / 清风 / 收起工具条，左上角是 ＋ 菜单（不是三张常驻大方块）。
+ *
+ * ⚠️ 保留全部既有功能类名（.cl-ghost / .cl-card-menu / .cl-composer / .cl-toast …），
+ *    拖动排序、就地编辑、右键菜单、10s 撤销、计时、软删除占位等逻辑一行不动。
+ *    窗口几何保持 300px：卡片 186px + hover 1.22 后底部 ≈283px，不会溢出裁切。 */
+
+.cl-root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  --cl-font: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --cl-ink: #2b2118;
+  --cl-sub: #8a7c6a;
+  --cl-rope: #b7915e;
+  --cl-rope-dark: #8a6a3e;
+  --cl-paper: #fffdf7;
+  --cl-line: rgba(120, 92, 52, 0.18);
+  --cl-shadow: 0 8px 18px rgba(40, 32, 20, 0.18), 0 2px 5px rgba(40, 32, 20, 0.1);
+  --cl-wood-dark: #8a5a28;
+  --cl-wood: #c89356;
+  --cl-accent: #2f6bff;
+  --cl-paper-ink: #3a352c;
+  --cl-paper-muted: #9a9284;
+  --cl-note: #fff8e6;
+  --cl-note-line: #efe2c1;
+  --cl-task: #eef3fb;
+  --cl-task-line: #dbe6f5;
+  --cl-timer: #fdf3ef;
+  --cl-timer-line: #f0ddd4;
+  --cl-text: #eef7ee;
+  --cl-text-line: #d9e8d9;
+  --cl-clip: #f6f7fa;
+  --cl-clip-line: #e3e7ef;
+}
+
+/* —— 主题：显式跟随主窗（todobar.sidebar.settings.v19.theme），系统偏好仅作恢复前兜底 —— */
+.cl-root[data-theme='dark'] {
+  --cl-ink: #f2e9db;
+  --cl-sub: #a99b88;
+  --cl-rope: #9a7b4f;
+  --cl-rope-dark: #6e5533;
+  --cl-paper: #2b2e37;
+  --cl-line: rgba(210, 190, 150, 0.18);
+  --cl-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --cl-paper-ink: #eceef3;
+  --cl-paper-muted: #a6adbb;
+  --cl-note: #34312a;
+  --cl-note-line: #4c483c;
+  --cl-task: #2a313d;
+  --cl-task-line: #3b485b;
+  --cl-timer: #302b33;
+  --cl-timer-line: #4b3f4e;
+  --cl-text: #2a352e;
+  --cl-text-line: #3d5143;
+  --cl-clip: #2b2e37;
+  --cl-clip-line: #414652;
+}
+@media (prefers-color-scheme: dark) {
+  .cl-root:not([data-theme='light']) {
+    --cl-ink: #f2e9db;
+    --cl-sub: #a99b88;
+    --cl-rope: #9a7b4f;
+    --cl-rope-dark: #6e5533;
+    --cl-paper: #2b2e37;
+    --cl-line: rgba(210, 190, 150, 0.18);
+    --cl-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --cl-paper-ink: #eceef3;
+    --cl-paper-muted: #a6adbb;
+    --cl-note: #34312a;
+    --cl-note-line: #4c483c;
+    --cl-task: #2a313d;
+    --cl-task-line: #3b485b;
+    --cl-timer: #302b33;
+    --cl-timer-line: #4b3f4e;
+    --cl-text: #2a352e;
+    --cl-text-line: #3d5143;
+    --cl-clip: #2b2e37;
+    --cl-clip-line: #414652;
+  }
+}
+.cl-root[data-theme='light'] {
+  --cl-ink: #2b2118;
+  --cl-sub: #8a7c6a;
+  --cl-rope: #b7915e;
+  --cl-rope-dark: #8a6a3e;
+  --cl-paper: #fffdf7;
+  --cl-line: rgba(120, 92, 52, 0.18);
+  --cl-shadow: 0 8px 18px rgba(40, 32, 20, 0.18), 0 2px 5px rgba(40, 32, 20, 0.1);
+  --cl-paper-ink: #3a352c;
+  --cl-paper-muted: #9a9284;
+  --cl-note: #fff8e6;
+  --cl-note-line: #efe2c1;
+  --cl-task: #eef3fb;
+  --cl-task-line: #dbe6f5;
+  --cl-timer: #fdf3ef;
+  --cl-timer-line: #f0ddd4;
+  --cl-text: #eef7ee;
+  --cl-text-line: #d9e8d9;
+  --cl-clip: #f6f7fa;
+  --cl-clip-line: #e3e7ef;
+}
+
+/* —— 麻绳：SVG 下垂细曲线 + 两端固定钉（原型 .rope-svg）—— */
+.cl-rope {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 64px;
+  pointer-events: none;
+  z-index: 1;
+}
+.cl-rope-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 64px;
+  overflow: visible;
+}
+.cl-rope-svg .cl-rope-main {
+  fill: none;
+  stroke: var(--cl-rope);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 2px 2px rgba(60, 40, 20, 0.28));
+}
+.cl-rope-svg .cl-rope-fiber {
+  fill: none;
+  stroke: rgba(255, 245, 220, 0.42);
+  stroke-width: 1;
+  stroke-dasharray: 5 7;
+  vector-effect: non-scaling-stroke;
+}
+.cl-rope-svg .cl-rope-under {
+  fill: none;
+  stroke: var(--cl-rope-dark);
+  stroke-width: 1;
+  opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+.cl-rope-nail {
+  position: absolute;
+  top: 19px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e8d3ac, var(--cl-rope-dark));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.cl-rope-nail-l { left: 8px; }
+.cl-rope-nail-r { right: 8px; }
+/* 长按绳子上下拖的热区：位于工具条下层，不吞工具条点击。 */
+.cl-rope-hotzone {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  /* 贴着麻绳曲线（两端 26px / 中点 46px）的窄带；压在卡片(z-index 16)与工具条(16)下层，
+     卡片间隙处露出可拖绳，卡片本身的热点不被吞掉。 */
+  top: 14px;
+  height: 36px;
+  z-index: 15;
+  cursor: ns-resize;
+  pointer-events: auto;
+  background: transparent;
+  touch-action: none;
+}
+
+/* —— 顶部工具条：计数 / 清风 / 收起（原型 1/24 · wind-badge · collapse-btn）—— */
+.cl-toolbar {
+  position: absolute;
+  right: 22px;
+  top: 4px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 16;
+  pointer-events: auto;
+}
+.cl-tool-count {
+  font: 700 10px/1 var(--cl-font);
+  color: #5a6a86;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(120, 140, 180, 0.28);
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: 0 2px 6px rgba(30, 40, 60, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+.cl-tool-btn {
+  font: 700 10px/1 var(--cl-font);
+  color: #5a6a86;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(120, 140, 180, 0.28);
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: 0 2px 6px rgba(30, 40, 60, 0.1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cl-tool-btn:hover { border-color: var(--cl-accent); color: var(--cl-accent); }
+.cl-tool-btn.is-on {
+  color: var(--cl-accent);
+  border-color: rgba(47, 107, 255, 0.35);
+  background: rgba(240, 246, 255, 0.94);
+}
+.cl-tool-collapse {
+  border-radius: 0 0 9px 9px;
+  height: 20px;
+}
+.cl-root[data-theme='dark'] .cl-tool-count,
+.cl-root[data-theme='dark'] .cl-tool-btn {
+  background: rgba(40, 44, 54, 0.92);
+  color: #b9c4da;
+  border-color: #4a5160;
+}
+.cl-root[data-theme='dark'] .cl-tool-btn.is-on { background: #2b3550; color: #a8c2ff; }
+
+/* —— ＋ 菜单：小圆按钮 + 弹出面板（原型 .add-btn / .add-sheet）—— */
+.cl-add-btn {
+  position: absolute;
+  left: 22px;
+  top: 30px;
+  z-index: 20;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: linear-gradient(180deg, #4f8aff, var(--cl-accent));
+  color: #fff;
+  font: 300 18px/1 var(--cl-font);
+  box-shadow: 0 4px 12px rgba(47, 107, 255, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cl-add-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(47, 107, 255, 0.45); }
+.cl-add-sheet {
+  position: absolute;
+  left: 22px;
+  top: 64px;
+  z-index: 21;
+  width: 214px;
+  display: none;
+  flex-direction: column;
+  padding: 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 14px 34px rgba(30, 40, 70, 0.22);
+  pointer-events: auto;
+}
+.cl-add-sheet.is-open { display: flex; }
+.cl-add-sheet .cl-sheet-head {
+  font: 600 9.5px/1.4 var(--cl-font);
+  color: #8a92a1;
+  padding: 4px 9px 6px;
+  letter-spacing: 0.5px;
+}
+.cl-add-sheet button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font: 11.5px/1.4 var(--cl-font);
+  color: #3b404a;
+  cursor: pointer;
+}
+.cl-add-sheet button:hover { background: #f1f4fb; }
+.cl-add-sheet button em { margin-left: auto; font-style: normal; font-size: 9px; color: #a2a9b6; }
+.cl-add-sheet .cl-sheet-sep { height: 1px; background: rgba(0, 0, 0, 0.075); margin: 5px 9px; }
+.cl-root[data-theme='dark'] .cl-add-sheet { background: #2c303a; border-color: #414653; }
+.cl-root[data-theme='dark'] .cl-add-sheet button { color: #e6e9f0; }
+.cl-root[data-theme='dark'] .cl-add-sheet button:hover { background: #3a4050; }
+.cl-root[data-theme='dark'] .cl-add-sheet .cl-sheet-sep { background: #414653; }
+
+/* —— 收起态把手 / 下拉胶囊（外框定位尺寸保持不变，命中矩形才不会错位）—— */
+.cl-handle {
+  position: absolute;
+  top: 14px;
+  width: 44px;
+  height: 96px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 18;
+}
+.cl-handle:active { cursor: grabbing; }
+.cl-root.is-expanded .cl-handle { opacity: 0; pointer-events: none; }
+.cl-clip {
+  width: 15px;
+  height: 32px;
+  border-radius: 3px 3px 2px 2px;
+  background: linear-gradient(90deg, var(--cl-wood-dark), var(--cl-wood) 28%, #efcf9c 52%, var(--cl-wood) 76%, var(--cl-wood-dark));
+  box-shadow: 0 2px 4px rgba(60, 40, 20, 0.28);
+  position: relative;
+}
+.cl-clip::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 12px;
+  height: 5px;
+  background: linear-gradient(180deg, #a9adb5, #eef0f3 45%, #8d929b);
+  border-radius: 2px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+.cl-clip::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  height: 8px;
+  background: rgba(90, 60, 30, 0.18);
+  border-radius: 0 0 2px 2px;
+}
+.cl-handle-label {
+  font: 10px/1.3 var(--cl-font);
+  color: var(--cl-sub);
+  letter-spacing: 0.5px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+.cl-handle:hover .cl-handle-label { opacity: 1; }
+
+.cl-pulltab {
+  position: absolute;
+  top: 38px;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  z-index: 17;
+  pointer-events: auto;
+}
+.cl-pull-cord {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  background: linear-gradient(180deg, rgba(120, 170, 255, 0.15), rgba(90, 150, 240, 0.8));
+  border-radius: 2px;
+}
+.cl-pull-tab {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 30px;
+  height: 26px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fff, #f7f9ff);
+  border: 1px solid rgba(120, 150, 210, 0.3);
+  box-shadow: 0 4px 12px rgba(30, 60, 120, 0.24), inset 0 1px 0 #fff;
+  transition: transform 0.18s;
+}
+.cl-pull-grip {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  width: 14px;
+  height: 3px;
+  margin-left: -7px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4f8aff, var(--cl-accent));
+}
+.cl-pull-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 11px;
+  background: linear-gradient(180deg, #3d7bff, var(--cl-accent));
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 700 10px/1 var(--cl-font);
+}
+.cl-pull-badge {
+  position: absolute;
+  left: 28px;
+  top: 8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--cl-accent);
+  color: #fff;
+  font: 700 9px/16px var(--cl-font);
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(47, 107, 255, 0.4);
+  opacity: 0;
+  transition: 0.18s;
+  white-space: nowrap;
+}
+.cl-pulltab:hover .cl-pull-tab { transform: translateY(3px); }
+.cl-pulltab:hover .cl-pull-badge { opacity: 1; }
+.cl-root[data-theme='dark'] .cl-pull-tab {
+  background: linear-gradient(180deg, #3a3f4c, #2c303b);
+  border-color: #4d5566;
+}
+
+/* —— 卡片甲板：无原生滚动条、两端渐隐、允许 hover 放大上下溢出 —— */
+.cl-deck {
+  position: absolute;
+  /* 卡片顶 = 32 + padding 12 − translateY 6 = 38px，木夹 top −19 → 19px，
+     正好跨在麻绳曲线（两端 26px / 中点 46px）上，不会出现「夹子悬空」。 */
+  top: 32px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 30px 24px;
+  /* 卡片 186px + hover 1.22 → 相对 deck 底部 227px < deck 高 256px，
+     不会溢出，无需 clip-path（clip-path 与 mask-image 叠加会裁掉悬停放大）。 */
+  overflow: hidden;
+  pointer-events: auto;
+  will-change: transform;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+}
+.cl-deck-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1.5px dashed var(--cl-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cl-paper) 55%, transparent);
+  backdrop-filter: blur(2px);
+  width: fit-content;
+  max-width: 90%;
+}
+
+/* —— 纸张卡片：纹理 / 内高光 / 分层阴影 / 微倾角 / 悬停放大 —— */
+.cl-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  min-height: 186px;
+  padding: 10px 10px 9px;
+  border-radius: 3px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  box-shadow: var(--cl-shadow);
+  color: var(--cl-paper-ink);
+  transform: translateY(-6px) rotate(var(--cl-rot, 0deg));
+  transform-origin: 50% 0;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s, opacity 0.22s;
+  cursor: pointer;
+  /* 高于麻绳拖曳热区(15)，保证木夹 / 卡片本身不被热区吞掉；工具条同为 16 但垂直不重叠。 */
+  z-index: 16;
+  pointer-events: auto;
+  touch-action: none;
+}
+.cl-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background: repeating-linear-gradient(0deg, rgba(120, 110, 90, 0.035) 0 1px, transparent 1px 3px);
+}
+.cl-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.cl-root[data-theme='dark'] .cl-card::after { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.cl-card:hover {
+  z-index: 19;
+  transform: translateY(-12px) rotate(0deg) scale(1.22);
+}
+.cl-card.is-pinned { border-color: color-mix(in srgb, var(--cl-rope) 55%, transparent); }
+.cl-card.is-dragging { opacity: 0.26; box-shadow: none; }
+.cl-card.is-drop-target::before {
+  content: '';
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--cl-rope-dark);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cl-rope) 30%, transparent);
+  z-index: 4;
+  /* 覆盖 .cl-card::before 纹理伪元素的 inset:0，否则小圆点会被拉伸成整卡色块。 */
+  right: auto;
+  bottom: auto;
+  opacity: 1;
+  background-image: none;
+}
+
+/* 立体木夹（原型 .clip） */
+.cl-card-clip {
+  position: absolute;
+  left: 50%;
+  top: -19px;
+  width: 15px;
+  height: 32px;
+  margin-left: -7.5px;
+  z-index: 4;
+  border-radius: 3px 3px 2px 2px;
+  background: linear-gradient(90deg, var(--cl-wood-dark), var(--cl-wood) 28%, #efcf9c 52%, var(--cl-wood) 76%, var(--cl-wood-dark));
+  box-shadow: 0 2px 4px rgba(60, 40, 20, 0.28);
+  transition: transform 0.25s, top 0.25s;
+  cursor: grab;
+  pointer-events: auto;
+}
+.cl-card-clip:active { cursor: grabbing; }
+.cl-card-clip::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 12px;
+  height: 5px;
+  background: linear-gradient(180deg, #a9adb5, #eef0f3 45%, #8d929b);
+  border-radius: 2px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+.cl-card-clip::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  height: 8px;
+  background: rgba(90, 60, 30, 0.18);
+  border-radius: 0 0 2px 2px;
+}
+.cl-card:hover .cl-card-clip { top: -8px; transform: translateY(-2px) rotate(-3deg); }
+
+/* 悬停浮出的操作按钮（原型 .card-actions） */
+.cl-card-actions {
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: 0.2s;
+  z-index: 6;
+}
+.cl-card:hover .cl-card-actions { opacity: 1; transform: none; }
+.cl-card-actions button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.94);
+  color: #454a54;
+  display: grid;
+  place-items: center;
+  font: 600 11px/1 var(--cl-font);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  padding: 0;
+}
+.cl-card-actions button:hover { background: #fff; color: var(--cl-accent); }
+.cl-card-actions button.is-danger:hover { color: #c2413c; }
+.cl-root[data-theme='dark'] .cl-card-actions button { background: rgba(50, 54, 64, 0.96); color: #e6e8ee; }
+
+/* —— 各类卡片的纸色（原型 §「各类卡片」）—— */
+.cl-card-note { background: var(--cl-note); border-color: var(--cl-note-line); }
+.cl-card-task { background: var(--cl-task); border-color: var(--cl-task-line); }
+.cl-card-timer { background: var(--cl-timer); border-color: var(--cl-timer-line); }
+.cl-card-text { background: var(--cl-text); border-color: var(--cl-text-line); }
+.cl-card-clipboard { background: var(--cl-clip); border-color: var(--cl-clip-line); }
+
+.cl-face { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.cl-face-head {
+  font: 700 10px/1.3 var(--cl-font);
+  color: var(--cl-rope-dark);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-pin-mark { color: var(--cl-rope-dark); font-weight: 800; }
+
+/* 便利签：米黄纸 + 勾选清单 */
+.cl-note-title { font: 700 11px/1.3 var(--cl-font); color: #8c7b58; margin: 2px 2px 7px; }
+.cl-root[data-theme='dark'] .cl-note-title { color: #d8c39c; }
+.cl-note-list { list-style: none; margin: 0; padding: 0 2px; }
+.cl-note-row {
+  font: 11px/1.6 var(--cl-font);
+  color: var(--cl-paper-ink);
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+.cl-note-row i {
+  width: 11px;
+  height: 11px;
+  border: 1.4px solid #b9a986;
+  border-radius: 3px;
+  flex: none;
+  margin-top: 3px;
+}
+.cl-root[data-theme='dark'] .cl-note-row i { border-color: #8c8268; }
+.cl-note-row.is-done i { background: #7fa86b; border-color: #7fa86b; position: relative; }
+.cl-note-row.is-done i::after { content: '✓'; position: absolute; left: 1px; top: -4px; font-size: 9px; color: #fff; font-style: normal; }
+.cl-note-row.is-done span { text-decoration: line-through; opacity: 0.5; }
+.cl-note-more { font: 10px/1.4 var(--cl-font); color: var(--cl-paper-muted); padding-left: 2px; }
+
+/* 待办：蓝纸 + 任务行 */
+.cl-task-title { font: 700 11px/1.3 var(--cl-font); color: #5b7bb0; margin: 2px 2px 8px; }
+.cl-root[data-theme='dark'] .cl-task-title { color: #a9c2e8; }
+.cl-task-row {
+  font: 11px/1.45 var(--cl-font);
+  color: var(--cl-paper-ink);
+  padding: 6px 4px;
+  border-bottom: 1px dashed #d7e2f1;
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+.cl-root[data-theme='dark'] .cl-task-row { border-color: #3d4a5e; }
+.cl-task-row i { width: 10px; height: 10px; border-radius: 50%; border: 1.4px solid #9db4d4; flex: none; margin-top: 2px; }
+
+/* 番茄计时：粉纸 + 圆环 + 控制按钮（原型 .tm-ring） */
+.cl-card-timer .cl-face { text-align: center; align-items: center; }
+.cl-tm-head { font: 700 10px/1.3 var(--cl-font); color: #b36a53; letter-spacing: 0.5px; }
+.cl-tm-ring { position: relative; width: 92px; height: 92px; margin: 4px auto 2px; }
+.cl-tm-svg { width: 92px; height: 92px; transform: rotate(-90deg); }
+.cl-tm-bg { fill: none; stroke: var(--cl-timer-line); stroke-width: 5; }
+.cl-tm-fg { fill: none; stroke: #e0714f; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 263.9; }
+.cl-root[data-theme='dark'] .cl-tm-bg { stroke: #4b3f4e; }
+.cl-root[data-theme='dark'] .cl-tm-fg { stroke: #ee9275; }
+.cl-tm-time {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 800 19px/1 var(--cl-font);
+  letter-spacing: 1px;
+  color: #4a3a35;
+  font-variant-numeric: tabular-nums;
+}
+.cl-root[data-theme='dark'] .cl-tm-time { color: #f0e2dc; }
+.cl-tm-time.is-fired { color: #c2413c; }
+.cl-tm-btns { display: flex; gap: 5px; justify-content: center; margin: 2px 0 4px; }
+.cl-tm-btns button {
+  border: 1px solid #ead2c7;
+  background: #fff;
+  color: #a35c48;
+  border-radius: 8px;
+  font: 9.5px/1.3 var(--cl-font);
+  padding: 4px 7px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cl-tm-btns button:hover { background: #fdeae2; }
+.cl-tm-foot { font: 9.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); }
+.cl-root[data-theme='dark'] .cl-tm-btns button { background: #3a3038; border-color: #57444d; color: #f0b49c; }
+
+/* 图片 / 截图 / 贴图：大图 + 标题 + 元信息（原型 .photo/.caption/.meta） */
+.cl-photo {
+  width: 100%;
+  height: 116px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #dde6ef;
+  position: relative;
+  cursor: zoom-in;
+  border: 1px solid var(--cl-line);
+}
+.cl-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cl-root[data-theme='dark'] .cl-photo { background: #2b2e37; }
+.cl-photo-empty {
+  width: 100%;
+  height: 116px;
+  border-radius: 2px;
+  background: #f4f6fa;
+  border: 1px solid var(--cl-line);
+  padding: 8px;
+}
+.cl-root[data-theme='dark'] .cl-photo-empty { background: #2b2e37; border-color: #414652; }
+.cl-mini-shot { width: 100%; height: 100%; background: #fff; border-radius: 3px; border: 1px solid #e5e9f0; overflow: hidden; }
+.cl-mini-shot .ms-bar { height: 13px; background: #f2f4f8; border-bottom: 1px solid #e8ebf1; display: flex; align-items: center; gap: 3px; padding: 0 5px; }
+.cl-mini-shot .ms-bar i { width: 4px; height: 4px; border-radius: 50%; background: #d6dbe4; }
+.cl-mini-shot .ms-line { height: 5px; background: #eceff5; border-radius: 3px; margin: 5px 8px 0; }
+.cl-mini-shot .ms-line.w1 { width: 64%; }
+.cl-mini-shot .ms-line.w2 { width: 88%; }
+.cl-mini-shot .ms-line.w3 { width: 46%; }
+.cl-caption {
+  font: 12.5px/1.4 'Kaiti SC', 'STKaiti', 'Segoe UI', serif;
+  color: var(--cl-paper-ink);
+  margin: 7px 2px 2px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  cursor: text;
+}
+.cl-caption::after { content: '✎'; position: absolute; right: 0; top: 0; font-size: 10px; color: #b0a89a; opacity: 0; transition: 0.18s; }
+.cl-card:hover .cl-caption::after { opacity: 1; }
+.cl-meta { font: 9.5px/1.4 var(--cl-font); color: var(--cl-paper-muted); margin: 1px 2px 0; letter-spacing: 0.2px; }
+
+/* 文字卡：浅绿纸 + 楷体；剪贴板：等宽 */
+.cl-txt {
+  font: 12.5px/1.7 'Kaiti SC', 'STKaiti', 'Segoe UI', serif;
+  color: var(--cl-paper-ink);
+  padding: 12px 8px 6px;
+  min-height: 128px;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 7;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-clip-txt {
+  font: 11px/1.65 'Cascadia Mono', Consolas, monospace;
+  color: var(--cl-paper-ink);
+  padding: 8px 4px;
+  min-height: 128px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 引用失效占位 */
+.cl-card-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 128px;
+  text-align: center;
+  opacity: 0.75;
+}
+.cl-ph-icon { font-size: 22px; color: var(--cl-rope-dark); }
+.cl-ph-title { font: 600 12px/1.3 var(--cl-font); color: var(--cl-paper-ink); }
+.cl-ph-sub { font: 10px/1.4 var(--cl-font); color: var(--cl-paper-muted); }
+
+/* —— 幽灵卡 / 编辑 / 右键菜单 / Toast（功能类名全部保留）—— */
+.cl-ghost {
+  position: fixed;
+  z-index: 30;
+  width: 168px;
+  min-height: 186px;
+  padding: 12px 10px;
+  border-radius: 3px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-rope);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
+  color: var(--cl-paper-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  transform: rotate(-2deg) scale(1.04);
+  transform-origin: top center;
+  will-change: left, top, transform;
+}
+.cl-ghost-clip {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 15px;
+  height: 26px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--cl-wood-dark), var(--cl-wood) 28%, #efcf9c 52%, var(--cl-wood) 76%, var(--cl-wood-dark));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+.cl-card-edit, .cl-composer { display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 5; }
+.cl-card-edit textarea, .cl-composer textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: none;
+  border-radius: 4px;
+  border: 1.5px solid var(--cl-accent);
+  background: rgba(255, 255, 255, 0.9);
+  color: #2c2a26;
+  font: 11.5px/1.6 var(--cl-font);
+  padding: 8px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.12);
+}
+.cl-composer {
+  flex: 0 0 auto;
+  width: 168px;
+  min-height: 186px;
+  padding: 10px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--cl-paper) 88%, transparent);
+  border: 1.5px dashed var(--cl-line);
+  box-shadow: var(--cl-shadow);
+  transform: translateY(-6px);
+}
+.cl-composer textarea { flex: 1; }
+.cl-edit-actions { display: flex; gap: 6px; }
+.cl-edit-actions button {
+  flex: 1;
+  border: 1px solid var(--cl-line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--cl-rope) 24%, transparent);
+  color: var(--cl-ink);
+  font: 600 11px/1.4 var(--cl-font);
+  padding: 3px 0;
+  cursor: pointer;
+}
+.cl-edit-actions button:hover { background: color-mix(in srgb, var(--cl-rope) 38%, transparent); }
+.cl-minutes { display: flex; align-items: center; gap: 6px; color: var(--cl-ink); font: 12px/1.4 var(--cl-font); }
+.cl-minutes input {
+  width: 100%;
+  border-radius: 5px;
+  border: 1px solid var(--cl-rope);
+  background: color-mix(in srgb, var(--cl-paper) 92%, #fff 8%);
+  color: var(--cl-ink);
+  padding: 8px;
+  font: 600 18px/1.2 var(--cl-font);
+  outline: none;
+}
+.cl-card-menu {
+  position: fixed;
+  z-index: 40;
+  width: 156px;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cl-paper) 96%, transparent);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  pointer-events: auto;
+}
+.cl-card-menu button {
+  border: 0;
+  background: transparent;
+  color: var(--cl-ink);
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font: 12px/1.3 var(--cl-font);
+  cursor: pointer;
+}
+.cl-card-menu button:hover { background: color-mix(in srgb, var(--cl-rope) 20%, transparent); }
+.cl-card-menu button.is-danger { color: #c2413c; }
+.cl-toast-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.cl-toast-action button {
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #e0b070;
+  color: #2b2118;
+  font: 700 11px/1.3 var(--cl-font);
+  cursor: pointer;
+}
+.cl-toast-limit { color: rgba(255, 255, 255, 0.65); font-size: 10px; }
+.cl-toast-hint { bottom: 52px; }
+.cl-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(28, 32, 40, 0.88);
+  color: #fff;
+  font: 11.5px/1.4 var(--cl-font);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 25;
+}
+.cl-deck-hint { font: 600 14px/1.4 var(--cl-font); color: var(--cl-ink); }
+.cl-deck-sub { font: 12px/1.5 var(--cl-font); color: var(--cl-sub); }
+
+/* —— 清风：极淡摆动，移入冻结（PRD §4.6）—— */
+@keyframes cl-sway {
+  0%, 100% { transform: rotate(-0.8deg); }
+  50% { transform: rotate(0.8deg); }
+}
+@keyframes cl-rope-breath {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.4px); }
+}
+@keyframes cl-clip-sway {
+  0%, 100% { transform: rotate(-1.6deg); }
+  50% { transform: rotate(1.6deg); }
+}
+@keyframes cl-paper-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.2px); }
+}
+.cl-root.has-wind .cl-rope-svg { animation: cl-rope-breath 6.4s ease-in-out infinite; }
+.cl-root.has-wind .cl-handle { transform-origin: top center; animation: cl-sway 5.5s ease-in-out infinite; }
+.cl-root.has-wind .cl-pulltab { transform-origin: top center; animation: cl-sway 6.2s ease-in-out infinite reverse; }
+.cl-root.has-wind .cl-card:not(.is-dragging) .cl-card-clip {
+  animation: cl-clip-sway 5.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.cl-root.has-wind .cl-card:not(.is-dragging) .cl-face { animation: cl-paper-breathe 6.4s ease-in-out infinite; }
+/* 鼠标进入绳带 / 悬停卡片 / 恢复期 / 拖动：一律冻结在当前相位，不重置。 */
+.cl-root.wind-paused .cl-rope-svg,
+.cl-root.wind-paused .cl-handle,
+.cl-root.wind-paused .cl-pulltab,
+.cl-root.wind-paused .cl-card-clip,
+.cl-root.wind-paused .cl-face,
+.cl-root.has-wind .cl-deck:hover .cl-card-clip,
+.cl-root.has-wind .cl-deck:hover .cl-face,
+.cl-root.is-restoring .cl-rope-svg,
+.cl-root.is-restoring .cl-card,
+.cl-root.is-restoring .cl-handle,
+.cl-root.is-restoring .cl-pulltab,
+.cl-root.is-restoring .cl-card-clip,
+.cl-root.is-restoring .cl-face {
+  animation-play-state: paused !important;
+}
+.cl-root.is-restoring .cl-card { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .cl-root.has-wind .cl-rope-svg,
+  .cl-root.has-wind .cl-handle,
+  .cl-root.has-wind .cl-pulltab,
+  .cl-root.has-wind .cl-card-clip,
+  .cl-root.has-wind .cl-face { animation: none; }
+}
+
+/* 启动 / 定位阶段：整层透明不可点，避免定位完成前吞桌面点击。 */
+.cl-root[data-cl-state='booting'],
+.cl-root[data-cl-state='placing'] {
+  pointer-events: none;
+  background: transparent;
+}
+/* 收起态：工具条 / 卡片 / ＋ 菜单一并隐藏，只留麻绳与下拉胶囊。 */
+.cl-root.is-collapsed .cl-toolbar,
+.cl-root.is-collapsed .cl-add-btn,
+.cl-root.is-collapsed .cl-add-sheet { display: none; }

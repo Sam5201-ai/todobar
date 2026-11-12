@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.4.64"
+version = "0.4.65"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"
@@ -89,3 +89,8 @@ objc2-vision = "0.3"
 # ---------------------------------------------------------------------------
 [profile.dev.package."*"]
 opt-level = 3
+
+# 单测不需要依赖的 opt-level 3（那会让 `cargo test --lib` 在本机链接 15 分钟仍未完成）。
+# test profile 默认继承 dev，这里显式把依赖降回 0；release / tauri build 不受影响。
+[profile.test.package."*"]
+opt-level = 0

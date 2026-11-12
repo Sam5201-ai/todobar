@@ -85,6 +85,8 @@ export type WorkerEnv = {
   CF_API_TOKEN?: string
   /** Cloudflare Account ID(非敏感,写进 wrangler.toml [vars])。 */
   CF_ACCOUNT_ID?: string
+  /** 站点发布网关的分享码。回源时注入,让自定义域裸链接可访问;每次 sites_deploy 换码后需同步更新。 */
+  SITE_SHARECODE?: string
 }
 
 // 每个 DB(生产环境即单个 D1 实例)只跑一次建表/补列。用 await 而非
@@ -1482,11 +1484,13 @@ app.post('/api/feedback', async (c) => {
 
 const SITE_UPSTREAM = 'https://todobar-app.app.workbuddy.host'
 const SITE_TTL_PAGE = 300 // 页面/文本类:5 分钟
+const SITE_TTL_VERSION = 60 // version.json:版本判定需较快生效,短缓存 + 过期 stale 兜底
 const SITE_TTL_ASSET = 86400 // 图片/字体/安装包等:1 天
 const SITE_UPSTREAM_TIMEOUT_MS = 8000
 
 function siteCacheTtl(pathname: string): number {
   const p = pathname.toLowerCase()
+  if (p === '/version.json') return SITE_TTL_VERSION
   if (
     p === '/' ||
     p.endsWith('/') ||
@@ -1500,35 +1504,113 @@ function siteCacheTtl(pathname: string): number {
   return SITE_TTL_ASSET
 }
 
+/**
+ * 逐跳回源下载站。
+ *
+ * 上游 WorkBuddy 网关校验完 ?sharecode= 之后,会把该参数从 query 中剥离再交给
+ * server.js,所以 server.js 生成的 302 Location 里没有分享码。若交给 fetch 自动
+ * 跟随,下一跳就会因缺码被网关 403「链接不完整」拦下,访客点「下载安装包」拿到
+ * 的其实是一段 HTML —— 浏览器按 text/html 的 MIME 把文件存成 tacco-setup.html。
+ *
+ * 因此这里手动跟随重定向,并在每一跳重新注入分享码;同时移除只在归因中转跳
+ * 使用的 d 参数,让安装包 URL 稳定、可命中边缘缓存(否则每次都要回源 40MB)。
+ */
+async function fetchSiteUpstream(target: string, shareCode: string): Promise<Response> {
+  const upstreamOrigin = new URL(SITE_UPSTREAM).origin
+  let current = target
+  let response: Response = new Response(null, { status: 502 })
+  for (let hop = 0; hop < 4; hop++) {
+    const u = new URL(current)
+    // /download/ 是归因中转:必须每次真实回源让 server.js 记 site_download,禁止缓存
+    const isTrackHop = u.pathname.toLowerCase().startsWith('/download/')
+    const ttl = isTrackHop ? 0 : siteCacheTtl(u.pathname)
+    response = await fetch(current, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(SITE_UPSTREAM_TIMEOUT_MS),
+      cf: {
+        cacheEverything: true,
+        cacheTtl: ttl,
+        cacheTtlByStatus: { '200-299': ttl, '301-302': 0, '404': 60, '500-599': 0 },
+      },
+    } as RequestInit)
+    const location = response.headers.get('location')
+    if (response.status < 300 || response.status >= 400 || !location) break
+    const next = new URL(location, current)
+    // 只允许继续访问上游站点,避免被重定向带到外部域名
+    if (next.origin !== upstreamOrigin) break
+    next.searchParams.delete('d')
+    if (shareCode && !next.searchParams.has('sharecode')) {
+      next.searchParams.set('sharecode', shareCode)
+    }
+    current = next.toString()
+  }
+  return response
+}
+
+/** version.json 里的安装包 URL 若仍指向平台裸域(会被分享网关 403、让安装包装成 .html),
+ *  实时改写为当前自有域,让 0.4.65+ 的应用内「检查更新→下载→覆盖安装」全链路走自有域。
+ *  注意:0.4.64 请求的是裸域、根本到不了本 Worker,无法被此逻辑拯救,需手动覆盖安装一次。 */
+export function rewriteVersionJsonUrl(text: string, origin: string): string {
+  try {
+    const data = JSON.parse(text) as { url?: string }
+    if (typeof data.url === 'string' && data.url.startsWith(SITE_UPSTREAM)) {
+      data.url = origin + data.url.slice(SITE_UPSTREAM.length)
+      return JSON.stringify(data)
+    }
+  } catch {
+    /* 非 JSON 或解析失败,原样返回 */
+  }
+  return text
+}
+
 async function proxySite(
   request: Request,
   pathname: string,
   search: string,
   ctx: ExecutionContext,
+  shareCode = '',
 ): Promise<Response> {
-  const target = SITE_UPSTREAM + pathname + search
-  const ttl = siteCacheTtl(pathname)
+  // 上游 WorkBuddy 站点网关强制校验 ?sharecode=,裸回源会被 403「链接不完整」拦截。
+  // 自定义域(sync / todobar.tuanzhang.site)的访客不会带这个参数,故统一在回源时注入,
+  // 覆盖下载页、安装包、后台 SPA、version.json 等所有非 /api/ 请求。
+  // 保留原始查询串(如 ?v=0.4.64);已自带 sharecode 时不重复追加。
+  const hasShareCode = /(?:^|[?&])sharecode=/i.test(search)
+  const target =
+    SITE_UPSTREAM + pathname + search +
+    (shareCode && !hasShareCode
+      ? `${search ? '&' : '?'}sharecode=${encodeURIComponent(shareCode)}`
+      : '')
+  // /download/ 是归因中转,不写缓存副本,保证每次点击都回源记一次 site_download
+  const isTrackPath = pathname.toLowerCase().startsWith('/download/')
+  const ttl = isTrackPath ? 0 : siteCacheTtl(pathname)
   const cache = caches.default
   // 缓存键忽略 query(除版本号外无业务含义),避免 ?v= 把缓存打散
   const cacheKey = new Request(`${SITE_UPSTREAM}${pathname}`, { method: 'GET' })
 
   try {
-    const upstream = await fetch(target, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(SITE_UPSTREAM_TIMEOUT_MS),
-      cf: {
-        cacheEverything: true,
-        cacheTtl: ttl,
-        cacheTtlByStatus: { '200-299': ttl, '301-302': 60, '404': 60, '500-599': 0 },
-      },
-    } as RequestInit)
+    const upstream = await fetchSiteUpstream(target, shareCode)
     const headers = new Headers(upstream.headers)
     headers.set('access-control-allow-origin', '*')
     headers.set('x-site-cache', upstream.headers.get('cf-cache-status') || 'MISS')
     const body = await upstream.arrayBuffer()
-    const out = new Response(body, { status: upstream.status, headers })
-    // 写入 Cache API 作为上游故障时的兜底副本(仅成功的 GET)
-    if (upstream.ok && request.method === 'GET') {
+    // version.json 的安装包 URL 按当前自有域实时改写:线上主站那份 url 仍指向平台裸域,
+    // 原样透传会让 0.4.65+ 应用内下载撞 403、把安装包存成 .html。改写只在返回前做,
+    // Cache API 仍存原始 body(见下),两个自有域共享缓存也不会串味。
+    const isVersionJson = pathname.toLowerCase() === '/version.json'
+    let outBody: ArrayBuffer = body
+    if (isVersionJson && upstream.ok) {
+      const rewritten = rewriteVersionJsonUrl(
+        new TextDecoder().decode(body),
+        new URL(request.url).origin,
+      )
+      outBody = new TextEncoder().encode(rewritten).buffer as ArrayBuffer
+      // 改写后字节长度变化,原始 content-length / content-encoding 已失效,必须移除
+      headers.delete('content-length')
+      headers.delete('content-encoding')
+    }
+    const out = new Response(outBody, { status: upstream.status, headers })
+    // 写入 Cache API 作为上游故障时的兜底副本(仅成功的 GET);version.json 存原始 body
+    if (upstream.ok && request.method === 'GET' && ttl > 0) {
       const forCache = new Response(body, {
         status: upstream.status,
         headers: {
@@ -1546,6 +1628,13 @@ async function proxySite(
     if (stale) {
       const h = new Headers(stale.headers)
       h.set('x-site-cache', 'STALE')
+      if (pathname.toLowerCase() === '/version.json') {
+        // 降级副本同样是原始 body,按当前域改写后再返回,避免裸域 url 漏出
+        const rewritten = rewriteVersionJsonUrl(await stale.text(), new URL(request.url).origin)
+        h.delete('content-length')
+        h.delete('content-encoding')
+        return new Response(rewritten, { status: 200, headers: h })
+      }
       return new Response(stale.body, { status: 200, headers: h })
     }
     return new Response(
@@ -1563,7 +1652,7 @@ export default {
     const url = new URL(request.url)
     // 自定义域名上的非 API 请求一律转发到下载页(404 修复的关键)
     if (!url.pathname.startsWith('/api/')) {
-      return proxySite(request, url.pathname, url.search, ctx)
+      return proxySite(request, url.pathname, url.search, ctx, env.SITE_SHARECODE || '')
     }
     // 首个请求同步补好表结构,确保后续 upsert 不再因缺列而 422。
     try {

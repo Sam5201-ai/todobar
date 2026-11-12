@@ -33,6 +33,8 @@ import {
   setPinState,
   type PinState,
 } from './store';
+import { clAddCard, clMakeCard, clSavePreview } from '../clothesline/bridge';
+import { isFullAccess, loadAccount } from '../account';
 import { cropRegionPng } from './ocr/prepare';
 import { filterNoiseLines, OCR_INPUT_LIMIT, recognizeRegion } from './ocr/ocrClient';
 import './screenshot.css';
@@ -515,6 +517,31 @@ export default function PinWindow() {
     }
   };
 
+  /** 挂到晾衣绳：直接用已装载的 dataUrl 压缩略图，不 takeImage、不动 pin stash。 */
+  const hangPinOnRope = async () => {
+    if (!dataUrl) return;
+    try {
+      const img = await loadImageDataUrl(dataUrl);
+      const scale = Math.min(1, 480 / Math.max(1, img.naturalWidth));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const seed = clMakeCard('pin', {
+        pin_id: pinIdRef.current,
+        title: '贴图',
+        text: `${img.naturalWidth}×${img.naturalHeight}`,
+      });
+      const path = await clSavePreview(seed.id, canvas.toDataURL('image/png'));
+      await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()));
+      showToast('已挂到晾衣绳');
+    } catch (e) {
+      showToast(`挂绳失败: ${String(e)}`);
+    }
+  };
+
   // ---- 右键原生菜单(原悬停工具栏功能全集) -----------------------------------
   // 悬停工具栏整体移除(黑色操作框会遮挡贴图内容),功能并入右键菜单;菜单用
   // OS 原生弹出(@tauri-apps/api/menu),在鼠标位置显示、不受贴图窗口尺寸约束
@@ -553,6 +580,7 @@ export default function PinWindow() {
       },
       { item: 'Separator' },
       { text: '复制图片', action: () => void copyPinImage() },
+      { text: '挂到晾衣绳', action: () => void hangPinOnRope() },
       { item: 'Separator' },
       { text: '关闭(进历史)', action: () => closeToHistory() },
       { text: '销毁(移出历史)', action: () => destroy() },

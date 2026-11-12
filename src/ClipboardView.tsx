@@ -6,7 +6,7 @@ import {
   getCurrentWindow,
   monitorFromPoint,
 } from '@tauri-apps/api/window'
-import { Copy, Pin, PinOff, Search, Trash2, X } from 'lucide-react'
+import { Copy, Pin, PinOff, Search, Shirt, Trash2, X } from 'lucide-react'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 import './ClipboardView.css'
@@ -21,6 +21,8 @@ import {
   onClipboardChanged,
   type ClipItem,
 } from './clipboard'
+import { clAddCard, clMakeCard } from './clothesline/bridge'
+import { isFullAccess, loadAccount } from './account'
 
 const WIN_W = 468
 const WIN_H = 600
@@ -204,6 +206,23 @@ export function ClipboardView() {
     setItems((cur) => cur.filter((i) => i.id !== item.id))
   }, [])
 
+  /** 挂到晾衣绳：只写 clothesline/cards.json，不复制、不改剪贴板历史。 */
+  const doHang = useCallback(async (item: ClipItem) => {
+    try {
+      await clAddCard(
+        clMakeCard('clipboard', {
+          clip_id: item.id,
+          title: '剪贴板',
+          text: item.text,
+        }),
+        isFullAccess(loadAccount()),
+      )
+      flash('已挂到晾衣绳')
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e))
+    }
+  }, [flash])
+
   const doPin = useCallback(async (item: ClipItem) => {
     const next = !item.pinned
     await clipboardPin(item.id, next)
@@ -286,6 +305,17 @@ export function ClipboardView() {
                 <span className="cb-len">{it.len} 字</span>
               </div>
               <div className="cb-item-ops">
+                <button
+                  type="button"
+                  className="cb-op"
+                  title="挂到晾衣绳"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void doHang(it)
+                  }}
+                >
+                  <Shirt size={13} />
+                </button>
                 <button
                   type="button"
                   className="cb-op cb-op-copy"

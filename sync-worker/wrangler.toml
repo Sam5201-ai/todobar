@@ -15,6 +15,10 @@ API_TOKENS = "a8a151bba6093d833e412e950fce6f17a62c68a9e122230e"
 # 后台「服务监控」页读取 GraphQL Analytics 用；令牌单独用 wrangler secret put CF_API_TOKEN 注入。
 CF_ACCOUNT_ID = "30b571afc22b411372befbba0492efb3"
 
+# 站点发布网关的分享码(公开值,非密钥)。sites_deploy 每次重新发布会轮换该码,
+# 必须同步更新本值并重新部署 Worker,否则自定义域裸链接回源会得到 403「链接不完整」。
+SITE_SHARECODE = "OJGGE54GTT"
+
 # 邮件发送(Resend):生产环境请用 `wrangler secret put RESEND_API_KEY` 注入,
 # 不要把密钥明文写进仓库。RESEND_FROM 填已在 Resend 验证过的发信域名地址。
 # RESEND_API_KEY = "re_xxx"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import worker from './index'
+import worker, { rewriteVersionJsonUrl } from './index'
 import { makeD1, makeKV } from '../test/d1-shim.mjs'
 
 async function makeEnv(opts: { apiTokens?: string; kv?: Awaited<ReturnType<typeof makeKV>> } = {}) {
@@ -157,5 +157,46 @@ describe('settings', () => {
     )
     const data = await get.json()
     expect(data.settings).toEqual({ theme: 'dark', panelWidth: 320 })
+  })
+})
+
+describe('rewriteVersionJsonUrl', () => {
+  const ORIGIN = 'https://sync.tuanzhang.site'
+
+  it('rewrites the bare-domain installer URL to the current own domain', () => {
+    const input = JSON.stringify({
+      version: '0.4.64',
+      url: 'https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.64',
+      notes: 'fix',
+    })
+    const out = JSON.parse(rewriteVersionJsonUrl(input, ORIGIN))
+    expect(out.url).toBe('https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.64')
+    expect(out.version).toBe('0.4.64')
+    expect(out.notes).toBe('fix')
+  })
+
+  it('honors the request origin (second custom domain)', () => {
+    const input = JSON.stringify({
+      version: '0.4.64',
+      url: 'https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.64',
+    })
+    const out = JSON.parse(rewriteVersionJsonUrl(input, 'https://todobar.tuanzhang.site'))
+    expect(out.url).toBe('https://todobar.tuanzhang.site/Tacco-setup.exe?v=0.4.64')
+  })
+
+  it('leaves an already-own-domain URL untouched', () => {
+    const input = JSON.stringify({
+      version: '0.4.65',
+      url: 'https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.65',
+    })
+    const out = JSON.parse(rewriteVersionJsonUrl(input, ORIGIN))
+    expect(out.url).toBe('https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.65')
+  })
+
+  it('returns non-JSON and url-less JSON unchanged', () => {
+    expect(rewriteVersionJsonUrl('<!doctype html>...', ORIGIN)).toBe('<!doctype html>...')
+    expect(rewriteVersionJsonUrl(JSON.stringify({ version: '0.4.65' }), ORIGIN)).toBe(
+      JSON.stringify({ version: '0.4.65' }),
+    )
   })
 })

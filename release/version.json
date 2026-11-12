@@ -1,5 +1,5 @@
 {
-  "version": "0.4.64",
-  "url": "https://todobar-app.app.workbuddy.host/Tacco-setup.exe?v=0.4.64",
-  "notes": "0.4.64 更新：修复多屏模式下在桌面打开工具时没有即时显示窗口的问题；每次重启工具后，工具窗口默认展开。"
+  "version": "0.4.65",
+  "url": "https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.65",
+  "notes": "0.4.65 更新：修复部分网络环境下账号登录、云同步与自动更新检查失败的问题。本次需手动覆盖安装一次，之后即可在工具内直接检查并自动更新。"
 }

@@ -11,11 +11,13 @@
 
 import { useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 import { readFreeQuotaUsed, useTaskStore } from '../useTaskStore'
 import { useAccount } from '../membership'
+import { CL_EDIT_NOTE_ITEM, CL_OPEN_NOTE } from '../clothesline/bridge'
 import { emitConvertResult, listenConvertRequest } from './bridge'
-import { getNotes, hydrateNotes, MAX_VISIBLE_NOTES } from './store'
+import { getNotes, hydrateNotes, MAX_VISIBLE_NOTES, updateNoteItem } from './store'
 import { createNoteWithWindow, failText } from './manager'
 import { applyNoteShortcut, initNoteShortcuts } from './shortcuts'
 
@@ -123,6 +125,43 @@ export function useNotesBridge(params: {
     return () => {
       disposed = true
       un?.()
+    }
+  }, [])
+
+  // ④ 晾衣绳的便利签卡：绳窗只读 localStorage、绝不写 prefs.json（R60 竞态）。
+  //    「打开原内容」与「编辑单条事项」都在这里落盘，仍然是 notes/store.ts 单一写方。
+  useEffect(() => {
+    let disposed = false
+    const unsubs: Array<() => void> = []
+    void (async () => {
+      const u1 = await listen<{ id: string }>(CL_OPEN_NOTE, (e) => {
+        if (disposed) return
+        const note = getNotes().find((n) => n.id === e.payload.id)
+        if (!note) {
+          setToastRef.current('err', '这张便利签已删除')
+          return
+        }
+        void invoke('notes_open_window', { noteId: note.id, pinned: note.pinned }).catch(() => {
+          setToastRef.current('err', '便利签窗口打开失败')
+        })
+      }).catch(() => null)
+      if (u1) unsubs.push(u1)
+
+      const u2 = await listen<{ noteId: string; itemId: string; text: string }>(
+        CL_EDIT_NOTE_ITEM,
+        (e) => {
+          if (disposed) return
+          const { noteId, itemId, text } = e.payload
+          if (!text?.trim()) return
+          updateNoteItem(noteId, itemId, { text: text.trim() })
+          setToastRef.current('ok', '便利签已更新')
+        },
+      ).catch(() => null)
+      if (u2) unsubs.push(u2)
+    })()
+    return () => {
+      disposed = true
+      unsubs.forEach((u) => u())
     }
   }, [])
 }

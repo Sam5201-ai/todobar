@@ -699,8 +699,14 @@ mod imp {
     /// 这是 B 路线对多屏混合 DPI 错位的根治点:旧实现抓整块虚拟屏、却只用主窗
     /// 所在屏的 scaleFactor 做除法 → 100%/125%/150% 混接时覆盖层必错位。
     /// 现在抓哪块屏就带哪块屏的 scale,且窗口定位全走物理像素,不再做前端换算。
+    ///
+    /// ⚠️ 晾衣绳 R54(PRD §14.3):BitBlt 抓的是「桌面合成帧」,默认 TOPMOST 的绳窗
+    /// 会被拍进每一张截图/贴图/OCR。这里首行挂 RAII 守卫,保证抓帧瞬间绳窗隐藏、
+    /// 且任何 return(含 Err)离开作用域都自动恢复。AppHandle 由 Tauri 自动注入,
+    /// 前端 `invoke('capture_screen')` 无参数调用方式不变。
     #[tauri::command]
-    pub fn capture_screen() -> Result<ScreenCapture, String> {
+    pub fn capture_screen(app: tauri::AppHandle) -> Result<ScreenCapture, String> {
+        let _clothesline_guard = crate::clothesline::CaptureGuard::new(&app);
         unsafe {
             // 让进程按每显示器 DPI 感知,这样所有 GDI / monitor API 返回物理像素。
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -913,8 +919,10 @@ mod imp {
         None
     }
 
+    // 参数与 Windows 分支保持一致(前端无参调用由 Tauri 注入);mac 无抓屏实现,
+    // 绳窗挂起无需动作,但签名必须对齐以保持命令解析一致。
     #[tauri::command]
-    pub fn capture_screen() -> Result<ScreenCapture, String> {
+    pub fn capture_screen(_app: tauri::AppHandle) -> Result<ScreenCapture, String> {
         Err("截图功能仅支持 Windows".into())
     }
 

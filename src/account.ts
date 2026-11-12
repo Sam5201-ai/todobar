@@ -6,8 +6,8 @@
  * - 发信走 Resend(服务端),客户端只负责调接口。
  */
 
-// 与同步同源:经国内代理即可直连,无需 VPN。若自建后端改这里即可。
-export const AUTH_BASE = 'https://todobar-app.app.workbuddy.host'
+// 自有同步域(Cloudflare Worker + D1),不经平台分享网关,避免裸域被强制 sharecode 拦截导致登录/同步 403。
+export const AUTH_BASE = 'https://sync.tuanzhang.site'
 
 import { trackEvent } from './analytics'
 import { invoke } from '@tauri-apps/api/core'

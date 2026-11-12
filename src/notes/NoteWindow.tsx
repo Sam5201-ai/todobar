@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
-import { Check, Palette, Pin, PinOff, X } from 'lucide-react'
+import { Check, Palette, Pin, PinOff, Shirt, X } from 'lucide-react'
 
 import './notes.css'
 import {
@@ -18,6 +18,8 @@ import {
   useNotes,
 } from './store'
 import { listenConvertResult, requestConvert } from './bridge'
+import { clAddCard, clMakeCard } from '../clothesline/bridge'
+import { isFullAccess, loadAccount } from '../account'
 
 const win = getCurrentWindow()
 const NOTE_ID = win.label.replace(/^note-/, '')
@@ -39,6 +41,31 @@ export function NoteWindow() {
     setToast(msg)
     window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 1800)
   }, [])
+
+  /** 挂到晾衣绳。便利签窗口只写 clothesline/cards.json；写回仍归主窗 notes/store.ts。 */
+  const hangOnRope = useCallback(
+    async (itemId?: string) => {
+      if (!note) return
+      const item = itemId ? note.items.find((it) => it.id === itemId) : null
+      try {
+        await clAddCard(
+          clMakeCard('note', {
+            note_id: note.id,
+            attach_to: itemId ? `item:${itemId}` : null,
+            title: item ? '便利签 · 单条' : '便利签',
+            text: item?.text ?? (note.items.length
+              ? note.items.map((it) => `${it.done ? '✓ ' : '· '}${it.text}`).join('\n')
+              : '（空便利签）'),
+          }),
+          isFullAccess(loadAccount()),
+        )
+        flash('已挂到晾衣绳')
+      } catch (e) {
+        flash(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [note, flash],
+  )
 
   // ——— 样式面板:点击面板外关闭(mousedown 判定,不做 preventDefault) ———
   useEffect(() => {
@@ -281,6 +308,14 @@ export function NoteWindow() {
         <div className="ns-tools">
           <button
             type="button"
+            className="ns-btn"
+            title="整张挂到晾衣绳"
+            onClick={() => void hangOnRope()}
+          >
+            <Shirt size={13} />
+          </button>
+          <button
+            type="button"
             className={`ns-btn ${styleOpen ? 'is-on' : ''}`}
             data-style-toggle
             title="颜色与透明度"
@@ -374,6 +409,14 @@ export function NoteWindow() {
                   </span>
                 )}
                 <span className="ns-item-ops">
+                  <button
+                    type="button"
+                    className="ns-btn"
+                    title="单条挂到晾衣绳"
+                    onClick={() => void hangOnRope(it.id)}
+                  >
+                    <Shirt size={12} />
+                  </button>
                   <button
                     type="button"
                     className={`ns-btn ns-check ${it.done ? 'is-on' : ''}`}

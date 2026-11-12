@@ -177,6 +177,39 @@ void (async () => {
     return
   }
 
+  // 顶部晾衣绳窗口:label = clothesline(Rust 动态建窗,见 src-tauri/src/clothesline.rs)。
+  // - 必须打 data-runtime='tauri',复用 index.css 透明背景规则(否则白底横幅)。
+  // - 跳过 hydrateIdentity:绳窗只读本地晾衣绳数据,不需要账号/同步。
+  // - ★R63:绳窗是透明置顶层,若动态 import / 挂载失败,showFatal 会在屏幕顶部刷出
+  //   一块刺眼白横幅。这里在失败时塞一个透明占位节点(childElementCount>0),
+  //   让 showFatal 的「已有内容则跳过」守卫与 12s 看门狗都不触发,失败静默化并只写日志。
+  if (label === 'clothesline') {
+    document.documentElement.dataset.runtime = 'tauri'
+    document.documentElement.classList.add('clothesline-mode')
+    const keepTransparentOnFailure = () => {
+      const root = document.getElementById('root')
+      if (root && root.childElementCount === 0) {
+        const holder = document.createElement('div')
+        holder.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:transparent'
+        root.appendChild(holder)
+      }
+    }
+    try {
+      const { ClotheslineView, ClotheslineErrorBoundary } = await import('./clothesline/ClotheslineView')
+      createRoot(document.getElementById('root')!).render(
+        <StrictMode>
+          <ClotheslineErrorBoundary>
+            <ClotheslineView />
+          </ClotheslineErrorBoundary>
+        </StrictMode>,
+      )
+    } catch (e) {
+      keepTransparentOnFailure()
+      console.error('[clothesline] 模块加载失败', e)
+    }
+    return
+  }
+
   // 剪贴板历史浮窗:label = clipboard(Rust 后台线程监听 + 快捷键唤起,见 src-tauri/src/clipboard.rs)。
   // - 必须打 data-runtime='tauri',复用 index.css 的透明背景规则(否则白底)。
   // - 跳过 hydrateIdentity:剪贴板浮窗不需要账号 / 同步,只读本地剪贴板历史文件。

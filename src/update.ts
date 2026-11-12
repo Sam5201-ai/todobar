@@ -9,8 +9,8 @@
  */
 import type { ReleaseRecord } from './changelog'
 
-/** 官方下载页(国内直连),版本检查与安装包下载都走这里,无需 VPN。 */
-export const OFFICIAL_SITE = 'https://todobar-app.app.workbuddy.host'
+/** 自有域(Cloudflare Worker 反代),版本检查与安装包下载都走这里;不经平台分享网关,避免被强制 sharecode 拦截返回 403。 */
+export const OFFICIAL_SITE = 'https://sync.tuanzhang.site'
 
 export type UpdateState =
   | { status: 'idle' }

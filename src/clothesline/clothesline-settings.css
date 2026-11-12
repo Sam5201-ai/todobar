@@ -1,0 +1,148 @@
+/* 晾衣绳配置页：只 6 项，一屏看完，无滚动条。挂在主窗 .page-panel 内，
+   主题变量继承 .workspace，这里只定义本页特有样式。 */
+
+.cl-set-body {
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cl-set-loading {
+  color: var(--muted, #66778a);
+  font-size: 13px;
+}
+
+.cl-set-group {
+  border: 1px solid var(--line, #dce3ea);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+
+.cl-set-group-title {
+  padding: 11px 14px 9px;
+  font: 600 12px/1.4 var(--font, system-ui, sans-serif);
+  color: var(--muted, #66778a);
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--line, #dce3ea);
+}
+
+.cl-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  min-height: 54px;
+}
+.cl-set-row + .cl-set-row {
+  border-top: 1px solid var(--line, #dce3ea);
+}
+.cl-set-row.is-disabled {
+  opacity: 0.5;
+}
+
+.cl-set-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cl-set-title {
+  font: 600 13px/1.35 var(--font, system-ui, sans-serif);
+  color: var(--ink, #111927);
+}
+.cl-set-sub {
+  font: 11px/1.45 var(--font, system-ui, sans-serif);
+  color: var(--muted, #66778a);
+}
+
+.cl-set-ctl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+/* 开关 */
+.cl-switch {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  border: 0;
+  padding: 2px;
+  background: var(--line, #dce3ea);
+  cursor: pointer;
+  transition: background 0.16s ease;
+  position: relative;
+}
+.cl-switch.is-on {
+  background: #5b8def;
+}
+.cl-switch:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.cl-switch-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 0.16s ease;
+}
+.cl-switch.is-on .cl-switch-knob {
+  transform: translateX(16px);
+}
+
+/* 选屏下拉 */
+.cl-set-select {
+  max-width: 168px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #dce3ea);
+  background: var(--surface, #fff);
+  color: var(--ink, #111927);
+  font: 12px/1.3 var(--font, system-ui, sans-serif);
+  cursor: pointer;
+}
+.cl-set-select:disabled {
+  cursor: default;
+}
+
+/* 状态条 */
+.cl-set-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px;
+  font: 11px/1.5 var(--font, system-ui, sans-serif);
+  color: var(--muted, #66778a);
+  flex-wrap: wrap;
+}
+.cl-set-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b6bfca;
+  flex: 0 0 auto;
+}
+.cl-set-dot.is-on {
+  background: #37b26b;
+  box-shadow: 0 0 0 3px rgba(55, 178, 107, 0.15);
+}
+.cl-set-status-sep {
+  opacity: 0.5;
+}
+
+/* 脚注：不可点，解释「其余能力去哪了」 */
+.cl-set-footnote {
+  margin: 0;
+  padding: 2px 4px;
+  font: 10.5px/1.55 var(--font, system-ui, sans-serif);
+  color: var(--muted, #66778a);
+  opacity: 0.8;
+  cursor: default;
+  user-select: none;
+}

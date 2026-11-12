@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Shirt,
   StickyNote,
   X,
 } from 'lucide-react'
@@ -133,6 +134,15 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { SalaryView, STORE_KEY as SALARY_STORE_KEY } from './SalaryView'
 import { RecorderView } from './RecorderView'
+import { ClotheslineSettingsPage } from './clothesline/ClotheslineSettingsPage'
+import {
+  clGetSettings,
+  clSetAlwaysOnTop,
+  clAddCard,
+  clMakeCard,
+  CL_OPEN_TASK,
+} from './clothesline/bridge'
+import { listen } from '@tauri-apps/api/event'
 import { useRecorderActive } from './recorder'
 import { loadDiskPref, saveDiskPref } from './prefs'
 import {
@@ -671,6 +681,7 @@ function App() {
   // 不占 tab,也不切换 activeTab;打开时整块替换侧栏内容。
   const [huangliOpen, setHuangliOpen] = useState(false)
   const toggleHuangli = () => {
+    setClotheslineOpen(false)
     setHuangliOpen((c) => {
       if (!c) trackPage('huangli')
       return !c
@@ -680,6 +691,7 @@ function App() {
   // 计算器是独立页面(仿设置页 / 万年历):顶栏图标进入,标题"计算器"。
   const [calculatorOpen, setCalculatorOpen] = useState(false)
   const toggleCalculator = () => {
+    setClotheslineOpen(false)
     setCalculatorOpen((c) => {
       if (!c) trackPage('calculator')
       return !c
@@ -689,6 +701,7 @@ function App() {
   // 牛马计薪器:顶栏独立入口图标(位于计算器左侧),点击打开计薪页面。
   const [salaryOpen, setSalaryOpen] = useState(false)
   const toggleSalary = () => {
+    setClotheslineOpen(false)
     setSalaryOpen((c) => {
       if (!c) trackPage('salary')
       return !c
@@ -699,6 +712,7 @@ function App() {
   // 录音引擎独立于页面生命周期,录音中图标亮红点(useRecorderActive 仅订阅状态变化)。
   const [recorderOpen, setRecorderOpen] = useState(false)
   const toggleRecorder = () => {
+    setClotheslineOpen(false)
     // 录音为会员专属,但闸门设在页内的「开始录音」按钮(RecorderView.handleStart):
     // 非会员仍可进页查看 / 回放 / 管理已有录音,点录音时才提示开通。
     setRecorderOpen((c) => {
@@ -707,6 +721,81 @@ function App() {
     })
   }
   const recorderActive = useRecorderActive()
+
+  // 晾衣绳配置页(0.4.65:仿设置页的独立页面)。非会员可用(拉新记忆点),无闸门。
+  const [clotheslineOpen, setClotheslineOpen] = useState(false)
+  const toggleClothesline = () => {
+    setClotheslineOpen((c) => {
+      if (!c) {
+        // 与其余独立页面互斥:避免多个绝对定位 PageShell 叠加。
+        setIsSettingsOpen(false)
+        setHuangliOpen(false)
+        setCalculatorOpen(false)
+        setSalaryOpen(false)
+        setRecorderOpen(false)
+        trackPage('clothesline')
+      }
+      return !c
+    })
+  }
+  // ＋ 菜单第 7 行常驻置顶开关的真源镜像(写入只走 clothesline_set_always_on_top)。
+  // 挂载即读磁盘真源(不硬编码 true)，并监听绳窗右键 / 其它入口的置顶变更，
+  // 保证 ＋ 菜单显示与窗口实际置顶态始终一致。
+  const [clTopmost, setClTopmost] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    let un: (() => void) | undefined
+    void clGetSettings()
+      .then((s) => {
+        if (!cancelled) setClTopmost(s.always_on_top)
+      })
+      .catch(() => undefined)
+    void listen<boolean>('clothesline-topmost-changed', (e) => {
+      if (!cancelled) setClTopmost(e.payload)
+    })
+      .then((fn) => {
+        if (cancelled) fn()
+        else un = fn
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      un?.()
+    }
+  }, [])
+  const toggleClTopmost = () => {
+    const next = !clTopmost
+    setClTopmost(next) // 乐观更新；失败回滚(事件监听也会同步真源)
+    void clSetAlwaysOnTop(next).catch(() => setClTopmost(!next))
+  }
+
+  // 晾衣绳「打开原内容 · 待办」：只切到对应清单 + 日期并关掉设置页，
+  // 不触碰任务数据（绳窗绝不直连 SQLite，避免第二个 repo 实例与同步引擎打架）。
+  useEffect(() => {
+    let cancelled = false
+    let un: (() => void) | undefined
+    void listen<{ id: string }>(CL_OPEN_TASK, (e) => {
+      if (cancelled) return
+      const t = store.tasks.find((x) => x.id === e.payload.id)
+      if (!t) {
+        setToast({ kind: 'err', text: '这条待办已删除' })
+        return
+      }
+      setActiveTab(t.listId === 'month' ? 'month' : 'day')
+      if (t.dueDate) setSelectedDateKey(t.dueDate.slice(0, 10))
+      setClotheslineOpen(false)
+      setToast({ kind: 'ok', text: '已定位到这条待办' })
+    })
+      .then((fn) => {
+        if (cancelled) fn()
+        else un = fn
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      un?.()
+    }
+  }, [store.tasks, setClotheslineOpen, setActiveTab, setSelectedDateKey])
 
   // ---- 首页顶栏快捷入口:动态槽位 + 「⋯ 更多」溢出菜单 -----------------------
   const [moreOpen, setMoreOpen] = useState(false)
@@ -787,6 +876,9 @@ function App() {
       case 'recorder':
         toggleRecorder()
         break
+      case 'clothesline':
+        toggleClothesline()
+        break
       case 'sync':
         onHeaderSync()
         break
@@ -795,6 +887,7 @@ function App() {
 
   const openSettingsPage = () => {
     setMoreOpen(false)
+    setClotheslineOpen(false)
     setIsSettingsOpen((c) => {
       if (!c) trackPage('settings')
       return !c
@@ -1856,9 +1949,27 @@ function App() {
     window.addEventListener('pointerup', onUp)
   }
 
+  /** 把主任务挂到顶部晾衣绳。只写 cards.json，不碰任务库 / 同步引擎。 */
+  const hangTaskToClothesline = async (task: Task) => {
+    try {
+      await clAddCard(
+        clMakeCard('task', {
+          task_id: task.id,
+          title: task.title,
+          text: task.meta || (task.dueDate ? task.dueDate.slice(0, 10) : ''),
+        }),
+        fullAccess,
+      )
+      setToast({ kind: 'ok', text: '已挂到晾衣绳' })
+    } catch (e) {
+      setToast({ kind: 'err', text: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
   const treeCtx = {
     childMap,
     onToggleDone: (id: string) => store.toggleDone(id),
+    onHang: (task: Task) => void hangTaskToClothesline(task),
     onToggleSeriesSub: (subId: string, dateKey: string) =>
       store.toggleSubtaskOccurrence(subId, dateKey),
     onRename: handleRename,
@@ -2102,8 +2213,13 @@ function App() {
             <RecorderView />
           </ErrorBoundary>
         </PageShell>
+        <PageShell open={clotheslineOpen} title="晾衣绳" onClose={() => setClotheslineOpen(false)}>
+          <ErrorBoundary label="晾衣绳设置">
+            <ClotheslineSettingsPage />
+          </ErrorBoundary>
+        </PageShell>
         {/* 待办主视图:页面打开时被覆盖层遮在下方,关闭动画过程中可透视 */}
-        <div className="sidebar-main" aria-hidden={isSettingsOpen || huangliOpen || calculatorOpen || salaryOpen || recorderOpen}>
+        <div className="sidebar-main" aria-hidden={isSettingsOpen || huangliOpen || calculatorOpen || salaryOpen || recorderOpen || clotheslineOpen}>
           <header className="sidebar-header">
               <div className="app-lockup">
                 <span className="app-icon">
@@ -2119,7 +2235,8 @@ function App() {
                       : t.id === 'huangli' ? huangliOpen
                         : t.id === 'salary' ? salaryOpen
                           : t.id === 'recorder' ? recorderOpen
-                            : false
+                            : t.id === 'clothesline' ? clotheslineOpen
+                              : false
                   const cls = [
                     t.id === 'recorder' ? 'rec-entry' : '',
                     active ? 'is-active' : '',
@@ -2180,7 +2297,9 @@ function App() {
                 </button>
               </div>
 
-              {/* 溢出菜单:absolute 相对 .todo-sidebar 定位,继承主题变量 */}
+              {/* 溢出菜单:absolute 相对 .todo-sidebar 定位,继承主题变量。
+                  工具注册表已有 9 项、topbarSlots 封顶 6 → hidden 恒 ≥3,菜单恒显示,
+                  晾衣绳置顶开关(第 7 行)也因此恒可达(R85)。 */}
               {moreOpen && topbar.hidden.length > 0 ? (
                 <TopbarMoreMenu
                   hidden={topbar.hidden}
@@ -2188,6 +2307,8 @@ function App() {
                   onRun={runTopbarTool}
                   onManage={manageTopbarTools}
                   menuRef={moreMenuRef}
+                  topmost={clTopmost}
+                  onToggleTopmost={toggleClTopmost}
                 />
               ) : null}
             </header>
@@ -2755,6 +2876,8 @@ function TopbarToolIcon({ id, size = 16 }: { id: TopbarToolId; size?: number }) 
       return <Coins size={size} />
     case 'recorder':
       return <Mic size={size} />
+    case 'clothesline':
+      return <Shirt size={size} />
     case 'sync':
       return <RefreshCw size={size} />
     default:
@@ -2773,12 +2896,17 @@ function TopbarMoreMenu({
   onRun,
   onManage,
   menuRef,
+  topmost,
+  onToggleTopmost,
 }: {
   hidden: TopbarTool[]
   shortcutLabels: Partial<Record<TopbarToolId, string>>
   onRun: (id: TopbarToolId, name: string) => void
   onManage: () => void
   menuRef: { current: HTMLDivElement | null }
+  /** 晾衣绳置顶开关(0.4.65):＋菜单第 7 行常驻,不可隐藏、不进配置页(R85 单一真源)。 */
+  topmost: boolean
+  onToggleTopmost: () => void
 }) {
   return (
     <div className="topbar-menu" ref={menuRef} role="menu" aria-label="更多工具">
@@ -2801,6 +2929,23 @@ function TopbarMoreMenu({
         </button>
       ))}
       <div className="tm-sep" />
+      {/* 晾衣绳置顶开关:常驻不可隐藏。点击不关菜单,可连续切换;唯一真源 alwaysOnTop。 */}
+      <button
+        type="button"
+        className="tm-item tm-cl-topmost"
+        role="switch"
+        aria-checked={topmost}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleTopmost()
+        }}
+      >
+        <Shirt size={15} />
+        <span className="nm">晾衣绳置顶</span>
+        <span className={`tm-mini-switch ${topmost ? 'is-on' : ''}`}>
+          <i />
+        </span>
+      </button>
       <button type="button" className="tm-manage" onClick={onManage}>
         <Settings size={14} />
         管理顶栏入口…
@@ -4133,6 +4278,8 @@ type RowDragState = {
 type TreeCtx = {
   childMap: Map<string, Task[]>
   onToggleDone: (id: string) => void
+  /** 挂到顶部晾衣绳（只写 clothesline/cards.json）。 */
+  onHang: (task: Task) => void
   /** 「整组」子任务在某个发生日下的独立勾选(写子任务 completedDates,不影响其他日期)。 */
   onToggleSeriesSub: (subtaskId: string, dateKey: string) => void
   onRename: (task: Task, title: string) => void
@@ -4307,6 +4454,17 @@ function TaskNode({
             </button>
           ) : (
             <>
+              {level === 1 && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`把 ${task.title} 挂到晾衣绳`}
+                  title="挂到晾衣绳"
+                  onClick={() => ctx.onHang(task)}
+                >
+                  <Shirt size={13} />
+                </button>
+              )}
               {level < 3 && (
                 <button
                   type="button"

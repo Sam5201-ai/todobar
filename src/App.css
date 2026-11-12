@@ -6229,6 +6229,34 @@ body.is-row-dragging * {
   padding: 1px 5px;
   flex: none;
 }
+/* 晾衣绳置顶开关(＋菜单第 7 行常驻,不可隐藏)。复用 .tm-item 布局,右侧 mini 拨钮。 */
+.tm-cl-topmost {
+  cursor: pointer;
+}
+.tm-mini-switch {
+  flex: none;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--line);
+  padding: 2px;
+  transition: background 0.16s ease;
+}
+.tm-mini-switch.is-on {
+  background: #5b8def;
+}
+.tm-mini-switch > i {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.16s ease;
+}
+.tm-mini-switch.is-on > i {
+  transform: translateX(13px);
+}
 .tm-sep {
   height: 1px;
   background: var(--line);

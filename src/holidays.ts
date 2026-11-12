@@ -11,8 +11,8 @@
 // 收录的是「实际放假的日期」,已包含调休产生的连休日(春节前后周末连休、中秋国庆合并等)。
 // 本表只服务「跳过法定节假日」,不含调休补班日(补班日本身是工作日)。
 
-// 与 App.tsx 中的 OFFICIAL_SITE 保持一致(下载站同源, server.js 对 .json 已开 CORS + no-cache)。
-const OFFICIAL_HOLIDAYS_URL = 'https://todobar-app.app.workbuddy.host/holidays.json'
+// 与 update.ts 的 OFFICIAL_SITE 同源(自有域,不经平台分享网关;server.js 对 .json 已开 CORS)。
+const OFFICIAL_HOLIDAYS_URL = 'https://sync.tuanzhang.site/holidays.json'
 
 const CACHE_KEY = 'ticktask.holidays.v1'
 

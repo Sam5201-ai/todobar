@@ -14,6 +14,7 @@ import {
   FULL_KEY,
   LAST_KEY,
   finishOverlay,
+  loadImageDataUrl,
   pinImage,
   saveImageTo,
   shotLog,
@@ -30,6 +31,13 @@ import { cropRegionPng } from './ocr/prepare';
 import { filterNoiseLines, joinLines, recognizeRegion, type OcrLine } from './ocr/ocrClient';
 import { emitOcrCreateTask } from './ocr/ocrBridge';
 import { copyText } from '../clipboard';
+import { isFullAccess, loadAccount } from '../account';
+import {
+  clAddCard,
+  clGetSettings,
+  clMakeCard,
+  clSavePreview,
+} from '../clothesline/bridge';
 import './screenshot.css';
 
 interface CaptureMeta {
@@ -49,6 +57,36 @@ const RATIO_VALUES: Record<Exclude<Ratio, 'free'>, number> = {
   '4:3': 4 / 3,
   '16:9': 16 / 9,
 };
+
+/**
+ * 截图「自动飞入晾衣绳」：只复制一份 ≤480px PNG 缩略图到 clothesline/previews，
+ * **绝不消费 LAST_KEY**（贴图「再贴一张」依赖它 stash 后立刻放回，见项目 MEMORY）。
+ * 总开关关闭 / 用户关掉飞入时直接早退；满额时由 Rust 撕下最旧非置顶卡（可撤销）。
+ */
+async function flyShotToClothesline(png: string): Promise<void> {
+  try {
+    const s = await clGetSettings().catch(() => null);
+    if (!s?.enabled || !s.auto_fly_shot) return;
+    const img = await loadImageDataUrl(`data:image/png;base64,${png}`);
+    const scale = Math.min(1, 480 / Math.max(1, img.naturalWidth));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const thumb = canvas.toDataURL('image/png');
+    const seed = clMakeCard('shot', {
+      title: '截图',
+      text: `${img.naturalWidth}×${img.naturalHeight}`,
+    });
+    const path = await clSavePreview(seed.id, thumb);
+    await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()), true);
+    await shotLog(`clothesline fly ok ${seed.id}`);
+  } catch (e) {
+    await shotLog(`clothesline fly fail: ${String(e)}`);
+  }
+}
 
 interface Sel {
   x: number;
@@ -687,6 +725,8 @@ export default function CaptureOverlay() {
       await writeClipboardImage(png);
       await stashImage(LAST_KEY, png);
       await shotLog(`copy ok ${Math.round(sel.w)}x${Math.round(sel.h)}`);
+      // 飞入是旁路：不 await、不阻塞复制与关窗；失败只写截图日志。
+      void flyShotToClothesline(png);
       // 复制后直接退出截图模式(原「复制后自动关闭」开关已移除,行为固定)。
       await finish();
     } catch (e) {

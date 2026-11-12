@@ -20,6 +20,7 @@ export type TopbarToolId =
   | 'salary'
   | 'recorder'
   | 'sync'
+  | 'clothesline'
 
 export type TopbarTool = {
   id: TopbarToolId
@@ -46,6 +47,9 @@ export const TOPBAR_TOOLS: TopbarTool[] = [
   { id: 'huangli', name: '黄历', tip: '黄历 · 万年历', vip: false, gated: false, keyHint: '' },
   { id: 'salary', name: '牛马计薪器', tip: '牛马计薪器', vip: false, gated: false, keyHint: '' },
   { id: 'recorder', name: '录音机', tip: '录音机', vip: true, gated: false, keyHint: '' },
+  // 晾衣绳(0.4.65):非会员 / 无闸门,拉新记忆点。放在 sync 前,顶栏装不下时
+  // 自动进「⋯ 更多」;老用户经下方 MIGRATE_IDS 显式补进 enabled 保证可达。
+  { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '' },
   { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' },
 ]
 
@@ -68,6 +72,16 @@ const BY_ID = Object.fromEntries(TOPBAR_TOOLS.map((t) => [t.id, t])) as Record<
 >
 
 /**
+ * 老用户显式迁移清单(0.4.65 晾衣绳)。
+ * 背景:sanitizeTopbarTools 对已存偏好只保留 enabled 里的工具,新增工具若不在其中,
+ * 就既不在顶栏也不在「⋯ 更多」→ 老用户永远找不到入口。这里对「已存过偏好」的用户
+ * 一次性把这些新工具补进 enabled(排在 sync 前的位置由 order 决定),保证可达。
+ * ⚠️ 不升 SIDEBAR_SETTINGS_KEY(升 key 会让磁盘并发回灌覆盖主题/宽度/快捷键)。
+ * 只在 rawEnabled 非空数组(老用户确实配置过)时追加;新用户 rawEnabled=null 走全启用。
+ */
+const MIGRATE_IDS: TopbarToolId[] = ['clothesline']
+
+/**
  * 归一化:过滤未知 id / 去重 / 补齐后加的工具 / 保证至少启用 1 个。
  * 老版本没有该字段时返回全启用默认;偏好升级或手工改坏 localStorage 都不会白屏。
  */
@@ -87,9 +101,17 @@ export function sanitizeTopbarTools(value: unknown): TopbarToolsPref {
   for (const id of ALL_IDS) if (!order.includes(id)) order.push(id)
 
   const rawEnabled = Array.isArray(raw.enabled) ? raw.enabled : null
-  const enabled = rawEnabled
+  let enabled = rawEnabled
     ? order.filter((id) => rawEnabled.includes(id))
     : [...order]
+  // 老用户显式迁移:已存过偏好但缺新工具时补进 enabled,保证入口可达。
+  if (rawEnabled) {
+    for (const id of MIGRATE_IDS) {
+      if (!enabled.includes(id)) enabled.push(id)
+    }
+    // enabled 必须跟随 order 的相对顺序,否则顶栏排序会错乱。
+    enabled = order.filter((id) => enabled.includes(id))
+  }
   return { order, enabled: enabled.length > 0 ? enabled : [order[0]] }
 }
 
