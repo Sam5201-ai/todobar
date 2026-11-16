@@ -113,6 +113,11 @@ pub struct ClotheslineSettings {
     /// 卡片尺寸缩放（1.0=当前最小尺寸，2.0=放大一倍）。前端按 CSS zoom 整组缩放。
     #[serde(default = "default_card_size")]
     pub card_size: f64,
+    /// 0.4.81 上线一次性迁移：所有安装本版本的用户首次启动，晾衣绳总开关一律默认关闭，
+    /// 覆盖开发版 / 0.4.80 遗留的 enabled=true。写盘打标记后永不再重置；用户此后
+    /// 在配置页手动启用由 clothesline_set_enabled 正常写盘记忆，重启后保持启用。
+    #[serde(default)]
+    pub default_off_v0481: bool,
 }
 fn default_half() -> f64 { 0.5 }
 fn default_pulltab_style() -> String { "porcelain".to_string() }
@@ -137,6 +142,7 @@ impl Default for ClotheslineSettings {
             x_ratio_split_v1: true,  // 全新安装无需迁移
             rope_width_ratio: default_rope_ratio(),
             card_size: default_card_size(),
+            default_off_v0481: true, // 全新安装无需迁移（enabled 本就 false）
         }
     }
 }
@@ -216,6 +222,30 @@ fn migrate_split_x_ratios(base: &Path, s: &mut ClotheslineSettings) {
     }
 }
 
+/// 0.4.81 上线一次性迁移：所有安装本版本的用户首次启动，晾衣绳总开关强制归位关闭，
+/// 覆盖开发版 / 0.4.80 遗留的 enabled=true。用进程内 Once 保证只写一次盘，
+/// 与上面两次迁移同款，避免启动期多个加载点并发 remove+rename 竞态。
+static DEFAULT_OFF_0481_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn migrate_default_off_0481(base: &Path, s: &mut ClotheslineSettings) {
+    if s.default_off_v0481
+        || DEFAULT_OFF_0481_DONE.swap(true, std::sync::atomic::Ordering::SeqCst)
+    {
+        return;
+    }
+    crate::append_app_log(&format!(
+        "[clothesline] 0.4.81 首次启动：总开关强制默认关闭（原 enabled={}）",
+        s.enabled
+    ));
+    s.enabled = false;
+    s.default_off_v0481 = true;
+    // 写回磁盘后天然幂等；此后用户手动启用写盘时标记仍在，不会被再次重置。
+    if let Err(e) = save_settings_to(base, s) {
+        crate::append_app_log(&format!("[clothesline] 0.4.81 默认关闭迁移写盘失败: {e}"));
+    }
+}
+
 fn base_dir() -> Option<PathBuf> {
     let home = std::env::var("USERPROFILE")
         .ok()
@@ -250,6 +280,7 @@ fn load_settings_from(base: &Path) -> ClotheslineSettings {
                 let mut v = sanitize(v);
                 migrate_dirty_winx(base, &mut v);
                 migrate_split_x_ratios(base, &mut v);
+                migrate_default_off_0481(base, &mut v);
                 v
             }
             Err(e) => {
@@ -1810,7 +1841,10 @@ pub fn clothesline_read_preview(app: tauri::AppHandle, id: String) -> Option<Str
 pub fn clothesline_get_card_usage(app: tauri::AppHandle) -> Result<usize, String> {
     let _ = &app;
     let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
-    let all = read_all_cards(&base)?;
+    // 0.4.81：卡片文件损坏 / 老版本数据不兼容时，绝不能让配置页的三个并行请求
+    // 整体 reject（Promise.all → catch 静默 → 永远停在「正在读取晾衣绳设置…」）。
+    // 配额只是状态条读数，读失败按 0 处理；数据本身由 restore 路径负责兜底。
+    let all = read_all_cards(&base).unwrap_or_default();
     Ok(all.iter().filter(|c| c.deleted_at.is_none()).count())
 }
 
@@ -1856,6 +1890,32 @@ mod tests {
         let p = std::env::temp_dir().join(format!("tacco_cl_test_{}_{}", tag, std::process::id()));
         let _ = std::fs::create_dir_all(&p);
         p
+    }
+
+    #[test]
+    fn default_off_0481_forces_off_once_and_remembers_manual_enable() {
+        let base = tmp_base("default_off_0481");
+        let _ = std::fs::remove_dir_all(&base);
+        // 模拟 0.4.80 / 开发版遗留：enabled=true 且没有 0.4.81 迁移标记
+        let mut old = ClotheslineSettings::default();
+        old.enabled = true;
+        old.default_off_v0481 = false;
+        save_settings_to(&base, &old).unwrap();
+
+        // 单测并行时全局 Once 可能已被别的用例置位，重置以保证本用例独立可测
+        DEFAULT_OFF_0481_DONE.store(false, std::sync::atomic::Ordering::SeqCst);
+        let first = load_settings_from(&base);
+        assert!(!first.enabled, "0.4.81 首次启动必须默认关闭");
+        assert!(first.default_off_v0481, "迁移标记必须写回磁盘");
+
+        // 用户在配置页手动启用（等价于 clothesline_set_enabled(true) 的写盘路径）
+        let mut manual = load_settings_from(&base);
+        manual.enabled = true;
+        save_settings_to(&base, &manual).unwrap();
+
+        let again = load_settings_from(&base);
+        assert!(again.enabled, "手动启用后必须被记忆，不能被再次重置");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

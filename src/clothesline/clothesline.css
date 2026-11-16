@@ -376,6 +376,18 @@ body, body:focus, body:focus-visible,
 }
 .cl-add-sheet button:hover { background: #f1f4fb; }
 .cl-add-sheet button em { margin-left: auto; font-style: normal; font-size: 9px; color: #a2a9b6; }
+/* ★0.4.81：＋菜单「一键录音」标题恒定单行。此前副标题过长会把匿名文本项挤到
+   第二行（截图：一键录 / 音）。这里把标题收成不可收缩的 span，副标题允许收缩
+   并省略截断，空间不足时牺牲副标题而不是标题。只作用于该项，其余菜单项不动。 */
+.cl-add-sheet button.cl-mi-record { white-space: nowrap; }
+.cl-add-sheet button.cl-mi-record .cl-mi-label { flex: 0 0 auto; white-space: nowrap; }
+.cl-add-sheet button.cl-mi-record em {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cl-add-sheet .cl-sheet-sep { height: 1px; background: rgba(0, 0, 0, 0.075); margin: 5px 9px; }
 .cl-root[data-theme='dark'] .cl-add-sheet { background: #2c303a; border-color: #414653; }
 .cl-root[data-theme='dark'] .cl-add-sheet button { color: #e6e9f0; }

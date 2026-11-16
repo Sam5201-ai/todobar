@@ -3433,9 +3433,10 @@ export function ClotheslineView() {
         <button type="button" onClick={() => openComposer('timer')}>
           ◷ 计时 / 番茄 <em>{composeMinutes} 分</em>
         </button>
-        {/* ★2026-11-15 一键录音：建卡即开录（引擎在主窗），保存后卡片自动取下。 */}
-        <button type="button" onClick={() => void startRopeRecording()}>
-          ◉ 一键录音 <em>挂绳即录 · 保存后自动取下</em>
+        {/* ★2026-11-15 一键录音：建卡即开录（引擎在主窗），保存后卡片自动取下。
+            ★0.4.81：标题包进独立 span 强制单行，副标题精简为「挂绳即录」。 */}
+        <button type="button" className="cl-mi-record" onClick={() => void startRopeRecording()}>
+          <span className="cl-mi-label">◉ 一键录音</span><em>挂绳即录</em>
         </button>
         <button type="button" onClick={() => { imageInputRef.current?.click(); setAddSheetOpen(false) }}>
           ▣ 本地图片 <em>PNG</em>
