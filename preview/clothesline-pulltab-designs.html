@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tacco 晾衣绳 · 收起态拉杆 3 款设计提案</title>
+<style>
+/* ── design tokens ─────────────────────────────────────────────── */
+:root{
+  --sheet-bg:#f2f0ea; --panel:#fffefa; --ink:#24221d; --ink-2:#6b675e;
+  --line:#ddd8cc; --line-soft:#ece8de; --chip:#f6f3ec;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --serif:"Songti SC","Noto Serif CJK SC",Georgia,serif;
+  --radius:14px;
+  --u:3px;     /* unit scale: 3px = 放大展示, 1px = 真实 1:1 尺寸（必须是长度，calc 才能得到 px） */
+  --p:0;       /* pull progress 0~1 */
+  --ease-idle:cubic-bezier(.22,1,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--sheet-bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:44px 28px 72px}
+
+/* ── header ────────────────────────────────────────────────────── */
+.head{margin-bottom:34px}
+.kicker{font-size:11px;letter-spacing:.22em;color:var(--ink-2);text-transform:uppercase;margin:0 0 12px}
+h1{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:.02em;margin:0 0 12px}
+.lede{font-size:14px;line-height:1.85;color:var(--ink-2);max-width:760px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-size:11px;color:var(--ink-2);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.chip b{color:var(--ink);font-weight:600}
+
+/* ── option card ───────────────────────────────────────────────── */
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:26px;overflow:hidden}
+.opt-head{display:grid;grid-template-columns:64px 1fr 1fr;gap:24px;padding:26px 30px 22px;align-items:start;border-bottom:1px solid var(--line-soft)}
+.opt-no{font-family:var(--serif);font-size:38px;line-height:1;color:var(--accent,#b7915e);opacity:.75}
+.opt-name{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
+.opt-mood{font-size:12px;color:var(--ink-2);margin:0 0 12px;letter-spacing:.04em}
+.opt-why{font-size:13px;line-height:1.8;color:var(--ink);margin:0}
+.opt-trade{font-size:12px;line-height:1.8;color:var(--ink-2);margin:0}
+.opt-trade b{color:var(--ink);font-weight:600}
+.sec-label{font-size:10px;letter-spacing:.16em;color:var(--ink-2);text-transform:uppercase;margin:0 0 8px}
+
+/* ── stages ────────────────────────────────────────────────────── */
+.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-soft)}
+.stage{background:#fff;position:relative;padding:16px 16px 14px}
+.stage-cap{font-size:11px;color:var(--ink-2);letter-spacing:.06em;margin-bottom:10px;display:flex;justify-content:space-between}
+.stage-cap em{font-style:normal;color:var(--accent,#b7915e)}
+.wall{height:300px;position:relative;border-radius:8px;overflow:hidden;
+  background:linear-gradient(155deg,#e9e5dc 0%,#f4f1e9 45%,#dcd7cc 100%)}
+.wall::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(115deg,rgba(255,255,255,.16) 0 2px,rgba(255,255,255,0) 2px 7px)}
+.rope{position:absolute;left:0;right:0;top:0;height:3px;
+  background:linear-gradient(180deg,#c8a878,#9a7b4f);box-shadow:0 1px 2px rgba(60,44,22,.25)}
+.rope::before,.rope::after{content:"";position:absolute;top:0;width:5px;height:9px;border-radius:2px;background:#8a6c45}
+.rope::before{left:22%}.rope::after{right:22%}
+
+/* ── the pull tab component (all 3 directions share this skeleton) ─ */
+.pt{position:absolute;left:50%;top:0;width:0;height:calc(96 * var(--u));
+  transform:translateX(-50%);pointer-events:none;z-index:2}
+.pt-cord,.pt-bead,.pt-tab,.pt-grip,.pt-mark{position:absolute;display:block}
+.pt-cord{left:50%;top:0;width:calc(2 * var(--u));height:calc(26 * var(--u));margin-left:calc(-1 * var(--u));
+  border-radius:calc(2 * var(--u));transform-origin:50% 0;
+  transform:scaleY(calc(1 + var(--p) * 1.05));
+  background:linear-gradient(180deg,transparent 0%,var(--cord-1) 32%,var(--cord-2) 100%)}
+.pt-bead{left:50%;top:calc(22 * var(--u));width:calc(9 * var(--u));height:calc(9 * var(--u));
+  margin-left:calc(-4.5 * var(--u));border-radius:50%;
+  transform:translateY(calc(27 * var(--u) * var(--p)));
+  background:radial-gradient(circle at 32% 26%,var(--bead-hi) 0 20%,var(--bead) 52%,var(--bead-edge) 100%);
+  box-shadow:0 calc(1 * var(--u)) calc(3 * var(--u)) var(--shadow)}
+.pt-tab{left:50%;top:calc(28 * var(--u));width:calc(30 * var(--u));height:calc(36 * var(--u));
+  margin-left:calc(-15 * var(--u));transform-origin:50% 0;
+  transform:translateY(calc(27 * var(--u) * var(--p))) rotate(calc(var(--p) * -3.2deg)) scaleY(calc(1 - var(--p) * .05));
+  background:linear-gradient(180deg,var(--tab-1) 0%,var(--tab-2) 52%,var(--tab-3) 100%);
+  border:calc(1 * var(--u) / 3) solid var(--tab-line);
+  box-shadow:0 calc(5 * var(--u)) calc(12 * var(--u)) var(--shadow),
+             0 calc(1 * var(--u)) calc(2 * var(--u)) var(--shadow),
+             inset 0 calc(1 * var(--u)) 0 var(--rim)}
+.pt-grip{left:50%;top:calc(12 * var(--u));transform:translateX(-50%)}
+.pt-mark{left:50%;bottom:calc(8 * var(--u));transform:translateX(-50%) rotate(45deg)}
+
+/* overshoot on release */
+.stage[data-state="release"] .pt-tab{transform:translateY(calc(-2 * var(--u))) rotate(2.2deg) scaleY(1.02)}
+.stage[data-state="release"] .pt-bead{transform:translateY(calc(-2 * var(--u)))}
+.stage[data-state="release"] .pt-cord{transform:scaleY(.96)}
+
+/* ── A 素瓷 ─────────────────────────────────────────────────────── */
+.opt-a{--accent:#a98a5d;--cord-1:#e3d7bf;--cord-2:#b9a17c;
+  --bead:#cbb493;--bead-hi:#f2e9d6;--bead-edge:#a58b64;
+  --tab-1:#fffdf8;--tab-2:#f5efe2;--tab-3:#e8dec9;--tab-line:#d8ccb2;--rim:#ffffff;
+  --mark:#9a8564;--shadow:rgba(74,58,36,.20)}
+.opt-a .pt-tab{border-radius:46% 46% 44% 44% / 26% 26% 34% 34%}
+.opt-a .pt-tab::before{content:"";position:absolute;left:50%;top:calc(4 * var(--u));
+  width:calc(10 * var(--u));height:calc(2.4 * var(--u));transform:translateX(-50%);border-radius:99px;
+  background:linear-gradient(180deg,#c9b99b,#fffdf8);box-shadow:0 1px 0 rgba(255,255,255,.9)}
+.opt-a .pt-grip{width:calc(13 * var(--u));height:calc(1.4 * var(--u));border-radius:99px;
+  background:linear-gradient(90deg,#d8c9ad,#8d7a58 50%,#d8c9ad)}
+.opt-a .pt-mark{width:calc(5 * var(--u));height:calc(5 * var(--u));
+  border-right:calc(1.4 * var(--u) / 3) solid var(--mark);border-bottom:calc(1.4 * var(--u) / 3) solid var(--mark);
+  border-radius:0 0 2px 0}
+.opt-a .pt-cord{background:
+  repeating-linear-gradient(112deg,rgba(255,255,255,.42) 0 calc(1.1 * var(--u)),
+    rgba(140,110,70,.16) calc(1.1 * var(--u)) calc(2.2 * var(--u))),
+  linear-gradient(180deg,transparent 0%,var(--cord-1) 28%,var(--cord-2) 100%)}
+
+/* ── B 黄铜 ─────────────────────────────────────────────────────── */
+.opt-b{--accent:#a47c2c;--cord-1:#a07b4a;--cord-2:#5a4027;
+  --bead:#f0d692;--bead-hi:#fff5d6;--bead-edge:#8a6a2f;
+  --tab-1:#f7e4af;--tab-2:#c9a24f;--tab-3:#8d6a2d;--tab-line:#7a5824;--rim:#fff2c9;
+  --mark:#5e441b;--shadow:rgba(56,38,14,.36)}
+.opt-b .pt-cord{width:calc(2.6 * var(--u));margin-left:calc(-1.3 * var(--u));
+  background:repeating-linear-gradient(112deg,#6b5030 0 calc(1.4 * var(--u)),
+    #b18b55 calc(1.4 * var(--u)) calc(2.8 * var(--u)))}
+.opt-b .pt-bead{width:calc(11 * var(--u));height:calc(11 * var(--u));margin-left:calc(-5.5 * var(--u));
+  top:calc(20 * var(--u));border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,#8a6a2f 0 30%,#e8cd88 34% 62%,#8a6a2f 68% 100%)}
+.opt-b .pt-tab{border-radius:40% 40% 26% 26% / 20% 20% 13% 13%;
+  background:linear-gradient(96deg,#8a6a2d 0%,#d6b061 18%,#f8e8b6 38%,#c39a48 62%,#8c682c 100%);
+  box-shadow:0 calc(5 * var(--u)) calc(12 * var(--u)) var(--shadow),
+             inset 0 calc(1 * var(--u)) 0 rgba(255,246,214,.85),
+             inset 0 calc(-3 * var(--u)) calc(5 * var(--u)) rgba(80,56,18,.45)}
+.opt-b .pt-tab::before{content:"";position:absolute;left:50%;top:calc(3.5 * var(--u));
+  width:calc(16 * var(--u));height:calc(4 * var(--u));transform:translateX(-50%);
+  border-radius:99px;background:linear-gradient(180deg,#f8e6b4,#9b7736);
+  box-shadow:0 calc(1 * var(--u)) calc(2 * var(--u)) rgba(60,40,12,.5)}
+.opt-b .pt-tab::after{content:"";position:absolute;left:calc(4 * var(--u));right:calc(4 * var(--u));bottom:calc(3 * var(--u));
+  height:calc(2 * var(--u));border-radius:99px;background:rgba(80,56,18,.42)}
+.opt-b .pt-grip{top:calc(15 * var(--u));width:calc(16 * var(--u));height:calc(7 * var(--u));
+  background:repeating-linear-gradient(180deg,rgba(94,68,27,.55) 0 calc(.8 * var(--u)),
+    rgba(255,240,196,.5) calc(.8 * var(--u)) calc(2 * var(--u)));
+  border-radius:2px}
+.opt-b .pt-mark{width:calc(5 * var(--u));height:calc(5 * var(--u));
+  border-right:calc(1.6 * var(--u) / 3) solid var(--rim);border-bottom:calc(1.6 * var(--u) / 3) solid var(--rim)}
+
+/* ── C 琉璃 ─────────────────────────────────────────────────────── */
+.opt-c{--accent:#5b8fd8;--cord-1:#eaf4ff;--cord-2:#93bced;
+  --bead:#ffffff;--bead-hi:#ffffff;--bead-edge:#9dbee9;
+  --tab-1:#ffffff;--tab-2:#dcecff;--tab-3:#a9c9f2;--tab-line:#9dc0ea;--rim:#ffffff;
+  --mark:#4b7bc4;--shadow:rgba(40,80,150,.26)}
+.opt-c .pt-cord{width:calc(1.6 * var(--u));margin-left:calc(-.8 * var(--u));
+  background:linear-gradient(180deg,transparent,#cfdff5 30%,#8fb4e8 100%)}
+.opt-c .pt-bead{width:calc(7 * var(--u));height:calc(7 * var(--u));margin-left:calc(-3.5 * var(--u));
+  top:calc(23 * var(--u));
+  background:radial-gradient(circle at 34% 28%,#fff 0 30%,#c7dcf8 55%,#7fa8e0 100%)}
+.opt-c .pt-tab{height:calc(30 * var(--u));
+  border-radius:50% 50% 50% 50% / 68% 68% 34% 34%;
+  background:radial-gradient(120% 90% at 32% 18%,#ffffff 0%,#eaf4ff 26%,#bcd7f6 60%,#8fb4e6 100%);
+  box-shadow:0 calc(5 * var(--u)) calc(14 * var(--u)) var(--shadow),
+             inset 0 calc(1.5 * var(--u)) 0 #fff,
+             inset 0 calc(-2 * var(--u)) calc(4 * var(--u)) rgba(60,110,190,.28)}
+.opt-c .pt-tab::before{content:"";position:absolute;left:50%;top:calc(9 * var(--u));
+  width:calc(11 * var(--u));height:calc(11 * var(--u));transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(circle at 42% 36%,#ffffff 0 18%,#a9ccf5 46%,#6f9fdd 100%);
+  box-shadow:0 0 calc(4 * var(--u)) rgba(120,170,235,.55)}
+.opt-c .pt-tab::after{content:"";position:absolute;left:50%;bottom:calc(-5 * var(--u));
+  width:calc(8 * var(--u));height:calc(8 * var(--u));transform:translateX(-50%) rotate(45deg);
+  border-radius:0 0 calc(3 * var(--u)) 0;
+  background:linear-gradient(135deg,#cfe2fa,#8fb4e6)}
+.opt-c .pt-grip{top:calc(6 * var(--u));width:calc(12 * var(--u));height:calc(2 * var(--u));
+  border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.2),#ffffff 50%,rgba(255,255,255,.2))}
+.opt-c .pt-mark{display:none}
+
+/* ── 1:1 strip + tokens ─────────────────────────────────────────── */
+.foot{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft)}
+.foot-cell{background:#fff;padding:20px 30px}
+.tokens{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.tok{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);
+  background:var(--chip);border:1px solid var(--line-soft);border-radius:6px;padding:5px 9px}
+.sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.09)}
+.motion{font-size:12px;line-height:1.9;color:var(--ink-2);margin:10px 0 0}
+.motion b{color:var(--ink);font-weight:600}
+.real{display:flex;gap:14px;align-items:flex-end;margin-top:10px}
+.real-box{position:relative;width:150px;height:96px;border-radius:6px;overflow:hidden;
+  border:1px solid var(--line);background:linear-gradient(150deg,#e9e5dc,#f4f1e9)}
+.real-box.dark{background:linear-gradient(150deg,#2a2c33,#3c3f49)}
+.real .pt{--u:1px;top:0}
+.real .rope{display:none}
+.real-box.dark .pt-tab{filter:brightness(.88) saturate(1.05)}
+.real-cap{font-size:10px;color:var(--ink-2);text-align:center;margin-top:6px;letter-spacing:.04em}
+.notes{margin-top:30px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px 30px}
+.notes h2{font-family:var(--serif);font-size:17px;font-weight:600;margin:0 0 12px}
+.notes ul{margin:0;padding-left:18px;font-size:12.5px;line-height:2;color:var(--ink-2)}
+.notes b{color:var(--ink)}
+.footer-note{font-size:12px;color:var(--ink-2);text-align:center;margin-top:28px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <p class="kicker">Tacco · clothesline · pull tab</p>
+    <h1>收起态拉杆 · 三款设计提案</h1>
+    <p class="lede">同一个不可变的结构骨架（细绳 → 绳结 → 30×36 把手），三种截然不同的材质语言与动效性格。请选择一款；确认后再改 <code>clothesline.css</code>。三款都只用不透明渐变 / 实色描边与 <code>transform</code>，不含 <code>backdrop-filter</code>、不含 alpha 动画，不会诱发透明窗的合成层问题。</p>
+    <div class="chips">
+      <span class="chip"><b>命中盒</b> 480 × 96 物理 px</span>
+      <span class="chip"><b>把手</b> 30 × 36 px · top 28</span>
+      <span class="chip"><b>丝线</b> 26 px · 下拉拉伸至 2.05×</span>
+      <span class="chip"><b>最大位移</b> 27 px · 底边不越出 96</span>
+      <span class="chip"><b>动效</b> 仅 transform · 零 opacity / filter</span>
+      <span class="chip"><b>主题</b> 浅色 / 深色壁纸都要能看清</span>
+    </div>
+  </div>
+
+  <!-- ─────────────────── A ─────────────────── -->
+  <section class="opt opt-a">
+    <div class="opt-head">
+      <div class="opt-no">A</div>
+      <div>
+        <h2 class="opt-name">素瓷 · 侘寂</h2>
+        <p class="opt-mood">Editorial / wabi-sabi · 安静、手作、纸感</p>
+        <p class="sec-label">为什么适合</p>
+        <p class="opt-why">米白哑光瓷扣 + 麻绳 + 陶土绳结，和绳上的原木夹、米色纸卡是同一套材质语言。把手不是"一个 UI 按钮"，而像挂在绳上的一枚小瓷牌，收起态几乎融进壁纸。</p>
+      </div>
+      <div>
+        <p class="sec-label">取舍</p>
+        <p class="opt-trade"><b>得到</b>：最耐看、最不抢眼，与现有晾衣绳零违和。<br><b>代价</b>：对比度偏低，深色壁纸上需要浅色描边兜底；识别"可下拉"要靠底部那个小 V，比另外两款含蓄。</p>
+      </div>
+    </div>
+    <div class="stages">
+      <div class="stage" data-state="idle" style="--p:0"><div class="stage-cap"><span>静止</span><em>pull 0.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="pull" style="--p:1"><div class="stage-cap"><span>下拉到底</span><em>pull 1.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="release" style="--p:0"><div class="stage-cap"><span>松手回弹</span><em>overshoot</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+    </div>
+    <div class="foot">
+      <div class="foot-cell"><p class="sec-label">色板与动效</p>
+        <div class="tokens">
+          <span class="tok"><i class="sw" style="background:#fffdf8"></i>瓷白 #FFFDF8</span>
+          <span class="tok"><i class="sw" style="background:#e8dec9"></i>瓷影 #E8DEC9</span>
+          <span class="tok"><i class="sw" style="background:#b9a17c"></i>麻绳 #B9A17C</span>
+          <span class="tok"><i class="sw" style="background:#cbb493"></i>陶结 #CBB493</span>
+          <span class="tok"><i class="sw" style="background:#8d7a58"></i>墨线 #8D7A58</span>
+        </div>
+        <p class="motion"><b>下拉</b>：麻绳以斜纹被拉直、陶结下移、瓷牌轻微内扣 −3.2° 并压扁 5%；<b>松手</b>：420ms 舒缓回位，几乎不过冲（<code>cubic-bezier(.22,1,.36,1)</code>），像纸牌慢慢晃一下就停。</p>
+      </div>
+      <div class="foot-cell"><p class="sec-label">1:1 真实尺寸（30×36 px）</p>
+        <div class="real">
+          <div><div class="real-box"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">浅色壁纸</div></div>
+          <div><div class="real-box dark"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">深色壁纸</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────── B ─────────────────── -->
+  <section class="opt opt-b">
+    <div class="opt-head">
+      <div class="opt-no">B</div>
+      <div>
+        <h2 class="opt-name">黄铜 · 铃坠</h2>
+        <p class="opt-mood">Heritage craft · 复古、有分量、金属光泽</p>
+        <p class="sec-label">为什么适合</p>
+        <p class="opt-why">把把手做成一枚老式窗帘绳的黄铜坠子：上端铜环、中段车刻横纹、下缘加厚收口，配深棕绞绳。它是三款里唯一"看起来就该被往下拽"的——重量感本身就是下拉的视觉提示。</p>
+      </div>
+      <div>
+        <p class="sec-label">取舍</p>
+        <p class="opt-trade"><b>得到</b>：辨识度最高、最有"可以拉"的暗示，深浅壁纸都压得住。<br><b>代价</b>：金色在米色纸卡体系里是新增的一个强调色，整体会稍显"精致物件"而非"随手贴的便签"。</p>
+      </div>
+    </div>
+    <div class="stages">
+      <div class="stage" data-state="idle" style="--p:0"><div class="stage-cap"><span>静止</span><em>pull 0.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="pull" style="--p:1"><div class="stage-cap"><span>下拉到底</span><em>pull 1.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="release" style="--p:0"><div class="stage-cap"><span>松手回弹</span><em>pendulum</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+    </div>
+    <div class="foot">
+      <div class="foot-cell"><p class="sec-label">色板与动效</p>
+        <div class="tokens">
+          <span class="tok"><i class="sw" style="background:#f8e8b6"></i>亮铜 #F8E8B6</span>
+          <span class="tok"><i class="sw" style="background:#c9a24f"></i>黄铜 #C9A24F</span>
+          <span class="tok"><i class="sw" style="background:#8a6a2f"></i>暗铜 #8A6A2F</span>
+          <span class="tok"><i class="sw" style="background:#5a4027"></i>绞绳 #5A4027</span>
+        </div>
+        <p class="motion"><b>下拉</b>：绞绳被拉直、铜环下移，坠子轻微侧倾；<b>松手</b>：600ms 阻尼钟摆（±7° 递减两次）再归位，读出"这东西有重量"。钟摆只用 <code>transform: rotate</code>，不改 alpha。</p>
+      </div>
+      <div class="foot-cell"><p class="sec-label">1:1 真实尺寸（30×36 px）</p>
+        <div class="real">
+          <div><div class="real-box"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">浅色壁纸</div></div>
+          <div><div class="real-box dark"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">深色壁纸</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────── C ─────────────────── -->
+  <section class="opt opt-c">
+    <div class="opt-head">
+      <div class="opt-no">C</div>
+      <div>
+        <h2 class="opt-name">琉璃 · 露珠</h2>
+        <p class="opt-mood">Luminous / dreamy · 通透、光感、最"唯美"</p>
+        <p class="sec-label">为什么适合</p>
+        <p class="opt-why">一颗挂在银蓝细丝上的露珠：上圆下尖的水滴轮廓、内部一枚柔光核、左上高光弧。它不像开关，更像凝结出来的一滴水，收起态在桌面顶部是一点很轻的亮。</p>
+      </div>
+      <div>
+        <p class="sec-label">取舍</p>
+        <p class="opt-trade"><b>得到</b>：三款里最梦幻、最像"设计过"的一件，冷色调在深色壁纸上尤其出彩。<br><b>代价</b>：与原木/纸张的暖调反差最大；为避免透明窗合成问题，通透感全部靠<b>不透明渐变</b>模拟，不能真用玻璃模糊。</p>
+      </div>
+    </div>
+    <div class="stages">
+      <div class="stage" data-state="idle" style="--p:0"><div class="stage-cap"><span>静止</span><em>pull 0.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="pull" style="--p:1"><div class="stage-cap"><span>下拉到底</span><em>pull 1.00</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+      <div class="stage" data-state="release" style="--p:0"><div class="stage-cap"><span>松手回弹</span><em>elastic</em></div>
+        <div class="wall"><span class="rope"></span><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div></div>
+    </div>
+    <div class="foot">
+      <div class="foot-cell"><p class="sec-label">色板与动效</p>
+        <div class="tokens">
+          <span class="tok"><i class="sw" style="background:#ffffff"></i>高光 #FFFFFF</span>
+          <span class="tok"><i class="sw" style="background:#dcecff"></i>琉璃 #DCECFF</span>
+          <span class="tok"><i class="sw" style="background:#a9c9f2"></i>水影 #A9C9F2</span>
+          <span class="tok"><i class="sw" style="background:#6f9fdd"></i>光核 #6F9FDD</span>
+          <span class="tok"><i class="sw" style="background:#93bced"></i>银丝 #93BCED</span>
+        </div>
+        <p class="motion"><b>下拉</b>：银丝拉长到 2.05×、露珠拉长 12% 并下移，内部光核做 3px 视差滞后；<b>松手</b>：440ms 弹性过冲（<code>cubic-bezier(.18,1.8,.4,1)</code>）回弹一次，像水滴晃了晃。</p>
+      </div>
+      <div class="foot-cell"><p class="sec-label">1:1 真实尺寸（30×36 px）</p>
+        <div class="real">
+          <div><div class="real-box"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">浅色壁纸</div></div>
+          <div><div class="real-box dark"><div class="pt"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"><span class="pt-grip"></span><span class="pt-mark"></span></span></div></div><div class="real-cap">深色壁纸</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="notes">
+    <h2>实现约束（三款共通，选中后照此落地）</h2>
+    <ul>
+      <li>沿用现有 DOM 骨架：<code>.cl-pulltab &gt; .cl-pull-cord / .cl-pull-bead / .cl-pull-tab</code>，只换样式，<b>Rust 侧零改动</b>。</li>
+      <li>布局锚点不变：480×96 命中盒、丝线居中 26px、把手 30×36 且 top 28、最大下移 27px（底边 91 &lt; 96，不会被窗口裁掉）。</li>
+      <li>所有表面用 <b>不透明</b> 渐变 / 实色描边；"通透感"靠渐变模拟，禁用 <code>backdrop-filter</code>、<code>filter: blur</code>、<code>mix-blend-mode</code>、<code>isolation</code> 与任何 alpha 动画。</li>
+      <li>动效只写 <code>transform</code>（<code>scaleY</code> / <code>translateY</code> / <code>rotate</code>），进度由 <code>--cl-pull</code> 驱动；<code>.is-pulling</code> 关 transition 逐帧跟手，<code>.is-released</code> 负责回弹曲线。</li>
+      <li>深色主题单独给一套描边/底色，保证在深色壁纸上仍有清晰轮廓。</li>
+      <li>hover 不改变任何合成属性（不改 transform / opacity / box-shadow / filter），避免与透明窗的合成层重绘冲突。</li>
+    </ul>
+  </div>
+
+  <p class="footer-note">Tacco · 2026-11-13 · 设计提案，仅用于选择，尚未写入产品代码<br>请回复 A / B / C，或说明想混搭的元素（例如「A 的瓷白 + B 的钟摆回弹」）。</p>
+</div>
+</body>
+</html>
