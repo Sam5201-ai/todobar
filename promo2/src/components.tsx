@@ -267,11 +267,12 @@ export const Cursor: React.FC<{ points: Waypoint[] }> = ({ points }) => {
           transform: 'translate(-8px,-4px)',
           zIndex: 31,
           pointerEvents: 'none',
-          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.4))',
+          filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))',
         }}
       >
+        {/* Windows 默认指针：白色填充 + 黑色描边，与实际系统光标一致 */}
         <svg width={46} height={54} viewBox="0 0 24 28">
-          <path d="M4 2 L4 22 L9.5 17 L13 25 L16.5 23.5 L13 15.5 L20 15 Z" fill="#1f2329" stroke="#ffffff" strokeWidth={1.6} />
+          <path d="M4 2 L4 22 L9.5 17 L13 25 L16.5 23.5 L13 15.5 L20 15 Z" fill="#ffffff" stroke="#1f2329" strokeWidth={1.6} strokeLinejoin="round" />
         </svg>
       </div>
     </>

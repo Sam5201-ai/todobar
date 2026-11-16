@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import worker, { rewriteVersionJsonUrl } from './index'
+import worker, { rewriteVersionJsonUrl, rewriteVersionJsonUrlForR2, r2KeyOf, r2ContentType } from './index'
 import { makeD1, makeKV } from '../test/d1-shim.mjs'
 
 async function makeEnv(opts: { apiTokens?: string; kv?: Awaited<ReturnType<typeof makeKV>> } = {}) {
@@ -197,6 +197,82 @@ describe('rewriteVersionJsonUrl', () => {
     expect(rewriteVersionJsonUrl('<!doctype html>...', ORIGIN)).toBe('<!doctype html>...')
     expect(rewriteVersionJsonUrl(JSON.stringify({ version: '0.4.65' }), ORIGIN)).toBe(
       JSON.stringify({ version: '0.4.65' }),
+    )
+  })
+
+  it('leaves an already-request-domain URL untouched (idempotent across domains)', () => {
+    const input = JSON.stringify({ version: '0.4.65', url: 'https://todobar.tuanzhang.site/Tacco-setup.exe?v=0.4.65' })
+    expect(JSON.parse(rewriteVersionJsonUrl(input, 'https://todobar.tuanzhang.site')).url).toBe(
+      'https://todobar.tuanzhang.site/Tacco-setup.exe?v=0.4.65',
+    )
+  })
+})
+
+describe('R2 static key mapping', () => {
+  it('maps root and explicit files', () => {
+    expect(r2KeyOf('/')).toBe('index.html')
+    expect(r2KeyOf('')).toBe('index.html')
+    expect(r2KeyOf('/version.json')).toBe('version.json')
+    expect(r2KeyOf('/assets/site.css')).toBe('assets/site.css')
+    expect(r2KeyOf('/Tacco-setup.exe')).toBe('Tacco-setup.exe')
+  })
+
+  it('falls back to admin SPA index for any /admin route', () => {
+    expect(r2KeyOf('/admin/')).toBe('admin/index.html')
+    expect(r2KeyOf('/admin')).toBe('admin/index.html')
+    expect(r2KeyOf('/admin/index.html')).toBe('admin/index.html')
+    expect(r2KeyOf('/admin/some/deep/path')).toBe('admin/index.html')
+  })
+
+  it('appends index.html for extension-less paths', () => {
+    expect(r2KeyOf('/faq')).toBe('faq/index.html')
+    expect(r2KeyOf('/features/')).toBe('features/index.html')
+  })
+
+  it('rejects traversal attempts', () => {
+    expect(r2KeyOf('/../secret')).toBeNull()
+    expect(r2KeyOf('/..%2fsecret')).toBeNull()
+    expect(r2KeyOf('/foo\\bar')).toBeNull()
+  })
+
+  it('content-type by extension, with charset for text types', () => {
+    expect(r2ContentType('index.html')).toBe('text/html; charset=utf-8')
+    expect(r2ContentType('version.json')).toBe('application/json; charset=utf-8')
+    expect(r2ContentType('assets/site.css')).toBe('text/css; charset=utf-8')
+    expect(r2ContentType('assets/logo.webp')).toBe('image/webp')
+    expect(r2ContentType('Tacco-setup.exe')).toBe('application/octet-stream')
+    expect(r2ContentType('unknown.xyz')).toBe('application/octet-stream')
+  })
+})
+
+describe('rewriteVersionJsonUrlForR2', () => {
+  // R2 上存的 version.json url 已是 sync 自有域,旧函数只认裸域故不改写 → todobar 域拿到 sync URL。
+  const stored = JSON.stringify({ version: '0.4.65', url: 'https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.65' })
+
+  it('rewrites already-own-domain URL to the second custom domain', () => {
+    const out = JSON.parse(rewriteVersionJsonUrlForR2(stored, 'https://todobar.tuanzhang.site'))
+    expect(out.url).toBe('https://todobar.tuanzhang.site/Tacco-setup.exe?v=0.4.65')
+    expect(out.version).toBe('0.4.65')
+  })
+
+  it('is idempotent on the matching origin', () => {
+    const out = JSON.parse(rewriteVersionJsonUrlForR2(stored, 'https://sync.tuanzhang.site'))
+    expect(out.url).toBe('https://sync.tuanzhang.site/Tacco-setup.exe?v=0.4.65')
+  })
+
+  it('preserves path and query, replaces only origin', () => {
+    const input = JSON.stringify({ url: 'https://a.example.com/dl/Tacco-setup.exe?v=1.2.3&d=web' })
+    const out = JSON.parse(rewriteVersionJsonUrlForR2(input, 'https://todobar.tuanzhang.site'))
+    expect(out.url).toBe('https://todobar.tuanzhang.site/dl/Tacco-setup.exe?v=1.2.3&d=web')
+  })
+
+  it('leaves non-JSON, url-less JSON, and relative URLs unchanged', () => {
+    expect(rewriteVersionJsonUrlForR2('<!doctype html>...', 'https://x')).toBe('<!doctype html>...')
+    expect(rewriteVersionJsonUrlForR2(JSON.stringify({ version: '0.4.65' }), 'https://x')).toBe(
+      JSON.stringify({ version: '0.4.65' }),
+    )
+    expect(rewriteVersionJsonUrlForR2(JSON.stringify({ url: '/Tacco-setup.exe' }), 'https://x')).toBe(
+      JSON.stringify({ url: '/Tacco-setup.exe' }),
     )
   })
 })

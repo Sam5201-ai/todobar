@@ -29,6 +29,14 @@ const TOMBSTONE_TTL = 30 * 24 * 3600 * 1000
 export const MAX_NOTES = 50
 /** 同时显示上限:桌面上同时存在的窗口数。 */
 export const MAX_VISIBLE_NOTES = 12
+/**
+ * 新建便利签默认尺寸(逻辑像素)。
+ * 混合 DPI 实测(主屏 1.5x / 副屏 1.0x):池窗在主屏创建时 setSize(PhysicalSize)
+ * 会被折算,逻辑 480×440 在屏幕上只显示 320×293;用户确认的目标观感是
+ * 264×261 物理像素(截图左侧那条手动调过的签),故取 396×392 ≈ 264×261 ÷ (2/3)。
+ * Rust 侧 notes.rs 的 NOTE_DEFAULT_W/H 必须与此保持一致。
+ */
+export const DEFAULT_NOTE_SIZE = { w: 320, h: 318 }
 
 /** 背景透明度可调范围。下限 0.35 保证任何色板下文字仍可读。 */
 export const MIN_BG_ALPHA = 0.35
@@ -136,8 +144,8 @@ function normalizeNote(raw: unknown): Note | null {
     pinned: v.pinned !== false,
     x: clampNum(v.x, -32768, 32768, 120),
     y: clampNum(v.y, -32768, 32768, 120),
-    w: clampNum(v.w, 200, 640, 240),
-    h: clampNum(v.h, 160, 900, 220),
+    w: clampNum(v.w, 200, 640, DEFAULT_NOTE_SIZE.w),
+    h: clampNum(v.h, 160, 900, DEFAULT_NOTE_SIZE.h),
     scaleFactor:
       typeof v.scaleFactor === 'number' &&
       Number.isFinite(v.scaleFactor) &&
@@ -388,8 +396,8 @@ export function createNote(patch: Partial<Note> = {}): Note | null {
     pinned: true, // 默认「始终置顶」(用户决策:默认钉住)
     x: 120,
     y: 120,
-    w: 240,
-    h: 220,
+    w: DEFAULT_NOTE_SIZE.w,
+    h: DEFAULT_NOTE_SIZE.h,
     createdAt: now,
     updatedAt: now,
     collapsed: false,

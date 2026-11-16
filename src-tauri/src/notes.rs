@@ -76,6 +76,11 @@ fn new_pool_id() -> String {
     format!("pool_{ms}_{seq}")
 }
 
+/// 便利签窗口建窗初始尺寸(逻辑像素),必须与前端 src/notes/store.ts 的
+/// DEFAULT_NOTE_SIZE 一致;前端显示前仍会按该签保存的 w/h 再 setSize 一次。
+const NOTE_DEFAULT_W: f64 = 320.0;
+const NOTE_DEFAULT_H: f64 = 318.0;
+
 /// 建窗唯一实现(池窗与常规开窗共用),返回是否真的可用。
 /// ⚠️ 必须在子线程调用:同步命令里内联 build() 会死锁(见文件头第 1 条)。
 fn build_note_window(app: &tauri::AppHandle, label: &str, pinned: bool) -> bool {
@@ -84,7 +89,7 @@ fn build_note_window(app: &tauri::AppHandle, label: &str, pinned: bool) -> bool 
         // ⚠️ 必须与主窗口 (tauri.conf.json app.windows[0].additionalBrowserArgs) 完全一致,
         // 否则第二个便利签起创建必失败(0.4.38 同款根因)。
         .additional_browser_args(crate::BROWSER_ARGS)
-        .inner_size(240.0, 220.0)
+        .inner_size(NOTE_DEFAULT_W, NOTE_DEFAULT_H)
         .decorations(false)
         .transparent(true)
         .visible(false)

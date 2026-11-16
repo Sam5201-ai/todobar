@@ -16,10 +16,67 @@ export const CL_CARD_REMOVED = 'clothesline-card-removed'
 /** 绳窗 → 主窗：打开原便利签 / 定位待办（主窗是这些数据的唯一写入方）。 */
 export const CL_OPEN_NOTE = 'clothesline-open-note'
 export const CL_OPEN_TASK = 'clothesline-open-task'
+/** 2026-11-15：绳窗 ＋ 菜单「晾衣绳设置」→ 主窗展开侧栏并打开晾衣绳设置页。 */
+export const CL_OPEN_SETTINGS = 'clothesline-open-settings'
 /** 绳窗 → 主窗：单条事项编辑（写回仍由主窗走 notes/store.ts，避免绳窗写 prefs.json）。 */
 export const CL_EDIT_NOTE_ITEM = 'clothesline-edit-note-item'
 /** 主窗配置页改了 6 项偏好后广播；绳窗据此本次会话内即时生效（无需重启）。 */
 export const CL_SETTINGS_CHANGED = 'clothesline-settings-changed'
+/** Rust 命中循环检测到「点在可点区外」→ 前端关闭右键/＋菜单（问题13）。 */
+export const CL_DISMISS_OVERLAY = 'cl-dismiss-overlay'
+/** 绳窗 → 主窗：便利签条目操作（toggle/add/remove/edit）。
+ *  绳窗只读 localStorage 快照，所有写回一律由主窗 notes/store.ts 单一写方执行。 */
+export const CL_NOTE_ITEM_ACTION = 'clothesline-note-item-action'
+export type ClNoteItemAction =
+  | { action: 'toggle'; noteId: string; itemId: string }
+  | { action: 'add'; noteId: string; text: string }
+  | { action: 'remove'; noteId: string; itemId: string }
+  | { action: 'edit'; noteId: string; itemId: string; text: string }
+  | { action: 'totask'; noteId: string; text: string }
+/** 绳窗 ＋ 菜单「新建便利签」→ 主窗创建便利签数据（不开桌面窗）并直接挂上晾衣绳。 */
+export const CL_CREATE_NOTE = 'clothesline-create-note'
+/** 便利签窗口 → 绳窗：拖整张便利签到绳上（用户把便利签窗口拖到桌面顶部释放）。 */
+export const CL_DROP_NOTE_WINDOW = 'clothesline-drop-note-window'
+export type ClDropNoteWindow = { noteId: string; text: string }
+/** 绳窗 → 主窗：卡片已成功挂到绳上，请隐藏桌面上那张便利签（数据保留，仅收起）。 */
+export const CL_NOTE_HUNG = 'clothesline-note-hung'
+export type ClNoteHung = { noteId: string }
+/** 绳窗 → 主窗：切换绳上便利签的颜色（与桌面便利签共用 NOTE_COLORS 色板）。 */
+export const CL_NOTE_COLOR_ACTION = 'clothesline-note-color-action'
+export type ClNoteColorAction = { noteId: string; colorKey: string }
+
+/** ★批14 主窗 → 绳窗：操作结果 toast（绳上便利签「加入待办」等）。
+ *  写方在主窗（单一写方红线），但用户不会一直开着工具窗——结果提示必须弹回
+ *  绳窗并锚到 noteId 对应卡片的水平位置；卡不在/未带 noteId 时回落面板居中。 */
+export const CL_TOAST = 'clothesline-toast'
+export type ClToastPayload = { kind: 'ok' | 'err'; msg: string; noteId?: string | null }
+
+/** ★2026-11-15 一键录音：绳窗 ＋ 菜单 → 主窗执行录音。录音引擎（recorder.ts 模块级
+ *  单例）只活在主窗 —— 绳窗是独立 WebView 上下文，绝不 import recorder（会双实例抢
+ *  麦克风 + 双写元数据），只发遥控命令 + 收状态广播。
+ *  reset = 重新计时：主窗丢弃已录内容（删半成品文件）并以同标题立即重开；
+ *  save/reset 携带卡片上的当前标题（用户可在卡上改名），保存时按它重命名落盘文件。 */
+export const CL_RECORDER_CMD = 'clothesline-recorder-cmd'
+export type ClRecorderCmd =
+  | { action: 'start'; cardId: string; title: string }
+  | { action: 'pause' }
+  | { action: 'resume' }
+  | { action: 'reset'; title: string }
+  | { action: 'save'; title: string }
+  | { action: 'abort' }
+
+/** 主窗 → 绳窗：录音引擎状态广播（录音中约 5Hz 由 200ms 计时 tick 驱动）。
+ *  cardId = 发起本次录音的绳卡 id；null = 录音页等其它入口发起，绳窗忽略。
+ *  done 是一次性终态信号：saved=已保存（绳窗取卡）；failed=失败（绳窗取卡+提示）。 */
+export const CL_RECORDER_STATE = 'clothesline-recorder-state'
+export type ClRecorderState = {
+  status: 'idle' | 'starting' | 'recording' | 'paused' | 'saving'
+  elapsedMs: number
+  title: string | null
+  cardId: string | null
+  error: string | null
+  done: 'saved' | 'failed' | null
+}
 
 /** 与 src-tauri/src/clothesline.rs::ClotheslineSettings 字段一一对应。 */
 export interface ClotheslineSettings {
@@ -32,7 +89,21 @@ export interface ClotheslineSettings {
   always_on_top: boolean
   anchor_y: number
   pulltab_x_ratio: number
+  /** 整窗在可用区内的水平位置 0~1（0.5=居中）。问题1/4/11 统一位置真源。 */
+  win_x_ratio: number
+  /** 收起态拉杆皮肤：素瓷 / 黄铜 / 琉璃。默认 porcelain。 */
+  pulltab_style: ClPulltabStyle
+  /** Rust 端一次性脏 ratio 迁移标记；前端只读、不写。 */
+  win_x_migrated_v2?: boolean
+  /** Rust 端两态位置解绑的存量迁移标记；前端只读、不写。 */
+  x_ratio_split_v1?: boolean
+  /** 晾衣绳长度 = 可用区宽度占比 0.3~1.0（默认 0.86），影响单屏可挂卡片数量。 */
+  rope_width_ratio: number
+  /** 卡片尺寸缩放 1.0~2.0（1.0=最小=当前默认，2.0=放大一倍）。 */
+  card_size: number
 }
+
+export type ClPulltabStyle = 'porcelain' | 'brass' | 'glass'
 
 /** 与 clothesline.rs::MonitorInfo 对应，全物理像素。 */
 export interface MonitorInfo {
@@ -54,7 +125,7 @@ export interface HitRect {
   height: number
 }
 
-/** 与 clothesline.rs::CardKind 对应。 */
+/** 与 clothesline.rs::CardKind 对应。audio = 一键录音卡（会话级，重启不恢复）。 */
 export type CardKind =
   | 'note'
   | 'shot'
@@ -64,6 +135,7 @@ export type CardKind =
   | 'task'
   | 'text'
   | 'timer'
+  | 'audio'
 
 /** 与 clothesline.rs::ClotheslineCard 对应。order 是唯一顺序真源。 */
 export interface ClotheslineCard {
@@ -81,9 +153,29 @@ export interface ClotheslineCard {
   src_path: string | null
   end_at: number | null
   elapsed_before_pause_ms: number
+  /** 番茄总时长（正计时暂停后恢复 / 重置 / +5 需要它，end_at 已置空时唯一真源）。 */
+  timer_total_ms: number | null
   timer_direction: string
   timer_elapsed_mode: string
   fired_at: number | null
+  /** 自定义底色（CSS 十六进制；null=类型默认纸色）。 */
+  card_color: string | null
+  /** 番茄钟卡片样式 paper / minimal / glass（null=paper）。 */
+  card_style: string | null
+  /** 计时卡结束是否弹提醒（默认 true）。 */
+  remind: boolean
+  /** 卡内文字缩放（0.6~1.4，null=1）。便利签 / 随手记卡的字号调节真源。 */
+  font_scale: number | null
+  /** ★批12 随手记字体格式（null/缺省=默认）。标题字号恒不受 font_scale 影响。 */
+  title_size?: number | null
+  /** 正文字号基准（px，渲染时仍乘 font_scale；null=默认 10）。 */
+  body_size?: number | null
+  /** 自定义字体族（CSS font-family 值；null=默认 Segoe UI）。 */
+  font_family?: string | null
+  title_bold?: boolean | null
+  title_italic?: boolean | null
+  body_bold?: boolean | null
+  body_italic?: boolean | null
   created_at: number
   updated_at: number
   deleted_at: number | null
@@ -119,9 +211,22 @@ export interface CardPatch {
   src_path?: string | null
   end_at?: number | null
   elapsed_before_pause_ms?: number
+  timer_total_ms?: number | null
   timer_direction?: string
   fired_at?: number | null
   pinned?: boolean
+  card_color?: string | null
+  card_style?: string | null
+  remind?: boolean
+  font_scale?: number | null
+  /** ★批12：DoubleOption 语义 —— 缺省=不改 / null=清空回默认 / 值=设置。 */
+  title_size?: number | null
+  body_size?: number | null
+  font_family?: string | null
+  title_bold?: boolean | null
+  title_italic?: boolean | null
+  body_bold?: boolean | null
+  body_italic?: boolean | null
 }
 
 /** 新卡由前端生成稳定 id（Webview 支持 randomUUID），Rust 负责 order / 时间戳 / 配额。 */
@@ -142,9 +247,21 @@ export function clMakeCard(kind: CardKind, patch: Partial<ClotheslineCard> = {})
     src_path: patch.src_path ?? null,
     end_at: patch.end_at ?? null,
     elapsed_before_pause_ms: patch.elapsed_before_pause_ms ?? 0,
+    timer_total_ms: patch.timer_total_ms ?? null,
     timer_direction: patch.timer_direction ?? 'countdown',
     timer_elapsed_mode: patch.timer_elapsed_mode ?? 'wallclock',
     fired_at: patch.fired_at ?? null,
+    card_color: patch.card_color ?? null,
+    card_style: patch.card_style ?? null,
+    remind: patch.remind ?? true,
+    font_scale: patch.font_scale ?? null,
+    title_size: patch.title_size ?? null,
+    body_size: patch.body_size ?? null,
+    font_family: patch.font_family ?? null,
+    title_bold: patch.title_bold ?? null,
+    title_italic: patch.title_italic ?? null,
+    body_bold: patch.body_bold ?? null,
+    body_italic: patch.body_italic ?? null,
     created_at: now,
     updated_at: now,
     deleted_at: null,
@@ -167,15 +284,37 @@ export const clApplyBoundsAndShow = (x: number, y: number, width: number, height
   invoke<void>('clothesline_apply_bounds_and_show', { x, y, width, height })
 
 /**
- * 上报可点矩形（屏幕绝对物理坐标）。空数组 = 展开态整窗可点。
- * ⚠️ 绝不能用 pointermove 写穿透布尔值——窗口穿透后收不到鼠标事件会永久锁死（R68）。
+ * ★问题3「点大图预览时晾衣绳晃动一下」：**单次 SetWindowPos** 写矩形，绝不做三连写。
+ * 三连写会让窗口出现「先移动、后改尺寸」的中间帧（旧位置 + 新宽度），肉眼就是
+ * 「像重新调整了一次位置」。预览放大 / 复原这类高频几何切换必须走这条一次性通道。
+ */
+export const clSetBounds = (x: number, y: number, width: number, height: number) =>
+  invoke<void>('clothesline_set_bounds', { x, y, width, height })
+
+/**
+ * 拖拽逐帧移动（第二十一轮绳带窄窗）：只改窗口位置、绝不改尺寸 → 视口恒定、零重排。
+ * 收起态拉杆平移 / 展开态垂直 anchor 拖动走这条通道；展开态水平拖动仍是纯 CSS 变量。
+ */
+export const clSetPosition = (x: number, y: number) =>
+  invoke<void>('clothesline_set_position', { x, y })
+
+/**
+ * 上报命中矩形（屏幕绝对物理坐标）。★2026-11-14 第二十一轮（绳带窄窗）：
+ * 本表**只服务 Rust 侧浮层关闭检测**（问题13「左键点在面板外」判定），不再参与 OS
+ * 命中测试——命中由绳带窄窗的普通矩形窗口语义天然完成（窗口外点击直达桌面）。
+ * 空数组 = 预览/拖放会话（面板外判定暂停；过期后 Rust 8s 兜底回退最近非空矩形）。
+ * ⚠️ 绝不能用 pointermove 写穿透布尔值——运行期窗口样式写入会触发 DWM 重建层（R68）。
  */
 export const clSetHitRects = (rects: HitRect[]) =>
   invoke<void>('clothesline_set_hit_rects', { rects })
 
-/** 拖拽 / 编辑期间临时强制可点，durationMs 后自动过期，避免拖到一半穿透。 */
+/** 兼容桩（第二十一轮起 force 无窗口副作用，绳带窄窗无穿透/可点双态）。 */
 export const clSetForceClickable = (durationMs: number) =>
   invoke<void>('clothesline_set_force_clickable', { durationMs })
+
+/** 浮层开合（问题13）：打开→Rust 命中循环检测窗外左键→发 CL_DISMISS_OVERLAY。 */
+export const clSetDismissOnOutside = (on: boolean) =>
+  invoke<void>('clothesline_set_dismiss_on_outside', { on })
 
 /** 截图会话级挂起 / 恢复（capture_screen 内部另有 RAII 自守卫兜底）。 */
 export const clCaptureSuspend = () => invoke<void>('clothesline_capture_suspend')

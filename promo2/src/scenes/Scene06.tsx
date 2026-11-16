@@ -12,9 +12,9 @@ export const Scene06: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: '#f6f7f9' }}>
       <CalcApp />
 
-      <Chip text="随手一按，账目清清楚楚" x={50} y={88} delay={18} hide={96} variant="dark" />
-      <Chip text="连续运算，一气呵成" x={50} y={88} delay={128} hide={222} variant="dark" dotRgb="29,126,240" />
-      <Chip text="结果秒出，支持括号与百分比" x={50} y={88} delay={244} variant="amber" />
+      <Chip text="随手一按，账目清清楚楚" x={50} y={88} delay={8} hide={52} variant="dark" />
+      <Chip text="连续运算，一气呵成" x={50} y={88} delay={60} hide={110} variant="dark" dotRgb="29,126,240" />
+      <Chip text="结果秒出，支持括号与百分比" x={50} y={88} delay={116} variant="amber" />
 
       <FlashIn />
       <FlashOut dur={DUR} />

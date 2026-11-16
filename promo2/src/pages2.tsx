@@ -26,13 +26,13 @@ const GRID: DayCell[][] = [
     { d: 8, sub: '三十' },
   ],
   [
-    { d: 9, sub: '十月' },
+    { d: 9, sub: '初十' },
     { d: 10, sub: '初二' },
     { d: 11, sub: '初三' },
     { d: 12, sub: '初四' },
     { d: 13, sub: '初五' },
-    { d: 14, sub: '初六' },
-    { d: 15, sub: '初七' },
+    { d: 14, sub: '休', red: true },
+    { d: 15, sub: '休', red: true },
   ],
   [
     { d: 16, sub: '初八' },
@@ -256,24 +256,24 @@ const fmt = (v: number, dec = 2) => v.toFixed(dec);
 export const SalaryApp: React.FC = () => {
   const f = useCurrentFrame();
 
-  // 今日已赚：f30-130 从 0 滚到 178.61，之后每 40 帧 +0.01~0.03 微跳
-  const base = interpolate(f, [30, 130], [0, 178.55], { easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const drip = Math.max(0, Math.floor((f - 130) / 40)) * 0.02;
+  // 今日已赚：f20-90 从 0 滚到 178.55，之后每 40 帧 +0.02 微跳
+  const base = interpolate(f, [20, 90], [0, 178.55], { easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const drip = Math.max(0, Math.floor((f - 90) / 40)) * 0.02;
   const earned = Math.min(178.61, base + drip);
 
-  // 秒表：03:23:10 起每 30 帧 +1 秒（按帧率折算 1 秒 = 30 帧）
-  const tick = Math.floor(Math.max(0, f - 20) / 30);
+  // 秒表：03:23:10 起每 30 帧 +1 秒
+  const tick = Math.floor(Math.max(0, f - 14) / 30);
   const worked = 3 * 3600 + 23 * 60 + 10 + tick;
   const off = 3 * 3600 + 36 * 60 + 50 - tick;
   const wStr = `${String(Math.floor(worked / 3600)).padStart(2, '0')}:${String(Math.floor((worked % 3600) / 60)).padStart(2, '0')}:${String(worked % 60).padStart(2, '0')}`;
   const oStr = `${String(Math.floor(off / 3600)).padStart(2, '0')}:${String(Math.floor((off % 3600) / 60)).padStart(2, '0')}:${String(off % 60).padStart(2, '0')}`;
 
   // 进度条 0 → 48.4%
-  const prog = interpolate(f, [40, 130], [0, 48.4], { easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const prog = interpolate(f, [24, 90], [0, 48.4], { easing: Easing.out(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   // 寄语打字机
-  const MOTTO = '加班的夜灯下，你是自己的英雄。别熬太狠，明天还有明天的活。🌙';
-  const chars = Math.floor(interpolate(f, [160, 240], [0, MOTTO.length], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
+  const MOTTO = '加班的夜灯下，你是自己的英雄。别熬太狠，明天还有明天的活。🍵';
+  const chars = Math.floor(interpolate(f, [100, 170], [0, MOTTO.length], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#eef2f7' }}>
@@ -333,6 +333,17 @@ export const SalaryApp: React.FC = () => {
           ))}
         </div>
 
+        {/* 本周已赚 / 本月已赚 */}
+        {[
+          { l: '本周已赚', v: '¥917.07' },
+          { l: '本月已赚', v: '¥917.07' },
+        ].map((it) => (
+          <div key={it.l} style={{ margin: '22px 28px 0', background: '#ffffff', borderRadius: 26, padding: '24px 30px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 18px rgba(23,28,38,0.06)' }}>
+            <span style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.ink2, flex: 1 }}>{it.l}</span>
+            <span style={{ fontFamily: MONO, fontSize: 42, fontWeight: 800, color: C.ink }}>{it.v}</span>
+          </div>
+        ))}
+
         {/* 发薪卡 */}
         <div style={{ margin: '22px 28px 0', background: '#ffffff', borderRadius: 26, padding: '24px 30px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 18px rgba(23,28,38,0.06)' }}>
           <div style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.ink2, flex: 1 }}>每月 10 号发薪</div>
@@ -382,16 +393,16 @@ const KEYS = [
   { k: '=', dark: true },
 ];
 
-// 输入时间轴：每一步 = [按键索引, 按下帧]
+// 输入时间轴：每一步 = [按键索引, 按下帧]（压缩适配 130f 场景）
 const STEPS: { key: number; t: number }[] = [
-  { key: 16, t: 50 }, // 5
-  { key: 17, t: 76 }, // 6
-  { key: 17, t: 102 }, // 6
-  { key: 9, t: 128 }, // ×
-  { key: 12, t: 154 }, // 9
-  { key: 17, t: 180 }, // 6
-  { key: 16, t: 206 }, // 5
-  { key: 24, t: 232 }, // =
+  { key: 16, t: 14 }, // 5
+  { key: 17, t: 28 }, // 6
+  { key: 17, t: 42 }, // 6
+  { key: 9, t: 56 }, // ×
+  { key: 12, t: 70 }, // 9
+  { key: 17, t: 84 }, // 6
+  { key: 16, t: 98 }, // 5
+  { key: 24, t: 112 }, // =
 ];
 
 // display 内容随步骤推进
@@ -454,10 +465,10 @@ export const CalcApp: React.FC = () => {
 
         {/* display */}
         <div style={{ margin: '24px 40px 0', textAlign: 'right', minHeight: 170 }}>
-          {!isResult && (
-            <div style={{ fontFamily: MONO, fontSize: 68, fontWeight: 700, color: C.ink2, fontVariantNumeric: 'tabular-nums' }}>{expr}</div>
-          )}
           {isResult && (
+            <div style={{ fontFamily: MONO, fontSize: 50, fontWeight: 700, color: C.ink3, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>566 × 965</div>
+          )}
+          {isResult ? (
             <div
               style={{
                 fontFamily: MONO,
@@ -472,6 +483,8 @@ export const CalcApp: React.FC = () => {
             >
               546190
             </div>
+          ) : (
+            <div style={{ fontFamily: MONO, fontSize: 108, fontWeight: 800, color: C.ink, fontVariantNumeric: 'tabular-nums' }}>{expr}</div>
           )}
         </div>
 
@@ -509,7 +522,7 @@ export const CalcApp: React.FC = () => {
 
         {/* 说明文字 */}
         <div style={{ margin: '26px 40px 0', fontFamily: FONT, fontSize: 25, fontWeight: 500, color: C.ink3, lineHeight: 1.5 }}>
-          支持四则运算、括号、小数与负数;% 按「相对于前一项的百分比」计算(如 200 + 10% = 220)。
+          支持四则运算、括号、小数与负数 ※ 按「相对于前一项的百分比」计算(如 200 + 10% = 220)。
         </div>
       </PageIn>
     </AbsoluteFill>

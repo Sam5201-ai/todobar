@@ -313,7 +313,7 @@ export const TodoApp: React.FC<{
     <AbsoluteFill>
       <AppHeader />
       <TabPills labels={['日待办', '周待办', '月待办', '记节日']} segs={segs} />
-      <DateStrip active={2} />
+      <DateStrip active={3} />
 
       {/* 列表标题 */}
       <div style={{ padding: '30px 40px 6px', display: 'flex', alignItems: 'baseline', gap: 16 }}>
@@ -406,6 +406,16 @@ const TaskCard: React.FC<{ task: Task; index: number; expandFactor: number; chec
             <path d="M6 9.5 12 15.5 18 9.5" stroke="#9aa0a8" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           </svg>
         )}
+        {/* 右侧操作：+ 新增 / 齿轮设置（对照真实截图） */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <svg width={40} height={40} viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="#1d7ef0" strokeWidth={2.8} strokeLinecap="round" />
+          </svg>
+          <svg width={40} height={40} viewBox="0 0 24 24" fill="none">
+            <circle cx={12} cy={12} r={3.2} stroke="#9aa0a8" strokeWidth={2.4} />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" stroke="#9aa0a8" strokeWidth={2} strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
 
       {/* 子任务区（高度动画） */}

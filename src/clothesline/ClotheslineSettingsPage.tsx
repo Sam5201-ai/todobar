@@ -1,7 +1,9 @@
 /**
- * 晾衣绳配置页(PRD v1.6 / 原型 cl-11)：**只渲染 6 项**，一屏看完、无滚动条。
+ * 晾衣绳配置页(PRD v1.6 / 原型 cl-11)：一屏看完、无滚动条。
  *
- * 6 项：① 启用顶部晾衣绳 ② 开机自动显示 ③ 展开 / 收起 ④ 显示屏幕 ⑤ 清风动效 ⑥ 截图自动飞入。
+ * 原 6 项：① 启用顶部晾衣绳 ② 开机自动显示 ③ 展开 / 收起 ④ 显示屏幕 ⑤ 清风动效 ⑥ 截图自动飞入。
+ * ⑦ 拉杆样式：2026-11-13 用户确认三款拉杆皮肤全部保留、由用户自行选择，默认「素瓷·侘寂」，
+ *    故配置页新增第 7 行。这是唯一一处皮肤入口，绳窗根节点 data-pulltab 由 settings 驱动。
  *
  * 铁律：
  * - **能力零删除**：其余能力(置顶、绳带位置、拉杆、配额、热区…)一个不少，只是不在此页。
@@ -19,6 +21,7 @@ import {
   clGetCardUsage,
   CL_CARDS_CHANGED,
   type ClotheslineSettings,
+  type ClPulltabStyle,
   type MonitorInfo,
 } from './bridge'
 import { useAccount } from '../membership'
@@ -138,6 +141,18 @@ export function ClotheslineSettingsPage() {
     }
   }, [busy])
 
+  // 滑杆专用：拖动时高频触发，不走 busy 闸门（否则第一次 patch 未返回前
+  // 后续 onChange 全部被丢弃，滑杆拖一半就「卡住」）。Rust 侧串行执行天然排队。
+  const patchLive = useCallback(async (p: Partial<ClotheslineSettings>) => {
+    setSettings((prev) => (prev ? { ...prev, ...p } : prev))
+    try {
+      const next = await clUpdateSettings(p)
+      setSettings(next)
+    } catch {
+      /* 静默 */
+    }
+  }, [])
+
   const setEnabled = useCallback(
     async (v: boolean) => {
       if (busy) return
@@ -195,6 +210,19 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
+        <Row title="拉杆样式" sub="收起态拉绳把手的材质与配色，默认素瓷">
+          <select
+            className="cl-set-select"
+            value={settings.pulltab_style ?? 'porcelain'}
+            disabled={busy}
+            onChange={(e) => void patch({ pulltab_style: e.target.value as ClPulltabStyle })}
+          >
+            <option value="porcelain">素瓷 · 侘寂（默认）</option>
+            <option value="brass">黄铜 · 铃坠</option>
+            <option value="glass">琉璃 · 露珠</option>
+          </select>
+        </Row>
+
         <Row
           title="显示屏幕"
           sub={
@@ -221,6 +249,48 @@ export function ClotheslineSettingsPage() {
           </select>
         </Row>
 
+        <Row
+          title="晾衣绳长度"
+          sub="绳子横向长度占可用区的比例，影响单屏可挂卡片数量"
+          disabled={!settings.enabled}
+        >
+          <div className="cl-set-range">
+            <input
+              type="range"
+              min={30}
+              max={100}
+              step={1}
+              value={Math.round((settings.rope_width_ratio ?? 0.86) * 100)}
+              disabled={!settings.enabled}
+              onChange={(e) => void patchLive({ rope_width_ratio: Number(e.target.value) / 100 })}
+            />
+            <span className="cl-set-range-val">
+              {Math.round((settings.rope_width_ratio ?? 0.86) * 100)}%
+            </span>
+          </div>
+        </Row>
+
+        <Row
+          title="卡片尺寸"
+          sub="当前尺寸为最小，最大可放大一倍"
+          disabled={!settings.enabled}
+        >
+          <div className="cl-set-range">
+            <input
+              type="range"
+              min={100}
+              max={200}
+              step={5}
+              value={Math.round((settings.card_size ?? 1) * 100)}
+              disabled={!settings.enabled}
+              onChange={(e) => void patchLive({ card_size: Number(e.target.value) / 100 })}
+            />
+            <span className="cl-set-range-val">
+              {Math.round((settings.card_size ?? 1) * 100)}%
+            </span>
+          </div>
+        </Row>
+
         <Row title="清风动效" sub="绳上卡片随风极淡摆动，鼠标悬停时暂停">
           <Switch
             checked={settings.wind_effect}
@@ -229,7 +299,7 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
-        <Row title="截图自动飞入晾衣绳" sub="区域截图复制到剪贴板后，生成一张明信片卡片">
+        <Row title="截图自动挂上晾衣绳" sub="截图复制后，截图会自动挂在晾衣绳上">
           <Switch
             checked={settings.auto_fly_shot}
             onChange={(v) => void patch({ auto_fly_shot: v })}

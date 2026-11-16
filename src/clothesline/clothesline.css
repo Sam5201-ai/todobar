@@ -1,3 +1,42 @@
+/* 问题12：透明置顶窗点击后出现浅蓝方框。来源可能是 UA 的 :focus-visible 描边、
+   -webkit-focus-ring-color（WebView2/Chromium 对 button 与 tabindex 元素默认画 focus ring），
+   或文本选中的蓝色高亮。绳窗内一律禁用，点击空白再主动 blur（见 ClotheslineView onMouseDown）。 */
+/* ★问题1 蓝框：截图里的蓝框是**整个窗口矩形**，不是卡片元素，来源有两处：
+ *   ① html/body 自身的 :focus 描边（旧规则只覆盖了 .cl-root 及其子元素，漏了 html/body）；
+ *   ② WS_EX_TRANSPARENT 被 48ms 反复重设时 DWM 画的窗口边框（已在 Rust 命中循环修根因）。
+ *   这里把 html/body 一并兜住。 */
+html, html:focus, html:focus-visible,
+body, body:focus, body:focus-visible,
+.cl-root, .cl-root * {
+  outline: none !important;
+  outline-color: transparent !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+/* ★问题4「每次点文本框卡片抖一下」的具体 CSS 根因：旧版 *:focus 里写了
+   `box-shadow: none !important`，点输入框时卡片祖先获得 focus → 阴影瞬间消失，
+   失焦又回来 → 每次点击都抖一次。focus 只允许关描边，绝不动合成属性。 */
+.cl-root *:focus, .cl-root *:focus-visible {
+  outline: none !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+/* 编辑/输入框需要正常光标与占位，但同样不要 focus 光圈（用边框色表达聚焦即可）。 */
+.cl-root textarea:focus, .cl-root input:focus { outline: none !important; }
+/* 全局禁用文本选中蓝底（卡片文案被拖拽选中时的蓝色方框）。 */
+.cl-root, .cl-root * { -webkit-user-select: none; user-select: none; }
+.cl-root textarea, .cl-root input { -webkit-user-select: text; user-select: text; }
+/* ::selection 透明化，防止 WebView2 在透明层上画出蓝色选区块。 */
+.cl-root ::selection { background: transparent; color: inherit; }
+/* ★批19：弹窗文本框（textarea/input）恢复可见的选中高亮。
+   上一条全局透明化把输入框的拖选高亮也一起抹掉了 —— 用户拖选/全选时看不到任何
+   反馈，误以为「不支持鼠标选择」。输入框是不透明实色底，恢复蓝色高亮不会产生
+   透明层蓝块问题；非输入区维持透明不变。 */
+.cl-root textarea::selection,
+.cl-root input::selection {
+  background: rgba(47, 107, 255, 0.32);
+  color: inherit;
+}
+
 /* 晾衣绳窗口样式 · v2 与 preview/clothesline-preview.html 1:1 对齐
  *
  * 设计基线（原型 clothesline-preview.html:76~260）：
@@ -13,9 +52,15 @@
 
 .cl-root {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /* ★★2026-11-13 问题3 架构根治：OS 绳窗恒为目标显示器整屏，且启动后永不改变。
+     绳身「面板」的矩形全部由 --cl-panel-x/y/w/h 四个 CSS 变量表达（逻辑 px，
+     placeAndArm / 拖动逐帧写入）。于是拖动、展开收起、大图预览都是纯 CSS，
+     WebView2 视口尺寸恒定 → 零 resize、零重排、零中间帧 = 晾衣绳绝对静止。
+     ⚠️ 绝不要改回 inset:0 / width:100%：那会让面板铺满整屏并吞掉所有桌面点击。 */
+  left: var(--cl-panel-x, 0px);
+  top: var(--cl-panel-y, 0px);
+  width: var(--cl-panel-w, 1180px);
+  height: var(--cl-panel-h, 300px);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -228,11 +273,48 @@
 }
 .cl-root[data-theme='dark'] .cl-tool-btn.is-on { background: #2b3550; color: #a8c2ff; }
 
+/* 问题4：专用拖动把手（⠿ 六点）——用户要求「长按该图标上下左右拖动整条晾衣绳」。
+   与麻绳热区共用 beginWindowDrag 会话：一次 setPosition 同时驱动 anchor_y + win_x_ratio，
+   松手一次写盘 + 重算命中矩形。做成工具条最左侧、明显可抓握的凸起按钮。 */
+.cl-drag-handle {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(120, 140, 180, 0.34);
+  border-radius: 7px;
+  background: linear-gradient(180deg, #f7faff, #e9eef8);
+  color: #6b7c9c;
+  font: 700 15px/1 var(--cl-font);
+  letter-spacing: -3px;
+  text-indent: -3px;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 2px 5px rgba(30, 40, 60, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.cl-drag-handle:hover, .cl-drag-handle.is-dragging {
+  color: var(--cl-accent);
+  border-color: rgba(47, 107, 255, 0.5);
+  background: linear-gradient(180deg, #fff, #eaf1ff);
+}
+.cl-drag-handle.is-dragging { cursor: grabbing; }
+.cl-root[data-theme='dark'] .cl-drag-handle {
+  background: linear-gradient(180deg, #3a4050, #2c303b);
+  border-color: #4d5566;
+  color: #b9c4da;
+}
+.cl-root[data-theme='dark'] .cl-drag-handle.is-dragging,
+.cl-root[data-theme='dark'] .cl-drag-handle:hover { background: #2b3550; color: #a8c2ff; }
+
 /* —— ＋ 菜单：小圆按钮 + 弹出面板（原型 .add-btn / .add-sheet）—— */
 .cl-add-btn {
   position: absolute;
-  left: 22px;
-  top: 30px;
+  left: 26px;
+  /* ★批18：＋按钮挂到绳的左端头上（绳端高度 26px，按钮 28px → top = 26-14 = 12），
+     不再压在绳子下方、也不再与首卡左上角接壤（deck 左内边距已加宽到 64px 让位）。 */
+  top: 12px;
   z-index: 20;
   width: 28px;
   height: 28px;
@@ -245,15 +327,25 @@
   cursor: pointer;
   pointer-events: auto;
 }
-.cl-add-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(47, 107, 255, 0.45); }
+.cl-add-btn:hover { /* 根因B：不改合成属性，避免透明窗重建层。 */ }
 .cl-add-sheet {
   position: absolute;
-  left: 22px;
-  top: 64px;
+  left: 26px;
+  /* ★批18：跟随 ＋ 按钮新位置（top 12 + 高 28 + 间距 6 = 46）。 */
+  top: 46px;
   z-index: 21;
   width: 214px;
   display: none;
   flex-direction: column;
+  /* ★问题11「＋ 下拉菜单底部被截断」：绳窗只有 300px 逻辑高，9 个菜单项排下来
+     会超出 WebView2 窗口物理边界被直接裁掉（窗口外的部分根本不会渲染）。
+     必须在窗口内给菜单自身可滚动区域，而不是指望溢出显示。 */
+  max-height: calc(100% - 74px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c9cfda transparent;
   padding: 7px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
@@ -347,107 +439,255 @@
 }
 .cl-handle:hover .cl-handle-label { opacity: 1; }
 
+/* —— 收起态拉绳（2026-11-13 重新设计 · 问题4「拉杆太丑、要有拉绳动效」）——
+ * 原版：白方块 + 底部一整块蓝色 + 一个 ⌄，像「下载按钮」，与纸/麻绳的质感不搭。
+ * 新版：一根**丝线**从桌面顶垂下 → 一颗**瓷珠**绳结 → 一枚**瓷白小柄**（蓝线是握位，
+ *        ⌄ 是「往下拉」的暗示），整体是「拉绳开关」而不是「按钮」。
+ * 动效：下拉时靠 CSS 变量 --cl-pull（0~1，由 onPullPointerMove 直接写 DOM）驱动：
+ *   · 丝线 scaleY 拉伸（只改 transform，不动布局）；
+ *   · 瓷珠随绳下移；
+ *   · 小柄下移 + 轻微内扣（rotate），像被手指拉住；
+ *   松手时摘掉 .is-pulling 恢复 transition → 弹回原位的过冲弹性（cubic-bezier 回弹）。
+ * ⚠️ 布局锚点不变：丝线在 left:50%、小柄在 50% 居中、top 28 / 高 32 →
+ *    Rust 侧 collapsedHitRects（480×96 横带）与本布局仍然逐字对齐。
+ * ⚠️ 动效只用 transform，绝不改 opacity/filter：透明置顶窗里 alpha 动画会重建合成层。 */
 .cl-pulltab {
   position: absolute;
-  top: 38px;
-  width: 30px;
-  height: 34px;
+  top: 0;
+  /* ★问题3「可拖区域太小」的第二层根因：Rust 侧 collapsedHitRects 早就是 480×96 的横带，
+     但**真正挂指针事件的只有这个 40×62 的按钮** —— 命中带里其余区域点了既不响应拖动
+     也不响应点击（浪费），用户摸到的有效区域就只有拉手那一小块。
+     现在把按钮盒子直接扩到与命中带逐字一致（480×96），绳/珠/拉手仍居中绘制。 */
+  /* ★第二十一轮绳带窄窗：绝不能 max-width:100% —— 收起态窗口只有 180 逻辑px 宽，
+     拉手必须保持 480px 全宽才能靠 left:calc(50% - 240px) 精确居中（超出部分被
+     .cl-root 的 overflow:hidden 裁掉），否则拉手被压成窗宽、中心漂出窗外。 */
+  width: 480px;
+  height: 96px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: grab;
   z-index: 17;
   pointer-events: auto;
+  --cl-pull: 0;
 }
+.cl-pulltab:active { cursor: grabbing; }
+
+/* ① 丝线：顶部渐隐、末端实色，带一点高光，像真丝绳被拉直。 */
 .cl-pull-cord {
   position: absolute;
   left: 50%;
   top: 0;
   width: 2px;
-  height: 8px;
+  height: 26px;
   margin-left: -1px;
-  background: linear-gradient(180deg, rgba(120, 170, 255, 0.15), rgba(90, 150, 240, 0.8));
   border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(120, 170, 255, 0.02) 0%,
+    rgba(110, 160, 250, 0.45) 34%,
+    rgba(74, 138, 240, 0.92) 78%,
+    rgba(47, 107, 255, 1) 100%
+  );
+  box-shadow: 0 0 7px rgba(74, 138, 240, 0.3);
+  transform-origin: 50% 0;
+  /* 拉伸而非改高度：不触发布局，也不会让丝线在 96px 窗口里溢出。 */
+  transform: scaleY(calc(1 + var(--cl-pull) * 1.05));
+  transition: transform 320ms cubic-bezier(0.22, 1.5, 0.36, 1);
 }
+/* ② 瓷珠（绳结）：深蓝釉面 + 顶部高光，下拉时整体下移。 */
+.cl-pull-bead {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, #eaf3ff 0 18%, #8fb4f2 46%, #2f6bff 100%);
+  box-shadow:
+    0 1px 3px rgba(40, 90, 200, 0.5),
+    inset 0 -1px 1px rgba(30, 70, 170, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85);
+  transform: translateY(calc(var(--cl-pull) * 27px));
+  transition: transform 320ms cubic-bezier(0.22, 1.5, 0.36, 1);
+}
+/* ③ 瓷白小柄：一枚「瓷扣」—— 顶部绳孔 + 蓝色握线 + 描边小箭头。
+   设计取向：轮廓清晰（细描边），体积靠内阴影而不是外发光（外发光在浅色桌面上会糊成一团）。 */
 .cl-pull-tab {
   position: absolute;
-  left: 0;
-  top: 7px;
+  /* 按钮盒子已加宽到 480px：拉手改为相对盒子居中，视觉位置与之前完全一致。 */
+  left: calc(50% - 15px);
+  top: 28px;
   width: 30px;
-  height: 26px;
-  border-radius: 9px;
-  overflow: hidden;
-  background: linear-gradient(180deg, #fff, #f7f9ff);
-  border: 1px solid rgba(120, 150, 210, 0.3);
-  box-shadow: 0 4px 12px rgba(30, 60, 120, 0.24), inset 0 1px 0 #fff;
-  transition: transform 0.18s;
+  height: 36px;
+  border-radius: 14px 14px 15px 15px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fafe 46%, #e7eefb 100%);
+  border: 1px solid rgba(104, 136, 194, 0.46);
+  box-shadow:
+    0 6px 14px rgba(28, 58, 118, 0.26),
+    0 1px 2px rgba(28, 58, 118, 0.18),
+    inset 0 1px 0 #ffffff,
+    inset 0 -3px 4px rgba(176, 196, 232, 0.4);
+  transform: translateY(calc(var(--cl-pull) * 27px))
+    rotate(calc(var(--cl-pull) * -3.2deg))
+    scaleY(calc(1 - var(--cl-pull) * 0.05));
+  transform-origin: 50% 0;
+  transition: transform 320ms cubic-bezier(0.22, 1.5, 0.36, 1);
 }
+/* 顶部绳孔：丝线从这里穿进瓷扣，压出一道细槽。 */
+.cl-pull-tab::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 9px;
+  height: 3px;
+  margin-left: -4.5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(140, 168, 214, 0.65), rgba(255, 255, 255, 0.15));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+/* 握位：一条柔和的蓝线（不是整块蓝底）。 */
 .cl-pull-grip {
   position: absolute;
   left: 50%;
-  top: 7px;
+  top: 12px;
   width: 14px;
   height: 3px;
   margin-left: -7px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #4f8aff, var(--cl-accent));
+  background: linear-gradient(90deg, #8bb6ff, var(--cl-accent) 50%, #8bb6ff);
+  box-shadow: 0 0 5px rgba(47, 107, 255, 0.45);
 }
+/* 下拉暗示：描边小 V（比字体符号锐利），用独立的 translate 属性做呼吸，
+   避免和 rotate(45deg) 抢同一个 transform。 */
 .cl-pull-foot {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 11px;
-  background: linear-gradient(180deg, #3d7bff, var(--cl-accent));
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font: 700 10px/1 var(--cl-font);
+  left: 50%;
+  bottom: 9px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-right: 1.6px solid #5b8cea;
+  border-bottom: 1.6px solid #5b8cea;
+  border-radius: 0 0 2px 0;
+  transform: rotate(45deg);
+  animation: cl-pull-hint 2.4s ease-in-out infinite;
+}
+@keyframes cl-pull-hint {
+  0%, 62%, 100% { translate: 0 0; }
+  78% { translate: 0 2px; }
+}
+/* 下拉进行中：禁用 transition，逐帧跟手（否则弹性曲线会把手指拖出「粘滞感」）。 */
+.cl-pulltab.is-pulling .cl-pull-cord,
+.cl-pulltab.is-pulling .cl-pull-bead,
+.cl-pulltab.is-pulling .cl-pull-tab {
+  transition: none;
+}
+/* 松手瞬间：恢复 transition 后归零 → 弹性过冲回到原位。 */
+.cl-pulltab.is-released .cl-pull-tab {
+  transition: transform 420ms cubic-bezier(0.18, 1.6, 0.4, 1);
+}
+.cl-pulltab.is-released .cl-pull-cord,
+.cl-pulltab.is-released .cl-pull-bead {
+  transition: transform 380ms cubic-bezier(0.18, 1.6, 0.4, 1);
 }
 .cl-pull-badge {
   position: absolute;
-  left: 28px;
-  top: 8px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  /* 2026-11-15 收起态窗口已收窄到拉手本身（56 逻辑px），badge 从「拉手右侧」
+     移到「拉手正下方」，避免侧向溢出被窗口裁切。 */
+  left: 50%;
+  top: 66px;
+  transform: translateX(-50%);
+  height: 18px;
+  padding: 0 8px;
   border-radius: 9px;
   background: var(--cl-accent);
   color: #fff;
-  font: 700 9px/16px var(--cl-font);
+  font: 700 9px/18px var(--cl-font);
   text-align: center;
   box-shadow: 0 2px 6px rgba(47, 107, 255, 0.4);
   opacity: 0;
   transition: 0.18s;
   white-space: nowrap;
 }
-.cl-pulltab:hover .cl-pull-tab { transform: translateY(3px); }
 .cl-pulltab:hover .cl-pull-badge { opacity: 1; }
+/* 下拉过程中把提示条藏起来（避免和小柄一起晃）。 */
+.cl-pulltab.is-pulling .cl-pull-badge { opacity: 0; }
+/* 根因A/B：拉手 hover 不改 transform / opacity —— 既避免透明窗重建层，
+   也避免拖动拉手时「拉扯感」（旧版拉手自身还有 sway 动画，已一并移除）。 */
 .cl-root[data-theme='dark'] .cl-pull-tab {
-  background: linear-gradient(180deg, #3a3f4c, #2c303b);
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(120, 150, 200, 0.32) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, #3d4350 0%, #333846 60%, #2c303b 100%);
   border-color: #4d5566;
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.cl-root[data-theme='dark'] .cl-pull-foot {
+  border-right-color: #9dc0ff;
+  border-bottom-color: #9dc0ff;
 }
 
 /* —— 卡片甲板：无原生滚动条、两端渐隐、允许 hover 放大上下溢出 —— */
-.cl-deck {
+/* ★批16 根因修复：平移层与缩放层分离。zoom 会等比放大子元素的 transform 位移，
+   旧版把 translateX(-scrollX) 和 zoom 挂在同一个 .cl-deck 上，卡片缩放非 100% 时
+   视觉平移 = scrollX × zoom（145% 档实测 1.45 倍过冲），新卡聚焦/滚轮/钳制全部
+   失准。现在 translateX 只挂在 .cl-deck-pan（不缩放），zoom 留在 .cl-deck 内层。 */
+.cl-deck-pan {
   position: absolute;
-  /* 卡片顶 = 32 + padding 12 − translateY 6 = 38px，木夹 top −19 → 19px，
-     正好跨在麻绳曲线（两端 26px / 中点 46px）上，不会出现「夹子悬空」。 */
   top: 32px;
   left: 0;
-  right: 0;
-  bottom: 0;
+  right: auto;
+  bottom: auto;
+  height: calc(100% - 32px);
+  width: 100%;
+  /* 包装层自身绝不拦截命中，命中语义与旧版（只有 deck/卡片可点）完全一致。 */
+  pointer-events: none;
+}
+.cl-deck {
+  height: 100%;
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 12px 30px 24px;
-  /* 卡片 186px + hover 1.22 → 相对 deck 底部 227px < deck 高 256px，
-     不会溢出，无需 clip-path（clip-path 与 mask-image 叠加会裁掉悬停放大）。 */
-  overflow: hidden;
+  /* ★批18：左右内边距 30 → 64，给绳端左上角的 ＋ 按钮让位（按钮占 x 26~54）。
+     左右对称加宽，保证 is-centered 居中模式不偏移。 */
+  padding: 12px 64px 24px;
+  box-sizing: border-box;
+  /* 卡片顶 = 32 + padding 12 − translateY 6 = 38px，木夹 top −19 → 19px。
+     ★2026-11-15 反馈6：麻绳是下垂曲线（两端 26px / 中点 36px），固定高度必然
+     让中段夹子悬空 —— 现在由 ClotheslineView.syncCardHang 逐卡写 --cl-hang，
+     让每枚木夹顶边精准贴住绳曲线（含 zoom / 居中 / 横向滚动的任意状态）。 */
+  /* ★问题4 根因修复：transform(translateX) 绝不能与 overflow:hidden 挂在同一个元素上。
+     旧版 deck 是 left:0/right:0（宽=窗口宽）+ overflow:hidden，滚轮平移时 deck 连同
+     它自己的裁剪框一起左移 → 右侧超出窗口的卡片永远落在裁剪框外，无论怎么滚都只露出
+     被硬裁的一条；左侧卡片却能被移出视口（被 .cl-root 裁掉），于是呈现「左边能藏能显、
+     右边永远截断」这一完全吻合用户描述的现象。
+     改为 width:max-content 让 deck 按卡片总宽自然撑开、overflow:visible 不自行裁剪，
+     由 .cl-root 的 overflow:hidden 统一按窗口边界裁剪。这样整排卡片都能随 transform
+     完整滚进视口。 */
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
   pointer-events: auto;
-  will-change: transform;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+  /* ★2026-11-15 卡片尺寸自定义（设置页 100%~200%）：用标准 zoom 整组缩放甲板。
+     zoom 影响布局（offsetWidth/getBoundingClientRect 均为缩放后真实值），
+     JS 侧 maxScrollX 等读 DOM 的逻辑自动适配；deckContentW 由 TSX 同步乘系数。
+     ★批16：zoom 现在只作用于本层（内容缩放），横向平移已上移到 .cl-deck-pan，
+     位移不再被 zoom 放大。 */
+  zoom: var(--cl-card-zoom, 1);
+  /* ★不再声明 will-change：甲板是「透明外壳 + 一堆实色子元素」的典型结构，
+     长期提升为独立合成层会在 DWM 下漏画子元素背景（同 .cl-card-sway 的问题）。
+     transform 只在滚轮时变化，Chromium 会自行按需提升，无需手工常驻。 */
+}
+/* 根因C：卡片不足一屏时整组居中。用 padding-left 的自动分配实现，
+   避免 justify-content:center 在「刚好溢出」时把首卡推到视口外。 */
+.cl-deck.is-centered {
+  justify-content: center;
+  padding-left: 30px;
+  padding-right: 30px;
 }
 .cl-deck-empty {
   display: flex;
@@ -456,8 +696,8 @@
   padding: 18px 20px;
   border: 1.5px dashed var(--cl-line);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--cl-paper) 55%, transparent);
-  backdrop-filter: blur(2px);
+  /* 根因B：不用 color-mix transparent / backdrop-filter（透明窗里会重建合成层）。 */
+  background: var(--cl-paper);
   width: fit-content;
   max-width: 90%;
 }
@@ -467,29 +707,56 @@
   position: relative;
   flex: 0 0 auto;
   width: 168px;
+  /* ★2026-11-15 反馈批5：显式 height —— 旧版只有 min/max-height，父高「不确定」时
+     子元素 height:100% 退化为 auto → .cl-txt 永远被内容撑开（scrollHeight==clientHeight）
+     → 滚轮白名单判定失效 → 超高内容无法滑动、滚轮被甲板吃掉横向平移。
+     视觉上内容被裁只是 .cl-card overflow:hidden 的假象。CSS 经典陷阱：
+     百分比高度只对「确定高度」生效，min/max 约束不算。 */
+  height: 186px;
   min-height: 186px;
+  max-height: 186px;
+  overflow: hidden;
   padding: 10px 10px 9px;
   border-radius: 3px;
-  background: var(--cl-paper);
-  border: 1px solid var(--cl-line);
+  /* ★0.4.80 方案A（纯前端、零系统 API、窗口状态机一行不动）：
+     (1) 纸底不再只靠 background-color 的纯色 fill，改由 background-image 的不透明
+         渐变纹理绘制。19 轮里最硬的实证是用户截图：带 <img> 的照片卡不透，纯 CSS
+         背景的文字/计时/表格卡透出下层 —— 纹理绘制项每次 invalidation 都会重新提交，
+         而独立合成层的纯色背景在透明 WebView2 里会被漏画。颜色用 --cl-card-bg 变量
+         承载，六类纸色 / 深浅主题 / 自定义便签色全部自动适配。
+     (2) 本元素不再带任何 transform / animation（全部移到外层 .cl-card-sway），让拥有
+         实色纸底的 DOM 回归静态绘制，与便利签「静态 DOM 画进主图层」同构。 */
+  background-color: var(--cl-card-bg, var(--cl-paper));
+  background-image: linear-gradient(
+    var(--cl-card-bg, var(--cl-paper)),
+    var(--cl-card-bg, var(--cl-paper))
+  );
+  border: 1px solid #ddd5c6;
   box-shadow: var(--cl-shadow);
   color: var(--cl-paper-ink);
-  transform: translateY(-6px) rotate(var(--cl-rot, 0deg));
-  transform-origin: 50% 0;
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s, opacity 0.22s;
+  opacity: 1 !important;
+  transform: none;
+  /* ★根因A/B：绝不给卡片任何 transition。编辑态切换、拖动排序、hover 时一旦有插值动画，
+     透明 WebView2 每帧重建合成层 → 卡片「抖一下」+ 背景被算成半透明透出下层窗口。 */
+  transition: none;
   cursor: pointer;
   /* 高于麻绳拖曳热区(15)，保证木夹 / 卡片本身不被热区吞掉；工具条同为 16 但垂直不重叠。 */
   z-index: 16;
   pointer-events: auto;
   touch-action: none;
 }
+/* ★问题8「所有卡片上像有很多条横」——2026-11-12 上一轮自己引入的回归：
+   这里的 repeating-linear-gradient(0deg, #f7f4ec 0 1px, transparent 1px 3px)
+   是**每 3px 一条横线**的密集纹理，且 `transparent` 在透明置顶窗里带 alpha 通道，
+   会把整张实色纸「洗」成半透明条纹（用户截图里卡片发白、透出下层页面）。
+   原型纸张是纯净实色，纹理并非必要 → 直接去掉背景，只保留伪元素骨架给
+   .is-drop-target::before 复用（它自己有 content/background，圆点不受影响）。 */
 .cl-card::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.5;
-  background: repeating-linear-gradient(0deg, rgba(120, 110, 90, 0.035) 0 1px, transparent 1px 3px);
+  background: none;
 }
 .cl-card::after {
   content: '';
@@ -497,15 +764,34 @@
   inset: 0;
   pointer-events: none;
   border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  /* 实色内高光，不带 alpha —— 透明窗里任何 rgba 都可能参与合成层 alpha 计算。 */
+  box-shadow: inset 0 1px 0 #ffffff;
 }
-.cl-root[data-theme='dark'] .cl-card::after { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
-.cl-card:hover {
-  z-index: 19;
-  transform: translateY(-12px) rotate(0deg) scale(1.22);
+.cl-root[data-theme='dark'] .cl-card::after { box-shadow: inset 0 1px 0 #4a4550; }
+/* —— 根因B（2026-11-12 结构性修复）：hover 时卡片色彩 / 透明度必须恒定 ——
+ * 旧版 hover 仍改 box-shadow + z-index，甚至 .cl-card-actions 用 opacity/transform 过渡；
+ * 在**透明置顶 WebView2** 里，任何一个合成属性变化都会让 GPU 重建该层的 alpha，
+ * 纸背景瞬间被算成半透明 → 置顶在别的窗口上时透出下层内容（用户问题3）。
+ * ★结论：hover 一律「零样式变化」——不改 transform / box-shadow / z-index / opacity /
+ *   filter / background。可点反馈交给常驻的 hover 按钮（见下方 .cl-card-actions，
+ *   改为恒定 opacity:1 且无 transition），以及光标形状。 */
+.cl-card:hover { /* 刻意留空：保持静止态的全部合成属性，绝不重建层。 */ }
+.cl-card.is-pinned { border-color: #b7915e; }
+/* ★2026-11-13 问题2「鼠标移入卡片后卡片变透明」的最后一条 alpha 通道：
+ *   旧版拖动中的原卡用 `opacity: .26` 表示「已被拿起」。半透明在透明置顶窗里
+ *   既会被 DWM 二次混算（有时看起来像 40% 灰、透出下层软件），也容易和
+ *   「hover 就变透明」的观感混淆。现在改用**不涉及 alpha 的视觉**：
+ *   虚线描边 + 去掉投影 + 略微上浮，幽灵卡仍跟着光标走，拿起感一样清楚。 */
+.cl-card.is-dragging {
+  opacity: 1;
+  box-shadow: none;
+  outline: 2px dashed rgba(183, 145, 94, 0.85);
+  outline-offset: -2px;
 }
-.cl-card.is-pinned { border-color: color-mix(in srgb, var(--cl-rope) 55%, transparent); }
-.cl-card.is-dragging { opacity: 0.26; box-shadow: none; }
+/* 拖动位移改由外壳承担（纸面恒无 transform）。:has() 在 WebView2 Chromium 105+ 可用。 */
+.cl-card-sway:has(> .cl-card.is-dragging) {
+  transform: translateY(calc(-10px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg));
+}
 .cl-card.is-drop-target::before {
   content: '';
   position: absolute;
@@ -563,21 +849,30 @@
   background: rgba(90, 60, 30, 0.18);
   border-radius: 0 0 2px 2px;
 }
-.cl-card:hover .cl-card-clip { top: -8px; transform: translateY(-2px) rotate(-3deg); }
+/* 木夹 hover 不再改 top / transform（问题10：几何变化触发合成层重建 → 纸背景透底）。
+   木倾角的清风动画由 has-wind 控制、hover 时已 pause 在当前相位，几何恒定不重建。 */
 
-/* 悬停浮出的操作按钮（原型 .card-actions） */
+/* 悬停浮出的操作按钮（原型 .card-actions）。
+ * ★根因B：旧版 opacity 0→1 + transform 过渡，在透明 WebView2 里 hover 瞬间重建合成层，
+ *   连带整张纸背景被算成半透明（问题3 透出下层窗口）。改为**常驻可见、恒定不透明**，
+ *   没有任何 opacity/transform/transition 变化；视觉上就是卡片右上角三个小圆按钮。 */
 .cl-card-actions {
   position: absolute;
   right: 6px;
   top: 8px;
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition: 0.2s;
   z-index: 6;
+  /* ★2026-11-15 反馈批8：操作图标改为鼠标移入卡片才显示（用户点名）。
+     用 visibility 离散切换——绝不用 opacity/transition 动画（透明窗合成层
+     历史问题）；hidden 时元素不接收指针事件，顺带杜绝误触。 */
+  visibility: hidden;
 }
-.cl-card:hover .cl-card-actions { opacity: 1; transform: none; }
+.cl-card:hover .cl-card-actions,
+.cl-card:focus-within .cl-card-actions,
+.cl-card-actions:has(button:focus) {
+  visibility: visible;
+}
 .cl-card-actions button {
   width: 20px;
   height: 20px;
@@ -597,13 +892,165 @@
 .cl-root[data-theme='dark'] .cl-card-actions button { background: rgba(50, 54, 64, 0.96); color: #e6e8ee; }
 
 /* —— 各类卡片的纸色（原型 §「各类卡片」）—— */
-.cl-card-note { background: var(--cl-note); border-color: var(--cl-note-line); }
-.cl-card-task { background: var(--cl-task); border-color: var(--cl-task-line); }
-.cl-card-timer { background: var(--cl-timer); border-color: var(--cl-timer-line); }
-.cl-card-text { background: var(--cl-text); border-color: var(--cl-text-line); }
-.cl-card-clipboard { background: var(--cl-clip); border-color: var(--cl-clip-line); }
+/* 问题10：绳上便利签可改色（与桌面便利签共用色板，变量由卡片 style 注入）。
+   固定高度 + border-box，才能让 .cl-note-list 用 flex:1 + 自身滚动，
+   并让「加一条 / 打开原窗」恒定贴在卡片底部，不随条目数漂移。 */
+.cl-card-note {
+  --cl-card-bg: var(--cl-note, #fff8e6);
+  background-color: var(--cl-note, #fff8e6);
+  border-color: var(--cl-note-line, #efe2c1);
+  color: var(--cl-note-ink, #3a352c);
+  box-sizing: border-box;
+  height: 186px;
+}
+.cl-card-note .cl-face { height: 100%; min-height: 0; gap: 0; }
+.cl-card-task { --cl-card-bg: var(--cl-task); background-color: var(--cl-task); border-color: var(--cl-task-line); }
+.cl-card-timer { --cl-card-bg: var(--cl-timer); background-color: var(--cl-timer); border-color: var(--cl-timer-line); }
+.cl-card-text {
+  /* ★2026-11-15 反馈批8：随手记卡改版 —— 用户选定「方案二 · 晨雾渐变」。
+     对角晨雾渐变（全部不透明实色，透明窗铁律）+ 12px 大圆角 + 白描边 +
+     底部三色渐变条；正文弃楷体改 Segoe UI（用户嫌旧版古板）。
+     自定义卡色时用 color-mix 从卡色派生渐变（无 alpha）；暗色主题提高
+     卡色占比，避免混成灰调。 */
+  --cl-card-bg: var(--cl-text);
+  background-color: var(--cl-card-bg);
+  background-image: linear-gradient(155deg,
+    color-mix(in srgb, var(--cl-card-bg) 55%, #ffd7e3) 0%,
+    color-mix(in srgb, var(--cl-card-bg) 72%, #e4d9fb) 52%,
+    color-mix(in srgb, var(--cl-card-bg) 55%, #d6e6fc) 100%);
+  border-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(120, 100, 160, 0.2), 0 2px 5px rgba(120, 100, 160, 0.12);
+}
+.cl-root[data-theme='dark'] .cl-card-text {
+  background-image: linear-gradient(155deg,
+    color-mix(in srgb, var(--cl-card-bg) 88%, #f9b8c8) 0%,
+    color-mix(in srgb, var(--cl-card-bg) 88%, #9dbdfc) 100%);
+  border-color: #3d4454;
+}
 
-.cl-face { position: relative; display: flex; flex-direction: column; gap: 4px; }
+/* —— 反馈批9：随手记样式可选（创建弹窗「卡片样式」：晨雾 / 胶带 / 墨夜）—— */
+
+/* 方案一 · 和纸胶带便签：奶油纸底 + 顶部斜贴双色胶带 + 日期胶囊 + 底部三圆点。
+   自定义卡色时直接当纸底色（inline --cl-card-bg 优先于下面的默认值）。 */
+.cl-card-text.is-tape {
+  --cl-card-bg: #fff9ee;
+  background-image: none;
+  background-color: var(--cl-card-bg);
+  border-color: #f0e3c8;
+  border-radius: 10px;
+  box-shadow: var(--cl-shadow);
+}
+.cl-card-text.is-tape::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 112px;
+  height: 16px;
+  transform: translateX(-50%) rotate(-2deg);
+  border-radius: 3px;
+  background: repeating-linear-gradient(45deg, #f9c8d0 0 8px, #a8d6fa 8px 16px);
+  box-shadow: 0 2px 4px rgba(120, 90, 60, 0.18);
+  z-index: 3;
+}
+.cl-card-text.is-tape .cl-letter-head { margin-top: 17px; }
+.cl-card-text.is-tape .cl-letter-badge { display: none; }
+.cl-card-text.is-tape .cl-letter-headtxt .cl-caption { color: #4a3710; }
+.cl-card-text.is-tape .cl-letter-headtxt .cl-letter-date {
+  align-self: flex-start;
+  background: #f6e8c8;
+  color: #8a6a3e;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.cl-card-text.is-tape .cl-txt { color: #5a4c34; }
+.cl-card-text.is-tape .cl-letter-bar { display: none; }
+.cl-card-text.is-tape::after {
+  content: '';
+  position: absolute;
+  bottom: 10px;
+  left: calc(50% - 15px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e3cf9e;
+  /* 三个装饰点用 box-shadow 实色复制（透明窗铁律：装饰不用 alpha）。 */
+  box-shadow: 12px 0 0 #e3cf9e, 24px 0 0 #e3cf9e;
+}
+
+/* 方案三 · 墨夜磁贴：深色卡 + 左侧竖条（取自定义卡色）+ 右上折角 + 等宽日期。
+   两种主题下都是深色（磁贴语义），明暗主题无需分写。 */
+.cl-card-text.is-night {
+  background-color: #2e3340;
+  background-image: linear-gradient(180deg, #333a49 0%, #262b37 100%);
+  border-color: #3d4454;
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(10, 14, 22, 0.4), 0 2px 5px rgba(10, 14, 22, 0.3);
+}
+.cl-card-text.is-night::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--cl-night-bar, #f2b8c6);
+}
+.cl-card-text.is-night::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  background: #39404f;
+  clip-path: polygon(0 0, 100% 100%, 100% 0);
+}
+.cl-card-text.is-night .cl-letter-head { padding-right: 18px; }
+.cl-card-text.is-night .cl-letter-badge { display: none; }
+.cl-card-text.is-night .cl-letter-headtxt .cl-caption { color: #f2f4f8; }
+/* ★批10-1：三样式的日期统一字体族 / 字号 / 字距（旧版墨夜用 Consolas + 1px 字距，
+   用户批10反馈「字体不一致」——日期字体只有颜色允许随样式变化）。 */
+.cl-card-text.is-night .cl-letter-headtxt .cl-letter-date {
+  color: #8f99ad;
+}
+.cl-card-text.is-night .cl-txt { color: #c6cdda; }
+/* ★批10-1：底条改回设计图的「3 个分开的圆头进度胶囊」——主体 + 两个实色
+   box-shadow 副本（透明窗铁律：装饰不用 alpha），第一段取自定义卡色。 */
+.cl-card-text.is-night .cl-letter-bar {
+  left: 14px;
+  right: auto;
+  bottom: 9px;
+  width: 34px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--cl-night-bar, #f2b8c6);
+  box-shadow: 44px 0 0 #3d4454, 88px 0 0 #3d4454;
+}
+
+/* 胶带样式的暗色主题：奶油纸 → 深棕纸（显式主题 + 系统偏好双覆盖）。 */
+.cl-root[data-theme='dark'] .cl-card-text.is-tape {
+  background-color: #2e2a24;
+  border-color: #4a4438;
+}
+.cl-root[data-theme='dark'] .cl-card-text.is-tape .cl-letter-headtxt .cl-caption { color: #f2e9db; }
+.cl-root[data-theme='dark'] .cl-card-text.is-tape .cl-letter-headtxt .cl-letter-date { background: #3d382e; color: #d8c39c; }
+.cl-root[data-theme='dark'] .cl-card-text.is-tape .cl-txt { color: #d9d2c2; }
+.cl-root[data-theme='dark'] .cl-card-text.is-tape::after { background: #5c5340; box-shadow: 12px 0 0 #5c5340, 24px 0 0 #5c5340; }
+@media (prefers-color-scheme: dark) {
+  .cl-root:not([data-theme='light']) .cl-card-text.is-tape {
+    background-color: #2e2a24;
+    border-color: #4a4438;
+  }
+  .cl-root:not([data-theme='light']) .cl-card-text.is-tape .cl-letter-headtxt .cl-caption { color: #f2e9db; }
+  .cl-root:not([data-theme='light']) .cl-card-text.is-tape .cl-letter-headtxt .cl-letter-date { background: #3d382e; color: #d8c39c; }
+  .cl-root:not([data-theme='light']) .cl-card-text.is-tape .cl-txt { color: #d9d2c2; }
+  .cl-root:not([data-theme='light']) .cl-card-text.is-tape::after { background: #5c5340; box-shadow: 12px 0 0 #5c5340, 24px 0 0 #5c5340; }
+}
+.cl-card-clipboard { --cl-card-bg: var(--cl-clip); background-color: var(--cl-clip); border-color: var(--cl-clip-line); }
+
+.cl-face { position: relative; display: flex; flex-direction: column; gap: 4px; height: 100%; }
 .cl-face-head {
   font: 700 10px/1.3 var(--cl-font);
   color: var(--cl-rope-dark);
@@ -615,16 +1062,46 @@
 .cl-pin-mark { color: var(--cl-rope-dark); font-weight: 800; }
 
 /* 便利签：米黄纸 + 勾选清单 */
-.cl-note-title { font: 700 11px/1.3 var(--cl-font); color: #8c7b58; margin: 2px 2px 7px; }
+.cl-note-title { font: 700 11px/1.3 var(--cl-font); color: #8c7b58; margin: 2px 2px 7px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cl-root[data-theme='dark'] .cl-note-title { color: #d8c39c; }
-.cl-note-list { list-style: none; margin: 0; padding: 0 2px; }
+.cl-note-head { display: flex; align-items: center; gap: 4px; flex: none; }
+.cl-note-color {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid #b9a986;
+  padding: 0;
+  font: 10px/15px var(--cl-font);
+  text-align: center;
+  cursor: pointer;
+}
+.cl-note-count { font-size: 8.5px; color: #a2926f; margin-left: 2px; }
+/* 问题10：条目超过 6 条不再被 slice 掉，列表自身滚动；上限 30 条由按钮 toast 提示。 */
+.cl-note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* ★问题5：条目超过单屏高度要能滚动，但**不显示滚动条**（原型是干净纸面）。
+     scrollbar-width:none + ::-webkit-scrollbar 全零，两条都写以覆盖 WebView2。 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cl-note-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .cl-note-row {
-  font: 11px/1.6 var(--cl-font);
+  font: calc(10.5px * var(--cl-card-fs, 1))/1.6 var(--cl-font);
   color: var(--cl-paper-ink);
   display: flex;
   gap: 6px;
   align-items: flex-start;
   margin-bottom: 4px;
+  /* ★2026-11-15 反馈4：悬停浮出行操作项（复制 / 加入待办 / 删除），不占内容空间。 */
+  position: relative;
 }
 .cl-note-row i {
   width: 11px;
@@ -639,6 +1116,143 @@
 .cl-note-row.is-done i::after { content: '✓'; position: absolute; left: 1px; top: -4px; font-size: 9px; color: #fff; font-style: normal; }
 .cl-note-row.is-done span { text-decoration: line-through; opacity: 0.5; }
 .cl-note-more { font: 10px/1.4 var(--cl-font); color: var(--cl-paper-muted); padding-left: 2px; }
+/* ⑥ 绳上便利签卡可交互：勾选 / 删除 / 新增 / 打开原窗。
+   全部用**不透明实色**、无 transition、无 transform，避免在透明置顶窗里重建合成层。 */
+.cl-note-text { flex: 1; min-width: 0; word-break: break-all; cursor: text; }
+.cl-note-row.is-done .cl-note-text { text-decoration: line-through; color: #8a8272; }
+.cl-note-check {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-top: 3px;
+  padding: 0;
+  border: 1.4px solid #b9a986;
+  border-radius: 3px;
+  background: #fffdf5;
+  color: #4d7040;
+  font: 700 9px/10px var(--cl-font);
+  text-align: center;
+  cursor: pointer;
+}
+.cl-note-row.is-done .cl-note-check { background: #7fa86b; border-color: #7fa86b; }
+.cl-note-del {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b09a7a;
+  font: 700 12px/12px var(--cl-font);
+  cursor: pointer;
+}
+/* ★2026-11-15 反馈4：行操作项与桌面便利签一致 —— 鼠标移入该行才浮出，
+   绝对定位浮在文字上方，不占用内容文案的显示空间。
+   ★反馈批3：尺寸/样式对齐桌面便利签 ns-item-ops（12px 图标 + 1px 间距 + 白底小圆角），
+   并用 zoom 反向抵消 .cl-deck 的卡片缩放，任何卡片尺寸下视觉大小恒定。 */
+.cl-note-ops {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  padding: 1px 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgba(60, 45, 20, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+  zoom: calc(1 / var(--cl-card-zoom, 1));
+}
+.cl-note-row:hover .cl-note-ops,
+.cl-note-ops:focus-within { opacity: 1; pointer-events: auto; }
+.cl-note-op {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #a09272;
+  cursor: pointer;
+}
+.cl-note-op svg { width: 12px; height: 12px; }
+.cl-note-op:hover { color: #6d5a38; background: rgba(120, 100, 60, 0.1); }
+.cl-note-op.is-danger:hover { color: #b3403a; }
+/* 问题10：按钮恒固定在便利签底部。list 已用 flex:1 吃掉剩余高度，
+   margin-top:auto 是双保险，条目再多也不会把按钮挤出卡片可视区。 */
+.cl-note-tools { display: flex; gap: 5px; margin-top: auto; padding-top: 5px; flex: none; }
+.cl-note-tools button {
+  flex: 1;
+  border: 1px solid #e2d5b6;
+  background: #fffdf3;
+  color: #8c7b58;
+  border-radius: 6px;
+  font: 9.5px/1.5 var(--cl-font);
+  padding: 3px 2px;
+  cursor: pointer;
+}
+.cl-root[data-theme='dark'] .cl-note-check { background: #34323a; border-color: #8c8268; color: #d8e8c8; }
+.cl-root[data-theme='dark'] .cl-note-tools button { background: #35323a; border-color: #5b5148; color: #e0cfae; }
+/* ⑥ 内联编辑条：与 .cl-note-tools 严格等高（22px，同 margin-top:5px），
+   切换编辑态时卡片高度不变 → 不会「每次点文本框都抖一下」。
+   全部实色、无 transition/transform/opacity，透明置顶窗不重建合成层。 */
+/* 问题10：新增/编辑的输入框放在列表最末一条下方，宽度撑满整张卡（不挤在窄缝里）。 */
+.cl-note-editbar { display: flex; gap: 5px; margin-top: 0; height: 24px; width: 100%; flex: 1; min-width: 0; align-items: stretch; }
+.cl-note-editbar .cl-note-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e2d5b6;
+  border-radius: 6px;
+  background: #fffdf3;
+  color: var(--cl-paper-ink);
+  font: 9.5px/1.5 var(--cl-font);
+  padding: 2px 4px;
+  outline: none;
+}
+.cl-note-editbar button {
+  flex: none;
+  width: 34px;
+  border: 1px solid #e2d5b6;
+  border-radius: 6px;
+  background: #fffdf3;
+  color: #8c7b58;
+  font: 9.5px/1.5 var(--cl-font);
+  padding: 2px 0;
+  cursor: pointer;
+}
+.cl-root[data-theme='dark'] .cl-note-editbar .cl-note-input,
+.cl-root[data-theme='dark'] .cl-note-editbar button { background: #35323a; border-color: #5b5148; color: #e0cfae; }
+/* ★2026-11-15 需求1：绳上便利签去掉「加一条 / 打开原窗」按钮排，改为底部固定
+   添加文本框（与桌面便利签一致：永远可输入，回车即新增条目）。 */
+.cl-note-addbar {
+  margin-top: auto;
+  padding-top: 5px;
+  flex: none;
+  display: flex;
+}
+.cl-note-addbar .cl-note-input {
+  width: 100%;
+  border: 1px solid #e2d5b6;
+  border-radius: 6px;
+  background: #fffdf3;
+  color: var(--cl-paper-ink);
+  font: 9.5px/1.5 var(--cl-font);
+  padding: 3px 5px;
+  outline: none;
+}
+.cl-note-addbar .cl-note-input::placeholder { color: #b09a7a; }
+.cl-root[data-theme='dark'] .cl-note-addbar .cl-note-input {
+  background: #35323a;
+  border-color: #5b5148;
+  color: #e0cfae;
+}
 
 /* 待办：蓝纸 + 任务行 */
 .cl-task-title { font: 700 11px/1.3 var(--cl-font); color: #5b7bb0; margin: 2px 2px 8px; }
@@ -655,11 +1269,13 @@
 .cl-root[data-theme='dark'] .cl-task-row { border-color: #3d4a5e; }
 .cl-task-row i { width: 10px; height: 10px; border-radius: 50%; border: 1.4px solid #9db4d4; flex: none; margin-top: 2px; }
 
-/* 番茄计时：粉纸 + 圆环 + 控制按钮（原型 .tm-ring） */
-.cl-card-timer .cl-face { text-align: center; align-items: center; }
+/* 番茄计时：粉纸 + 圆环 + 控制按钮（原型 .tm-ring）
+ * 问题6：卡片内容须在 300px 视口内完整显示——收紧垂直间距、按钮绝不换行，
+ *       并让 .cl-face 内容能自然撑开卡片高度（cl-card 用 min-height 而非固定 height）。 */
+.cl-card-timer .cl-face { text-align: center; align-items: center; gap: 3px; }
 .cl-tm-head { font: 700 10px/1.3 var(--cl-font); color: #b36a53; letter-spacing: 0.5px; }
-.cl-tm-ring { position: relative; width: 92px; height: 92px; margin: 4px auto 2px; }
-.cl-tm-svg { width: 92px; height: 92px; transform: rotate(-90deg); }
+.cl-tm-ring { position: relative; width: 88px; height: 88px; margin: 2px auto 0; flex: none; }
+.cl-tm-svg { width: 88px; height: 88px; transform: rotate(-90deg); }
 .cl-tm-bg { fill: none; stroke: var(--cl-timer-line); stroke-width: 5; }
 .cl-tm-fg { fill: none; stroke: #e0714f; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 263.9; }
 .cl-root[data-theme='dark'] .cl-tm-bg { stroke: #4b3f4e; }
@@ -676,20 +1292,278 @@
 }
 .cl-root[data-theme='dark'] .cl-tm-time { color: #f0e2dc; }
 .cl-tm-time.is-fired { color: #c2413c; }
-.cl-tm-btns { display: flex; gap: 5px; justify-content: center; margin: 2px 0 4px; }
+.cl-tm-btns {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  margin: 1px 0 2px;
+  width: 100%;
+}
 .cl-tm-btns button {
   border: 1px solid #ead2c7;
   background: #fff;
   color: #a35c48;
   border-radius: 8px;
   font: 9.5px/1.3 var(--cl-font);
-  padding: 4px 7px;
+  padding: 4px 6px;
   white-space: nowrap;
+  flex: 1 1 0;
+  min-width: 0;
   cursor: pointer;
 }
 .cl-tm-btns button:hover { background: #fdeae2; }
-.cl-tm-foot { font: 9.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); }
+.cl-tm-foot { font: 9.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); white-space: nowrap; }
 .cl-root[data-theme='dark'] .cl-tm-btns button { background: #3a3038; border-color: #57444d; color: #f0b49c; }
+
+/* —— ★2026-11-15 一键录音卡（用户选定「方案六 · 墨黑胶囊」）：墨黑卡身 + 白色
+      细体数字 + 红色 REC 胶囊，iOS 语音备忘录质感，纸色卡群里辨识度最高。
+      声波条/胶囊全部是纯静态色块（绳窗铁律：卡片内容层绝不引入 CSS animation
+      —— 5Hz 重渲染会不断重启动画造成抖动）。卡身自带深色配色，明暗主题通用。 —— */
+.cl-card-audio {
+  --cl-card-bg: #2a2c34;
+  background-color: #2a2c34;
+  background-image: linear-gradient(#2e3038, #23252c);
+  border-color: #17181d;
+}
+.cl-card-audio .cl-face { text-align: center; align-items: center; gap: 0; }
+.cl-au-pill {
+  flex: none;
+  font: 700 8.5px/1 var(--cl-font);
+  letter-spacing: 1.5px;
+  color: #fff;
+  background: #e05043;
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.cl-au-pill.is-hold { background: #d9a13c; }
+.cl-au-pill.is-save { background: #5a6280; }
+.cl-au-title {
+  margin-top: 6px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px dashed transparent;
+  background: transparent;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font: 600 11px/1.3 var(--cl-font);
+  color: #e8e9ee;
+  cursor: text;
+}
+.cl-au-title:hover { border-color: #4a4e5a; background: #3a3d47; }
+.cl-au-title-input {
+  margin-top: 6px;
+  width: 138px;
+  min-width: 0;
+  border: 1px solid #4a4e5a;
+  background: #3a3d47;
+  color: #f0f1f4;
+  border-radius: 6px;
+  font: 600 11px/1.3 var(--cl-font);
+  padding: 2px 6px;
+}
+.cl-au-time {
+  font: 200 38px/1 'Segoe UI Light', 'Segoe UI', var(--cl-font);
+  color: #f5f6f8;
+  margin: 12px 0 6px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
+.cl-au-line { display: flex; align-items: center; gap: 3px; height: 18px; opacity: .8; }
+.cl-au-line i { display: block; width: 3px; border-radius: 1.5px; background: #e05043; }
+.cl-au-btns { display: flex; gap: 8px; margin-top: auto; }
+.cl-au-btns button {
+  min-width: 38px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font: 700 11px/1 var(--cl-font);
+  color: #cfd2da;
+  background: #3a3d47;
+  border: 1px solid #4a4e5a;
+  cursor: pointer;
+}
+.cl-au-btns button:hover:not(:disabled) { border-color: #6a7080; color: #fff; }
+.cl-au-btns button:disabled { opacity: 0.45; cursor: default; }
+.cl-au-btns .cl-au-save {
+  min-width: 54px;
+  background: #e05043;
+  border-color: #c2453a;
+  color: #fff;
+}
+.cl-au-btns .cl-au-save:hover:not(:disabled) { background: #c94338; border-color: #a83a30; color: #fff; }
+.cl-au-foot { font: 9.5px/1.3 var(--cl-font); color: #8b8f9c; margin-top: 7px; white-space: nowrap; }
+/* —— 番茄钟卡片样式三选一（2026-11-15 需求6；默认 paper=纸感，不再另写）——
+ * 全部用不透明色（color-mix 与不透明渐变），透明置顶窗里绝不引入 alpha 背景。 */
+/* ★2026-11-15 反馈4：三种卡样式必须有肉眼可辨的差异 ——
+   极简=纯白平板无纹理、玻璃=强冷调渐变+高光描边、纸感(默认)=米色纸纹+虚线内衬。 */
+.cl-card-timer[data-style='minimal'] {
+  background-color: #ffffff;
+  background-image: none;
+  border: 1px solid #d5d1c8;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(40, 32, 20, 0.14);
+}
+.cl-card-timer[data-style='minimal']::after { border-radius: 8px; border-style: solid; border-color: transparent; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='minimal'] { border-color: #4a4550; }
+.cl-card-timer[data-style='glass'] {
+  background-image: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--cl-card-bg, #eaf1fd) 28%, #f3f8ff) 0%,
+    color-mix(in srgb, var(--cl-card-bg, #eaf1fd) 62%, #dfeaff) 55%,
+    color-mix(in srgb, var(--cl-card-bg, #eaf1fd) 55%, #7f97c9) 100%
+  );
+  /* ★2026-11-15 反馈3：旧版边框混入 #2f6bff 蓝色 → 任何卡色下边框恒发蓝，
+     用户误以为「蓝色边框线 bug」。改为与纸色系一致的中性暖边（麻绳棕）。 */
+  border: 1.5px solid color-mix(in srgb, var(--cl-card-bg, #eaf1fd) 40%, #8a6a3e);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 6px 16px rgba(122, 92, 52, 0.2);
+}
+.cl-card-timer[data-style='glass']::after { border-radius: 14px; border-color: transparent; }
+
+/* —— 2026-11-15 需求5/6：随手记 / 番茄钟添加编辑弹窗（桌面居中、无遮罩）——
+ * 弹窗打开时绳窗临时整屏（复用预览机制），本体 fixed 居中；周边完全透明
+ * 且不做暗色遮罩，点击弹窗外由 Rust dismiss 通道回传取消。 */
+/* ★2026-11-15 反馈批5：弹窗加宽 + 正文框加高 —— 旧版 312px 宽 / textarea 76px 高，
+   多行内容编辑体验极差。宽度 312→420，textarea 76→200 且允许纵向手动拉伸；
+   max-height 72vh 兜底，小屏时弹窗整体仍可滚。 */
+.cl-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: 420px;
+  max-height: 80vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  text-align: left;
+}
+.cl-modal-title { font: 700 13px/1.4 var(--cl-font); color: var(--cl-ink); }
+.cl-modal-row { display: flex; flex-direction: column; gap: 4px; }
+.cl-modal-label { font: 600 10.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); }
+.cl-modal-input,
+.cl-modal-textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1.5px solid var(--cl-line);
+  background: color-mix(in srgb, var(--cl-paper) 90%, #ffffff 10%);
+  color: var(--cl-paper-ink);
+  font: 11.5px/1.5 var(--cl-font);
+  padding: 7px 9px;
+  outline: none;
+}
+.cl-modal-textarea { min-height: 200px; resize: vertical; }
+.cl-modal-input:focus, .cl-modal-textarea:focus { border-color: var(--cl-accent); }
+/* 必填校验错误提示（2026-11-15 反馈4） */
+.cl-modal-err { font: 600 10.5px/1.4 var(--cl-font); color: #b3403a; }
+.cl-modal-swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+.cl-modal-swatch {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(90, 70, 40, 0.35);
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(90, 70, 40, 0.18);
+}
+/* ★2026-11-15 反馈4：选中样式改为 box-shadow 双环 + ✓ 角标 ——
+   outline 在 zoom/合成层场景下时隐时现，ring 必须一眼可见。 */
+.cl-modal-swatch.is-active {
+  border-color: var(--cl-accent, #2f6bff);
+  box-shadow:
+    0 0 0 2.5px var(--cl-paper, #fdf9ef),
+    0 0 0 5px var(--cl-accent, #2f6bff),
+    0 1px 2px rgba(90, 70, 40, 0.18);
+}
+.cl-modal-swatch.is-active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 10px/1 var(--cl-font);
+  color: #4c3d22;
+}
+.cl-modal-seg { display: flex; gap: 6px; }
+.cl-modal-seg button {
+  flex: 1;
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cl-paper) 92%, #ffffff 8%);
+  color: var(--cl-ink);
+  font: 600 11px/1.4 var(--cl-font);
+  padding: 5px 0;
+  cursor: pointer;
+}
+.cl-modal-seg button.is-active {
+  background: color-mix(in srgb, var(--cl-accent) 16%, var(--cl-paper));
+  border-color: var(--cl-accent);
+}
+.cl-modal-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 11px/1.4 var(--cl-font);
+  color: var(--cl-ink);
+  cursor: pointer;
+}
+.cl-modal-check input { accent-color: var(--cl-accent); cursor: pointer; }
+.cl-modal .cl-minutes { flex-direction: column; align-items: stretch; gap: 5px; }
+.cl-modal .cl-minutes input { font: 600 13px/1.3 var(--cl-font); padding: 6px 8px; }
+.cl-modal-quick { display: flex; gap: 5px; }
+.cl-modal-quick button {
+  flex: 1;
+  border: 1px solid var(--cl-line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cl-paper) 92%, #ffffff 8%);
+  color: var(--cl-ink);
+  font: 600 10.5px/1.3 var(--cl-font);
+  padding: 4px 0;
+  cursor: pointer;
+}
+.cl-modal-quick button.is-active {
+  background: color-mix(in srgb, var(--cl-accent) 16%, var(--cl-paper));
+  border-color: var(--cl-accent);
+}
+/* 便利签色卡弹窗（绳卡顶部 🎨 图标触发）：小浮层，样式与右键菜单同族。 */
+.cl-color-menu {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cl-paper) 96%, transparent);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+.cl-color-menu button {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(90, 70, 40, 0.35);
+  cursor: pointer;
+}
+.cl-color-menu button.is-current { outline: 2px solid var(--cl-accent); outline-offset: 1px; }
 
 /* 图片 / 截图 / 贴图：大图 + 标题 + 元信息（原型 .photo/.caption/.meta） */
 .cl-photo {
@@ -732,23 +1606,189 @@
   cursor: text;
 }
 .cl-caption::after { content: '✎'; position: absolute; right: 0; top: 0; font-size: 10px; color: #b0a89a; opacity: 0; transition: 0.18s; }
-.cl-card:hover .cl-caption::after { opacity: 1; }
+/* 根因B：caption 编辑提示不再靠 hover 改 opacity（透明窗合成层重建）。 */
 .cl-meta { font: 9.5px/1.4 var(--cl-font); color: var(--cl-paper-muted); margin: 1px 2px 0; letter-spacing: 0.2px; }
+
+/* ★2026-11-15 反馈7：随手记卡信件样式 —— 信纸横线 + 楷体 + 创建时间落款。 */
+.cl-letter-face { padding-top: 0; }
+.cl-caption { font-size: calc(12.5px * var(--cl-card-fs, 1)); }
+.cl-letter-date {
+  font: calc(9px * var(--cl-card-fs, 1))/1.4 var(--cl-font);
+  color: var(--cl-paper-muted);
+  margin: 0 4px 0;
+  letter-spacing: 0.4px;
+  text-align: right;
+  border-bottom: 1px dashed rgba(140, 123, 88, 0.4);
+  padding-bottom: 2px;
+}
+.cl-letter-sign {
+  font: italic calc(9px * var(--cl-card-fs, 1))/1.4 'Kaiti SC', 'STKaiti', serif;
+  color: var(--cl-paper-muted);
+  margin: 1px 4px 2px;
+  text-align: right;
+}
+
+/* —— 方案二 · 晨雾渐变：圆徽章标题区 + 底部三色渐变条（反馈批8） —— */
+.cl-letter-head { display: flex; align-items: center; gap: 7px; margin: 1px 2px 0; flex: none; }
+.cl-letter-badge {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f9b8c8, #9dbdfc);
+  color: #ffffff;
+  font: 700 14px/27px var(--cl-font);
+  text-align: center;
+}
+.cl-letter-headtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.cl-letter-headtxt .cl-caption {
+  /* ★批12：标题默认再缩小（14→12.5px）、恒加粗；支持卡级自定义
+     --cl-title-size / --cl-title-weight / --cl-title-style / --cl-card-font。 */
+  font-size: var(--cl-title-size, 12.5px);
+  font-weight: var(--cl-title-weight, 800);
+  font-style: var(--cl-title-style, normal);
+  font-family: var(--cl-card-font, inherit);
+  color: #33415c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-root[data-theme='dark'] .cl-letter-headtxt .cl-caption { color: #f2f4f8; }
+.cl-letter-headtxt .cl-letter-date {
+  /* ★批12：日期再缩小（8.5→8px）+ 行高收紧 1.2 + 间距归零（用户批12：
+     日期与标题间距太大、占据空间大）。 */
+  font-size: 8px;
+  line-height: 1.2;
+  margin-top: 1px;
+  color: #8a93ad;
+  border-bottom: 0;
+  padding-bottom: 0;
+  text-align: left;
+  margin-bottom: 0;
+  align-self: flex-start;
+}
+.cl-root[data-theme='dark'] .cl-letter-headtxt .cl-letter-date { color: #8f99ad; }
+.cl-letter-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 5px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #f9b8c8, #9dbdfc 55%, #b8e2c8);
+  flex: none;
+}
+/* 正文：弃楷体与信纸横线（用户嫌古板），改现代无衬线 + 宽行距。
+   ★批10-1：字号显式声明（不再隐式继承基础 .cl-txt），三样式标题 14px/800、
+   日期 10px、正文 12.5px 完全一致，杜绝「字体大小不一致」。 */
+.cl-card-text .cl-txt {
+  /* ★批12：正文默认再缩小（11→10px）；卡级自定义 --cl-body-size（px 基准，
+     仍乘 A 键字号档位）/ --cl-body-weight / --cl-body-style / --cl-card-font。 */
+  font-size: calc(var(--cl-body-size, 10px) * var(--cl-card-fs, 1));
+  font-family: var(--cl-card-font, 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif);
+  font-weight: var(--cl-body-weight, 500);
+  font-style: var(--cl-body-style, normal);
+  line-height: 1.7;
+  background: none;
+  padding-bottom: 16px;
+  color: #47536b;
+}
+.cl-root[data-theme='dark'] .cl-card-text .cl-txt { color: #c6cdda; }
+
+/* ★批12 弹窗「字体格式」段：标题/内容独立字号步进 + 字体族下拉 + 加粗/倾斜开关。
+   透明窗铁律：全部不透明实色，无 alpha。 */
+.cl-modal-fmt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px 12px;
+  border: 1px solid #e2e6f0;
+  border-radius: 12px;
+  background: #f7f8fc;
+}
+.cl-modal-fmt-head { display: flex; align-items: center; justify-content: space-between; }
+.cl-modal-fmt-head > span { font-size: 12px; font-weight: 700; color: #3a415c; }
+.cl-modal-fmt-reset {
+  border: 0;
+  background: none;
+  color: #5b6cf0;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.cl-modal-fmt-reset:hover { text-decoration: underline; }
+.cl-modal-fmt-family {
+  height: 30px;
+  border: 1px solid #d9ddeb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #2c3352;
+  outline: none;
+}
+.cl-modal-fmt-row { display: flex; align-items: center; gap: 8px; }
+.cl-modal-fmt-label { width: 34px; font-size: 12px; color: #55607f; flex: none; }
+.cl-modal-fmt-step {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d9ddeb;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 14px;
+  line-height: 1;
+  color: #2c3352;
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+}
+.cl-modal-fmt-step:hover { background: #eef1fa; }
+.cl-modal-fmt-val { min-width: 52px; text-align: center; font-size: 12px; color: #2c3352; }
+.cl-modal-fmt-tgl {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d9ddeb;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #55607f;
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+}
+.cl-modal-fmt-tgl.is-on { background: #5b6cf0; border-color: #5b6cf0; color: #ffffff; }
+.cl-modal-fmt-tgl-i { font-style: italic; font-family: Georgia, serif; }
 
 /* 文字卡：浅绿纸 + 楷体；剪贴板：等宽 */
 .cl-txt {
-  font: 12.5px/1.7 'Kaiti SC', 'STKaiti', 'Segoe UI', serif;
+  font: calc(12.5px * var(--cl-card-fs, 1))/calc(24px * var(--cl-card-fs, 1)) 'Kaiti SC', 'STKaiti', 'Segoe UI', serif;
   color: var(--cl-paper-ink);
-  padding: 12px 8px 6px;
-  min-height: 128px;
+  /* ★2026-11-15 反馈批4：顶内边距 12px → 4px —— 旧值与日期行下边距叠加出
+     一行空白；横线起点同步上移，仍然 1px 悬在每行文字上方。 */
+  padding: 4px 10px 8px;
   cursor: text;
   white-space: pre-wrap;
   word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 7;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* ★2026-11-15 反馈3：正文超出卡面可滚动查看，但不显示滚动条。
+     同时去掉旧版 -webkit-box/line-clamp —— 旧盒模型会把首行顶到裁剪边界
+     之外（用户看到的「第一行不是正文第一行」）。 */
+  overflow-y: auto;
+  /* 滚到边界不再把滚动链给祖先（甲板是 transform 平移，链上去只会抖）。 */
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* ★2026-11-15 反馈7：信纸横线（行高 24px 与横线节距严格一致，缩放档位同步）。
+     用 local 让横线跟随内容滚动，滚到底横线仍然贴合文字行。 */
+  background-image: linear-gradient(rgba(140, 123, 88, 0.15) 1px, transparent 1px);
+  background-size: 100% calc(24px * var(--cl-card-fs, 1));
+  background-attachment: local;
+  background-position: 0 3px;
 }
+.cl-txt::-webkit-scrollbar { display: none; }
 .cl-clip-txt {
   font: 11px/1.65 'Cascadia Mono', Consolas, monospace;
   color: var(--cl-paper-ink);
@@ -777,26 +1817,23 @@
 .cl-ph-title { font: 600 12px/1.3 var(--cl-font); color: var(--cl-paper-ink); }
 .cl-ph-sub { font: 10px/1.4 var(--cl-font); color: var(--cl-paper-muted); }
 
-/* —— 幽灵卡 / 编辑 / 右键菜单 / Toast（功能类名全部保留）—— */
+/* —— 幽灵卡 / 编辑 / 右键菜单 / Toast（功能类名全部保留）——
+ * ★2026-11-15 拖动排序幽灵卡重构：旧版 .cl-ghost 自绘一张「白纸+文字」的简化卡，
+ * 用户长按拖动时卡片瞬间变成白块（反馈：太丑了）。现在幽灵卡直接渲染真实
+ * CardFace（纸色/纹理/计时圆环/木夹与静置时完全一致），本类只承担跟随光标的
+ * 定位壳：自身不再画纸底描边，全部视觉交给内层 .cl-card。 */
 .cl-ghost {
   position: fixed;
   z-index: 30;
-  width: 168px;
-  min-height: 186px;
-  padding: 12px 10px;
-  border-radius: 3px;
-  background: var(--cl-paper);
-  border: 1px solid var(--cl-rope);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
-  color: var(--cl-paper-ink);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   pointer-events: none;
   transform: rotate(-2deg) scale(1.04);
   transform-origin: top center;
   will-change: left, top, transform;
 }
+/* 幽灵卡内所有交互元素一律不可点（拖动只听 document 指针事件）。 */
+.cl-ghost * { pointer-events: none !important; }
+.cl-ghost .cl-card-sway { transform: translateY(-6px); }
+.cl-ghost .cl-card { width: 100%; }
 .cl-ghost-clip {
   position: absolute;
   top: -9px;
@@ -882,7 +1919,10 @@
 }
 .cl-card-menu button:hover { background: color-mix(in srgb, var(--cl-rope) 20%, transparent); }
 .cl-card-menu button.is-danger { color: #c2413c; }
-.cl-toast-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+/* ★2026-11-15 撤销按钮点击无响应真因：本规则（.cl-toast）定义在 .cl-toast-action 之后，
+   同特异性 (0,1,0) 后者胜出 → pointer-events:none 覆盖了按钮的 auto，
+   撤销按钮永远收不到点击。这里提高特异性（0,2,0），与书写顺序彻底解耦。 */
+.cl-toast.cl-toast-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
 .cl-toast-action button {
   border: 0;
   border-radius: 999px;
@@ -909,57 +1949,106 @@
   pointer-events: none;
   z-index: 25;
 }
+/* toast 本体带一个不透明胶囊底，让「已取下」文案在任何桌面上都可读。
+   （本体仍是 pointer-events:none，只有按钮可点，见上方 .cl-toast.cl-toast-action。） */
 .cl-deck-hint { font: 600 14px/1.4 var(--cl-font); color: var(--cl-ink); }
 .cl-deck-sub { font: 12px/1.5 var(--cl-font); color: var(--cl-sub); }
 
-/* —— 清风：极淡摆动，移入冻结（PRD §4.6）—— */
-@keyframes cl-sway {
-  0%, 100% { transform: rotate(-0.8deg); }
-  50% { transform: rotate(0.8deg); }
+/* —— 清风：可见的极淡摆动（PRD §4.6 / 问题5）——
+ * 旧实现是「鼠标进入整个绳窗 → 全部动画 pause」，而绳窗展开态几乎横贯桌面顶部，
+ * 鼠标常驻其内 → 清风永远停着，用户误以为没生效。
+ * ⚠️ hover 冻结已彻底移除（2026-11-13）：透明置顶窗里「hover 改动画状态」= 合成层
+ *    重光栅化，正是「鼠标移入卡片纸面变透明」的诱因之一。现在 hover 零动画副作用。 */
+/* —— 清风动效（2026-11-12 结构性重构）——
+ * ★根因（本轮 9 条反复修不好的总源头）：
+ *   旧版把摆动挂在 **.cl-face（卡片内容）** 和 .cl-card-clip（木夹）上，translateY 只让
+ *   文字/图片上下飘、纸板不动 → 用户看到「动的是内容不是卡片本身」(问题9)。
+ *   更要命的是相位用 React inline `animationDelay` 注入：拖动 / 编辑 / 滚轮 / hover 任意一次
+ *   重渲染都会重设 style → CSS 动画被重启 → 卡片瞬间跳回起始相位 = 肉眼「抖动一次」
+ *   (问题2 拖动抖、问题5 点文本框抖)。拉手自身还带 sway，拖动时它自己也在摆 = 拉扯感(问题8)。
+ * ★0.4.80 更正：动画改挂**透明外壳 .cl-card-sway**，让拥有不透明纸面的 .cl-card
+ *   保持 transform:none 的静态 DOM。相位仍用稳定的 --cl-wind-delay（卡片 id 哈希，
+ *   与 React 渲染无关），无 inline animationDelay、不按 hover/editing 切 play-state。
+ *   11-13 曾把动画从外壳移到 .cl-card 上，理由是「让合成层自带纸面」，但 0.4.66
+ *   之后 hover 透底依旧，证明动画挂哪层不是真因；本轮把纸底改成纹理绘制项后，
+ *   让纸面彻底退出合成层，与便利签 / 竞品「窗口与内容都只有一种绘制状态」对齐。 */
+/* 整卡摆动：以木夹夹点为轴，整张纸（含木夹与内容）一起摆。
+ * 0.4.80 起作用在透明外壳上；纸面本身无 transform、靠 background-image 纹理提交。
+ * 关键：不使用 will-change（长期强制提层正是 0.4.66 前反复漏画纸底的诱因）。 */
+@keyframes cl-card-sway {
+  /* ★2026-11-15 反馈6：--cl-hang = 逐卡挂绳偏移（JS 按麻绳曲线算出），必须
+     参与摆动 keyframes，否则清风一开卡片就跳回固定高度、夹子再次脱离麻绳。 */
+  0%, 100% { transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(calc(var(--cl-rot, 0deg) - 1.6deg)); }
+  50%      { transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(calc(var(--cl-rot, 0deg) + 1.6deg)); }
 }
 @keyframes cl-rope-breath {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(1.4px); }
+  50%      { transform: translateY(2px); }
 }
-@keyframes cl-clip-sway {
-  0%, 100% { transform: rotate(-1.6deg); }
-  50% { transform: rotate(1.6deg); }
+/* 外壳：承担全部 transform / 摆动 / 入出场动画。它本身透明、无 background，
+   即使被提升为合成层也**不会漏画任何纸面**；内层 .cl-card 恒 transform:none。
+   ★z-index:16 不可删：带 transform 会新建 stacking context，若留 auto 则整组卡片
+   会落到麻绳拖曳热区(z-index:15)之下 → 卡片点不动（与旧版 card 自带 16 等价）。 */
+.cl-card-sway {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 16;
+  /* ★2026-11-15 反馈6：--cl-hang 由 ClotheslineView.syncCardHang 逐卡写入
+     （夹子顶边贴住麻绳曲线 y = 26 + 40·t·(1−t)），旧版所有卡片固定同高，
+     绳中间下垂时夹子肉眼可见地悬空。 */
+  transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg));
+  transform-origin: 50% 0;
 }
-@keyframes cl-paper-breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(1.2px); }
+/* 摆动直接作用在拥有不透明背景的 .cl-card 上（见上方根因说明）。
+   注意与 .is-expanding / .is-collapsing 的入场动画同级：入场规则写在文件更后面，
+   同优先级后出现者生效 → 展开动画优先，展开结束后自动回到摆动。 */
+.cl-root.has-wind .cl-card-sway {
+  animation: cl-card-sway 4.6s ease-in-out infinite;
+  animation-delay: var(--cl-wind-delay, 0s);
 }
-.cl-root.has-wind .cl-rope-svg { animation: cl-rope-breath 6.4s ease-in-out infinite; }
-.cl-root.has-wind .cl-handle { transform-origin: top center; animation: cl-sway 5.5s ease-in-out infinite; }
-.cl-root.has-wind .cl-pulltab { transform-origin: top center; animation: cl-sway 6.2s ease-in-out infinite reverse; }
-.cl-root.has-wind .cl-card:not(.is-dragging) .cl-card-clip {
-  animation: cl-clip-sway 5.2s ease-in-out infinite;
-  transform-origin: bottom center;
+.cl-root.has-wind .cl-rope-svg { animation: cl-rope-breath 5.4s ease-in-out infinite; }
+/* 拖动排序中的那一张不摆（避免幽灵卡与摆动叠加），其余卡片动画不受影响。 */
+.cl-root.has-wind .cl-card-sway.is-still { animation: none; }
+/* 2026-11-15 需求：清风开启时 hover 到某张卡片上，该卡必须静止（不摆），
+   否则按钮点不准、输入框没法用。只改 animation-play-state（暂停不重置相位，
+   移开后从当前相位继续），不动 opacity / transform 值本身。 */
+.cl-root.has-wind .cl-card-sway:hover { animation-play-state: paused; }
+/* 恢复期：仅暂停（不重置相位），避免窗口定位过程与动效叠加。 */
+.cl-root.is-restoring .cl-card-sway,
+.cl-root.is-restoring .cl-rope-svg { animation-play-state: paused !important; }
+.cl-root.is-restoring .cl-card-sway { transition: none !important; animation: none !important; }
+
+/* —— 问题8：展开 / 收起动效 ——
+ * 展开：卡片从绳上方落下，落到静态位后带一次小幅回弹；收起：整组向上收回绳里。
+ * ★只改 transform，绝不改 opacity / box-shadow / filter —— 透明置顶 WebView2 里
+ *   任何 alpha 动画都会重建合成层，正是前面几轮「hover 变透明 / 抖动」的来源。
+ * 相位由 ClotheslineView 的 ropePhase 驱动：收起先播动画、动画结束才缩小窗口；
+ * 展开先放大窗口、再播动画，保证卡片不会被窗口边界裁掉。 */
+@keyframes cl-card-drop-in {
+  /* 落下终点必须带上各自的 --cl-hang（反馈6）：否则展开动画结束后卡片瞬移。 */
+  0%   { transform: translateY(calc(-214px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
+  60%  { transform: translateY(calc(-10px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
+  76%  { transform: translateY(calc(3px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
+  88%  { transform: translateY(calc(-8px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
+  100% { transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
 }
-.cl-root.has-wind .cl-card:not(.is-dragging) .cl-face { animation: cl-paper-breathe 6.4s ease-in-out infinite; }
-/* 鼠标进入绳带 / 悬停卡片 / 恢复期 / 拖动：一律冻结在当前相位，不重置。 */
-.cl-root.wind-paused .cl-rope-svg,
-.cl-root.wind-paused .cl-handle,
-.cl-root.wind-paused .cl-pulltab,
-.cl-root.wind-paused .cl-card-clip,
-.cl-root.wind-paused .cl-face,
-.cl-root.has-wind .cl-deck:hover .cl-card-clip,
-.cl-root.has-wind .cl-deck:hover .cl-face,
-.cl-root.is-restoring .cl-rope-svg,
-.cl-root.is-restoring .cl-card,
-.cl-root.is-restoring .cl-handle,
-.cl-root.is-restoring .cl-pulltab,
-.cl-root.is-restoring .cl-card-clip,
-.cl-root.is-restoring .cl-face {
-  animation-play-state: paused !important;
+@keyframes cl-card-pull-up {
+  0%   { transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
+  100% { transform: translateY(calc(-220px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)); }
 }
-.cl-root.is-restoring .cl-card { transition: none !important; }
+@keyframes cl-bar-drop {
+  0%   { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+.cl-root.is-expanding .cl-card-sway { animation: cl-card-drop-in 0.46s cubic-bezier(.2, .85, .3, 1) both; }
+.cl-root.is-expanding .cl-toolbar { animation: cl-bar-drop 0.4s ease-out both; }
+.cl-root.is-collapsing .cl-card-sway { animation: cl-card-pull-up 0.26s ease-in both; }
 @media (prefers-reduced-motion: reduce) {
-  .cl-root.has-wind .cl-rope-svg,
-  .cl-root.has-wind .cl-handle,
-  .cl-root.has-wind .cl-pulltab,
-  .cl-root.has-wind .cl-card-clip,
-  .cl-root.has-wind .cl-face { animation: none; }
+  /* 非清风态照旧尊重系统偏好。 */
+  .cl-root:not(.has-wind) * { animation: none !important; }
+  /* 清风是用户在工具内显式打开的偏好，优先级高于系统「减少动画」：只收敛周期，绝不禁掉。 */
+  .cl-root.has-wind .cl-card-sway { animation-duration: 6.4s; }
+  .cl-root.has-wind .cl-rope-svg { animation-duration: 7s; }
 }
 
 /* 启动 / 定位阶段：整层透明不可点，避免定位完成前吞桌面点击。 */
@@ -968,7 +2057,342 @@
   pointer-events: none;
   background: transparent;
 }
-/* 收起态：工具条 / 卡片 / ＋ 菜单一并隐藏，只留麻绳与下拉胶囊。 */
+/* 收起态（问题11 / 原型 cl-02）：整条横向麻绳、两端固定钉、木夹把手、工具条、＋菜单
+   全部隐藏；桌面顶部只留一根从屏幕顶垂下的蓝色拉绳（.cl-pulltab）。
+   ⚠️ 绝不能只隐藏卡片而保留横绳——旧实现那样会让「收起后桌面顶部还横着一根绳」，
+      与原型「收起＝绳完全消失、只剩一个拉手」完全相反。 */
+.cl-root.is-collapsed .cl-rope,
 .cl-root.is-collapsed .cl-toolbar,
 .cl-root.is-collapsed .cl-add-btn,
 .cl-root.is-collapsed .cl-add-sheet { display: none; }
+/* 收起态木夹把手不再渲染（置顶能力已挪到拉绳右键、展开能力挪到拉绳点击），
+   避免顶部同时出现木夹 + 拉绳两套把手。 */
+.cl-root.is-collapsed .cl-handle { display: none; }
+/* badge 相对新拉手（宽 40 / 拉手 top28）右移，hover 才显示。
+   2026-11-15：窗口收窄后 badge 统一移到拉手正下方，不再右偏。 */
+.cl-root.is-collapsed .cl-pull-badge { left: 50%; top: 66px; }
+
+/* —— 问题9：拖图片文件入绳的提示遮罩（1:1 原型 drop 态）—— */
+.cl-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 38;
+  display: grid;
+  place-items: center;
+  pointer-events: none; /* 绝不吞 drop：drop 挂在根 div，遮罩只做视觉。 */
+  background: rgba(47, 107, 255, 0.08);
+  border: 2px dashed rgba(47, 107, 255, 0.55);
+  border-radius: 10px;
+  box-sizing: border-box;
+  animation: cl-drop-fade 0.16s ease;
+}
+@keyframes cl-drop-fade { from { opacity: 0; } to { opacity: 1; } }
+.cl-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 16px 26px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(120, 150, 210, 0.3);
+  box-shadow: 0 12px 32px rgba(30, 60, 120, 0.22);
+}
+.cl-drop-icon { font-size: 26px; color: var(--cl-accent); line-height: 1; }
+.cl-drop-title { font: 700 13px/1.4 var(--cl-font); color: #2b3550; }
+.cl-drop-sub { font: 10px/1.4 var(--cl-font); color: #8a92a1; }
+.cl-root[data-theme='dark'] .cl-drop-card { background: rgba(44, 48, 58, 0.96); border-color: #4d5566; }
+.cl-root[data-theme='dark'] .cl-drop-title { color: #e6e9f0; }
+.cl-root[data-theme='dark'] .cl-drop-sub { color: #a6adbb; }
+
+/* —— 问题8：大图预览浮层（1:1 原型 .preview / .pv-card.pv-image）——
+ * ★「大图不要白框」（SunMemo v1.4.1 教训）：图片卡预览背景透明、无内边距、无阴影框，
+ *   只有图片本体投影；信息条独立深色胶囊。铺满绳窗(268px 逻辑高)、不改窗口几何，
+ *   图片按可用高度缩放（约 ≤206px），比卡片内 116px 明显更大且不触发窗口位置记忆回归。 */
+.cl-preview {
+  /* ★问题3：窗口恒为目标屏整屏、.cl-root 只占面板矩形，遮罩必须相对**视口**
+     铺满全屏（fixed 元素不受祖先 overflow:hidden 裁剪，前提是 .cl-root 无 transform）。
+     预览期间不改任何几何，绳身保持静止。 */
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 根因D：轻薄半透明遮罩，桌面 / 晾衣绳都透得出来；绝不用 backdrop-filter
+     （透明 WebView2 里 blur 会强制重建整层合成，把桌面糊掉且易透底）。 */
+  background: rgba(18, 22, 30, 0.32);
+  animation: cl-pv-fade 0.18s ease;
+  pointer-events: auto;
+}
+@keyframes cl-pv-fade { from { opacity: 0; } to { opacity: 1; } }
+.cl-pv-close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 0;
+  color: #3b404a;
+  font: 600 14px/1 var(--cl-font);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  z-index: 2;
+}
+/* 无白框：容器透明、零 padding、零阴影，只有图片本体带投影。 */
+.cl-pv-card.cl-pv-image {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-height: 100%;
+}
+/* 问题8：真·全屏——窗口已被 openPreview 放大到整块显示器，这里让图片按视口放大到
+   尽可能大（94vw / 84vh 取先到约束），而不是旧的 max-height:206px「绳窗内小框预览」。
+   ★旧的 206px 限制正是用户反馈「点击图片只在框内小范围预览」的直接根源。 */
+.cl-pv-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: calc(100% - 62px);
+  min-height: 0;
+  overflow: hidden;
+}
+.cl-pv-photo img {
+  display: block;
+  max-width: 94vw;
+  max-height: 84vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.cl-pv-info {
+  max-width: 90vw;
+  background: rgba(20, 24, 34, 0.74);
+  color: #fff;
+  border-radius: 9px;
+  padding: 8px 16px;
+  font: 12.5px/1.4 var(--cl-font);
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.cl-pv-info small { color: #c8d0e0; font-size: 10px; }
+/* —— 根因D（2026-11-12）：预览 = 半透明遮罩 + 大图，**不隐藏桌面、不隐藏晾衣绳** ——
+ * 旧版把绳身 visibility:hidden + 全屏黑遮罩 + backdrop-filter:blur，
+ * 等于为了看一张图把整个桌面和晾衣绳都抹掉，用户明确反馈「体验很差」。
+ * ★现在：绳身照常渲染，遮罩只是一层轻薄半透明色（桌面 / 绳子都透得出来）。
+ *   窗口放大到整屏后，把绳身容器约束回原来的面板宽与高度，避免麻绳被拉成整屏长。 */
+/* ★问题5「点大图预览，遮罩背后的晾衣绳样式就变了」的真正根治：
+   预览把绳窗放大到整块显示器，而 .cl-root 是 inset:0;width:100%;height:100%，
+   于是**所有** left:0;right:0 / right:22px / min-width:100% / top:xx 的子元素
+   都按整屏尺寸重新排版 → 麻绳被拉长、工具条飞到最右、卡片甲板被撑满。
+   上一轮逐个元素打补丁（rope / hotzone / toolbar / deck 各写一条）必然挂一漏万。
+   现在只锁**根容器**回原来的面板宽与 300px 高，所有子元素自动沿用展开态的
+   原始布局，零差异；遮罩层改用 position:fixed 相对视口铺满全屏。 */
+/* ★★问题3 架构根治：窗口恒整屏、root 面板矩形也恒定，预览期间**什么几何都不改**。
+   `.cl-preview { position:fixed; inset:0 }` 相对视口（=整屏窗口）铺满全屏，
+   绳身仍在 root 的面板矩形里，一个像素都不移动。
+   刻意删掉旧版两条根因放大项：
+   ① `.has-preview` 锁 left/width/height（切换瞬间改了 root 的布局尺寸 → reflow）；
+   ② `animation-play-state: paused !important`（清风 running↔paused 会让合成层重挂，
+      与几何剧变严格同步叠加，注释里写的「避免跳一下」其实正是抖动的来源）。 */
+.cl-root.has-preview { /* 刻意留空：预览零样式变化，只多一层 .cl-preview 遮罩。 */ }
+
+/* ══════════════ 2026-11-13 问题4：收起态拉杆皮肤 ══════════════
+ * 配置页三选一，默认 porcelain。
+ * ⚠️ 2026-11-13 实机反馈「素瓷与设计图不符」的真因：设计稿
+ *    preview/clothesline-pulltab-designs.html 的 .opt-a 是米白瓷扣 + 麻绳 + 陶土结，
+ *    但产品 CSS 里 porcelain 一直沿用 0.4.66 遗留的「蓝白胶囊」（蓝色丝线 / 蓝釉珠 /
+ *    蓝色握线 / 蓝色箭头）——A 款皮肤**从未真正落地**，当时只给 brass / glass 写了覆盖，
+ *    把「默认复用上方已验证样式」错当成了 A 款。下方补 A 款真实材质。
+ * brass / glass / porcelain 只用「颜色 / 材质 / 装饰伪元素」覆盖，**绝不改命中盒与几何骨架**
+ *   （left/top/width/height 及 --cl-pull 驱动的位移；glass 的 ::after 仅做装饰性 rotate），
+ * 因此 480×96 命中盒、26px 丝线、30×36 小柄、27px 下拉位移三套完全一致，
+ * Rust 侧 collapsedHitRects 与 --cl-pull 动效无需任何改动。
+ * ⚠️ 红线：绝不使用 filter / backdrop-filter / will-change / isolation / opacity 动画
+ *    —— 透明置顶 WebView2 里这些会重建合成层，正是问题2「纸面漏画」的放大器。
+ *    深色主题用 [data-pulltab][data-theme] 双属性选择器（特异性 0,3,1），
+ *    稳定盖过上方单属性的 [data-theme='dark'] 规则。 */
+
+/* ── A 素瓷·侘寂（默认）：米白瓷扣 + 麻绳 + 陶土结 ───────────────────
+ * tokens 逐字取自设计稿 .opt-a：--accent #a98a5d / --cord #e3d7bf→#b9a17c /
+ * --bead #cbb493 / --tab #fffdf8→#f5efe2→#e8dec9 / --tab-line #d8ccb2 /
+ * --mark #9a8564 / --shadow rgba(74,58,36,.20)。
+ * 只改颜色与材质：480×96 命中盒、2px×26px 丝线、30×36 小柄、27px 下拉位移
+ * 与其余两套逐像素一致（见 preview/_cl_pulltab_check.cjs 的三皮肤断言）。 */
+.cl-root[data-pulltab='porcelain'] .cl-pull-cord {
+  background:
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.42) 0 1px, rgba(140, 110, 70, 0.16) 1px 2px),
+    linear-gradient(180deg, rgba(227, 215, 191, 0.02) 0%, #e3d7bf 28%, #b9a17c 100%);
+  box-shadow: 0 0 6px rgba(120, 96, 62, 0.22);
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-bead {
+  background: radial-gradient(circle at 34% 26%, #f2e9d6 0 18%, #cbb493 46%, #a58b64 100%);
+  box-shadow: 0 1px 3px rgba(74, 58, 36, 0.38), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-tab {
+  border-radius: 46% 46% 44% 44% / 26% 26% 34% 34%;
+  background: linear-gradient(180deg, #fffdf8 0%, #f5efe2 46%, #e8dec9 100%);
+  border-color: #d8ccb2;
+  box-shadow:
+    0 6px 14px rgba(74, 58, 36, 0.20),
+    0 1px 2px rgba(74, 58, 36, 0.16),
+    inset 0 1px 0 #ffffff,
+    inset 0 -3px 4px rgba(165, 139, 100, 0.28);
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-tab::before {
+  background: linear-gradient(180deg, #c9b99b, #fffdf8);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-grip {
+  background: linear-gradient(90deg, #d8c9ad, #8d7a58 50%, #d8c9ad);
+  box-shadow: none;
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-foot {
+  border-right-color: #9a8564;
+  border-bottom-color: #9a8564;
+}
+.cl-root[data-pulltab='porcelain'] .cl-pull-badge {
+  background: #a98a5d;
+  box-shadow: 0 2px 6px rgba(74, 58, 36, 0.32);
+}
+
+/* ── B 黄铜·铃坠：老式窗帘绳的铜坠，深棕绞绳 + 车刻横纹 + 铜环 ── */
+.cl-root[data-pulltab='brass'] .cl-pull-cord {
+  background:
+    repeating-linear-gradient(112deg, rgba(255, 236, 190, 0.34) 0 1px, rgba(90, 64, 39, 0.28) 1px 2px),
+    linear-gradient(180deg, rgba(160, 123, 74, 0.02) 0%, #a07b4a 30%, #5a4027 100%);
+  box-shadow: 0 0 6px rgba(90, 64, 39, 0.3);
+}
+.cl-root[data-pulltab='brass'] .cl-pull-bead {
+  background: radial-gradient(circle at 50% 50%, #8a6a2f 0 30%, #f0d692 34% 62%, #8a6a2f 68% 100%);
+  box-shadow: 0 1px 3px rgba(56, 38, 14, 0.5), inset 0 1px 1px rgba(255, 245, 214, 0.9);
+}
+.cl-root[data-pulltab='brass'] .cl-pull-tab {
+  border-radius: 40% 40% 26% 26% / 20% 20% 13% 13%;
+  background: linear-gradient(96deg, #8a6a2d 0%, #d6b061 18%, #f8e8b6 38%, #c39a48 62%, #8c682c 100%);
+  border-color: #7a5824;
+  box-shadow:
+    0 6px 14px rgba(56, 38, 14, 0.36),
+    0 1px 2px rgba(56, 38, 14, 0.26),
+    inset 0 1px 0 rgba(255, 246, 214, 0.9),
+    inset 0 -3px 5px rgba(80, 56, 18, 0.45);
+}
+.cl-root[data-pulltab='brass'] .cl-pull-tab::before {
+  background: linear-gradient(180deg, #9b7736, #f8e6b4);
+  box-shadow: 0 1px 2px rgba(60, 40, 12, 0.5);
+}
+.cl-root[data-pulltab='brass'] .cl-pull-grip {
+  background: repeating-linear-gradient(180deg,
+    rgba(94, 68, 27, 0.65) 0 1px, rgba(255, 240, 196, 0.6) 1px 2px);
+  box-shadow: none;
+}
+.cl-root[data-pulltab='brass'] .cl-pull-foot {
+  border-right-color: #fff2c9;
+  border-bottom-color: #fff2c9;
+}
+.cl-root[data-pulltab='brass'] .cl-pull-badge {
+  background: #a47c2c;
+  box-shadow: 0 2px 6px rgba(90, 64, 39, 0.42);
+}
+
+/* ── C 琉璃·露珠：银蓝细丝 + 上圆下尖的水滴 + 柔光核 ── */
+.cl-root[data-pulltab='glass'] .cl-pull-cord {
+  background: linear-gradient(180deg, rgba(234, 244, 255, 0.02) 0%, #cfdff5 30%, #8fb4e8 100%);
+  box-shadow: 0 0 6px rgba(120, 170, 235, 0.28);
+}
+.cl-root[data-pulltab='glass'] .cl-pull-bead {
+  background: radial-gradient(circle at 34% 28%, #ffffff 0 30%, #c7dcf8 55%, #7fa8e0 100%);
+  box-shadow: 0 1px 3px rgba(40, 80, 150, 0.32), inset 0 1px 1px #ffffff;
+}
+.cl-root[data-pulltab='glass'] .cl-pull-tab {
+  border-radius: 50% 50% 50% 50% / 68% 68% 34% 34%;
+  background: radial-gradient(120% 90% at 32% 18%, #ffffff 0%, #eaf4ff 26%, #bcd7f6 60%, #8fb4e6 100%);
+  border-color: #9dc0ea;
+  box-shadow:
+    0 6px 14px rgba(40, 80, 150, 0.26),
+    0 1px 2px rgba(40, 80, 150, 0.18),
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 4px rgba(60, 110, 190, 0.28);
+}
+/* 水滴尖端：不越出 96px 窗口（28 + 36 + 27 下拉 + 3 = 94）。 */
+.cl-root[data-pulltab='glass'] .cl-pull-tab::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 0 0 3px 0;
+  background: linear-gradient(135deg, #cfe2fa, #8fb4e6);
+  transform: rotate(45deg);
+}
+.cl-root[data-pulltab='glass'] .cl-pull-tab::before {
+  top: 9px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 36%, #ffffff 0 18%, #a9ccf5 46%, #6f9fdd 100%);
+  box-shadow: 0 0 4px rgba(120, 170, 235, 0.55);
+}
+.cl-root[data-pulltab='glass'] .cl-pull-grip {
+  top: 5px;
+  width: 12px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), #ffffff 50%, rgba(255, 255, 255, 0.4));
+  box-shadow: none;
+}
+.cl-root[data-pulltab='glass'] .cl-pull-foot { display: none; }
+.cl-root[data-pulltab='glass'] .cl-pull-badge {
+  background: #5b8fd8;
+  box-shadow: 0 2px 6px rgba(40, 80, 150, 0.34);
+}
+
+/* ── 深色壁纸：三套都不能靠 filter（会建合成层），改用实色变量覆盖 ── */
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-pull-tab {
+  background: linear-gradient(180deg, #4a4640 0%, #3b3833 55%, #322f2b 100%);
+  border-color: #6b6355;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 252, 243, 0.16);
+}
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-pull-grip {
+  background: linear-gradient(90deg, #8a7c62, #c9b693 50%, #8a7c62);
+}
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-pull-foot {
+  border-right-color: #c9b693;
+  border-bottom-color: #c9b693;
+}
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-pull-bead {
+  background: radial-gradient(circle at 34% 26%, #f2e9d6 0 18%, #cbb493 46%, #7d6849 100%);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-pull-tab {
+  background: linear-gradient(96deg, #5b4420 0%, #a9853f 18%, #d8bb76 38%, #9c7836 62%, #57411d 100%);
+  border-color: #4a3818;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 240, 200, 0.55);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-pull-grip {
+  background: repeating-linear-gradient(180deg, rgba(60, 42, 16, 0.7) 0 1px, rgba(255, 238, 190, 0.55) 1px 2px);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-pull-tab {
+  background: radial-gradient(120% 90% at 32% 18%, #7f9fc9 0%, #5c7fb0 30%, #3f5f90 65%, #2f4a75 100%);
+  border-color: #52729e;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-pull-tab::after {
+  background: linear-gradient(135deg, #6f93c4, #3f5f90);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-pull-tab::before {
+  background: radial-gradient(circle at 42% 36%, #ffffff 0 18%, #a9ccf5 46%, #4f7bbb 100%);
+}

@@ -1,6 +1,6 @@
 import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'
-import type { D1Database, D1PreparedStatement, KVNamespace } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement, KVNamespace, R2Bucket, R2ObjectBody } from '@cloudflare/workers-types'
 import {
   applySchema,
   getSettings,
@@ -85,9 +85,15 @@ export type WorkerEnv = {
   CF_API_TOKEN?: string
   /** Cloudflare Account ID(非敏感,写进 wrangler.toml [vars])。 */
   CF_ACCOUNT_ID?: string
-  /** 站点发布网关的分享码。回源时注入,让自定义域裸链接可访问;每次 sites_deploy 换码后需同步更新。 */
+  /** 站点发布网关的分享码。仅应急回退(USE_R2_STATIC=false)回源平台域时用到。 */
   SITE_SHARECODE?: string
+  /** 下载站静态内容的自有对象存储。迁移后非 /api/ 请求直接读此桶,不再回源平台域。 */
+  SITE: R2Bucket
 }
+
+// 静态内容来源开关:默认走自有 R2(根治平台分享码 403)。
+// 若新链路异常,改成 false 重新部署即可一键回退到旧的「回源平台域 + 注入 sharecode」。
+const USE_R2_STATIC = true
 
 // 每个 DB(生产环境即单个 D1 实例)只跑一次建表/补列。用 await 而非
 // ctx.waitUntil 的异步调度,确保首个请求在表结构就绪后再执行 upsert,
@@ -1563,6 +1569,222 @@ export function rewriteVersionJsonUrl(text: string, origin: string): string {
   return text
 }
 
+/** R2 链路专用:无条件把 version.json 安装包 URL 的 origin 换成请求域。
+ *  与 rewriteVersionJsonUrl 的区别——R2 上存的 version.json url 已是自有域(sync),
+ *  旧函数"只在裸域时改写"的条件不匹配,导致 todobar 域拿到 sync 域的 URL。
+ *  此函数让两个自定义域各自返回本域 URL,自包含;仅替换 origin,保留 path/query。 */
+export function rewriteVersionJsonUrlForR2(text: string, origin: string): string {
+  try {
+    const data = JSON.parse(text) as { url?: string }
+    if (typeof data.url === 'string' && /^https?:\/\//.test(data.url)) {
+      const parsed = new URL(data.url)
+      data.url = origin + parsed.pathname + parsed.search + parsed.hash
+      return JSON.stringify(data)
+    }
+  } catch {
+    /* 非 JSON、非法 URL 或解析失败,原样返回 */
+  }
+  return text
+}
+
+// ===== 自有 R2 静态托管(USE_R2_STATIC=true 时启用) =====
+// 非 /api/ 请求直接读自有 R2 桶,彻底不回源平台分享域 → 平台换码/故障与本站无关。
+
+/** URL 路径 → R2 对象 key。根目录指首页;后台深链回退到 admin/index.html(SPA);防目录穿越。 */
+export function r2KeyOf(pathname: string): string | null {
+  let p: string
+  try {
+    p = decodeURIComponent(pathname)
+  } catch {
+    return null
+  }
+  if (p === '/' || p === '') return 'index.html'
+  p = p.replace(/^\/+/, '')
+  if (p.includes('..') || p.includes('\\')) return null
+  // 后台管理是 hash 路由的单页应用,任何 /admin... 路径都回退到同一个 index.html
+  if (p === 'admin' || p.startsWith('admin/')) return 'admin/index.html'
+  // 常见 SPA/静态站约定:以 / 结尾或无名扩展名的路径补 index.html
+  if (p.endsWith('/')) return `${p}index.html`
+  if (!/\.[a-z0-9]+$/i.test(p)) return `${p}/index.html`
+  return p
+}
+
+/** 按扩展名给静态对象补 content-type;wrangler 上传时只存主 MIME,charset 在此补。 */
+export function r2ContentType(key: string): string {
+  const ext = key.slice(key.lastIndexOf('.')).toLowerCase()
+  const map: Record<string, string> = {
+    '.html': 'text/html; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.xml': 'application/xml; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.webp': 'image/webp',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+    '.exe': 'application/octet-stream',
+    '.dmg': 'application/octet-stream',
+  }
+  return map[ext] || 'application/octet-stream'
+}
+
+const R2_404_HTML =
+  '<!doctype html><meta charset="utf-8"><title>Tacco</title><h1>页面不存在</h1><p>你访问的页面不存在，请返回 <a href="/">首页</a>。</p>'
+
+/** 下载归因中转:复用 server.js 的口径——记 site_downloads 后 302 到真实安装包。
+ *  迁移后 server.js 不再参与,这里在 Worker 内直接写 D1,少一跳、归因不丢。 */
+async function handleR2Download(
+  request: Request,
+  pathname: string,
+  search: string,
+  env: WorkerEnv,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const file = decodeURIComponent(pathname.slice('/download/'.length))
+  // 仅放行命名规范的安装包,防目录穿越(与 server.js 同一规则)
+  if (!/^Tacco-[\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
+    return new Response('Not Found', { status: 404 })
+  }
+  const url = new URL(request.url)
+  const device = url.searchParams.get('d') || ''
+  const ip =
+    request.headers.get('cf-connecting-ip')?.trim() ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  const ua = request.headers.get('user-agent') || ''
+  // waitUntil 异步落库,绝不阻塞下载;失败仅记日志
+  ctx.waitUntil(
+    recordSiteDownload(env.DB, device, ip, ua, nowIso()).catch((e) =>
+      console.error('[r2] site_download record failed:', e),
+    ),
+  )
+  const target = '/' + file + search
+  // no-store:归因中转每次都真实命中,不被边缘缓存跳过
+  return new Response(null, { status: 302, headers: { location: target, 'cache-control': 'no-store' } })
+}
+
+async function serveR2(
+  request: Request,
+  pathname: string,
+  search: string,
+  env: WorkerEnv,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  // 下载归因中转优先处理
+  if (pathname.toLowerCase().startsWith('/download/')) {
+    return handleR2Download(request, pathname, search, env, ctx)
+  }
+
+  const key = r2KeyOf(pathname)
+  if (!key) {
+    return new Response(R2_404_HTML, { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } })
+  }
+
+  const ttl = siteCacheTtl(pathname)
+  const baseHeaders = () => {
+    const h = new Headers()
+    h.set('content-type', r2ContentType(key))
+    h.set('access-control-allow-origin', '*')
+    h.set('cache-control', `public, max-age=${ttl}`)
+    h.set('x-served-by', 'r2')
+    return h
+  }
+
+  try {
+    // Range 请求(安装包断点续传 / 下载器分片):R2 原生支持 range 读取
+    const range = request.headers.get('range')
+    if (range && request.method === 'GET') {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+      if (m) {
+        const head = await env.SITE.head(key)
+        if (head) {
+          const total = head.size
+          let start: number
+          let end: number
+          if (m[1] === '' && m[2] !== '') {
+            // bytes=-N:最后 N 字节
+            const suffix = Math.min(Number(m[2]), total)
+            start = total - suffix
+            end = total - 1
+          } else {
+            start = Number(m[1]) || 0
+            end = m[2] ? Math.min(Number(m[2]), total - 1) : total - 1
+          }
+          if (start <= end && start < total) {
+            const obj = await env.SITE.get(key, { range: { offset: start, length: end - start + 1 } })
+            if (obj) {
+              const h = baseHeaders()
+              h.set('content-range', `bytes ${start}-${end}/${total}`)
+              h.set('accept-ranges', 'bytes')
+              h.set('content-length', String(end - start + 1))
+              return new Response((obj as R2ObjectBody).body, { status: 206, headers: h })
+            }
+          }
+          // 范围越界:按 HTTP 规范返回 416
+          const h416 = baseHeaders()
+          h416.set('content-range', `bytes */${total}`)
+          return new Response(null, { status: 416, headers: h416 })
+        }
+      }
+    }
+
+    const obj = await env.SITE.get(key)
+    if (!obj) {
+      // SPA 兜底:对齐原 server.js,未知「页面」路径返回首页(下载页)。
+      // 但安装包/资源类缺失必须返回真 404 —— 否则浏览器会把 404 的 HTML
+      // 当安装包存成 .html,重演历史事故。这也比原 server.js 一视同仁兜底更安全。
+      const isInstaller = /\.(exe|dmg)$/i.test(key)
+      const isAsset = /\.(webp|png|jpe?g|css|js|ico|svg|xml|txt)$/i.test(key)
+      if (!isInstaller && !isAsset) {
+        const home = await env.SITE.get('index.html')
+        if (home) {
+          const h = baseHeaders()
+          h.set('content-type', 'text/html; charset=utf-8')
+          h.set('content-length', String(home.size))
+          return new Response((home as R2ObjectBody).body, { headers: h })
+        }
+      }
+      // 安装包/资源缺失:返回纯文本真 404,绝不吐 HTML —— 浏览器/下载器不会把
+      // text/plain 的 404 误当安装包存成 .exe.html,彻底堵死历史"下载变 .html"事故。
+      if (isInstaller || isAsset) {
+        return new Response('Not Found', {
+          status: 404,
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'x-served-by': 'r2' },
+        })
+      }
+      return new Response(R2_404_HTML, {
+        status: 404,
+        headers: { 'content-type': 'text/html; charset=utf-8', 'x-served-by': 'r2' },
+      })
+    }
+
+    const h = baseHeaders()
+    // version.json 的安装包 URL 按当前自有域实时改写(两个自定义域各自返回本域 URL)。
+    // R2 上存的 url 已是 sync 自有域,旧 rewriteVersionJsonUrl 只认裸域故不匹配,
+    // 必须用 ForR2 版本无条件替换 origin,否则 todobar 域会拿到 sync 域的 URL。
+    if (pathname.toLowerCase() === '/version.json') {
+      const text = await obj.text()
+      const rewritten = rewriteVersionJsonUrlForR2(text, new URL(request.url).origin)
+      h.delete('content-length')
+      return new Response(rewritten, { headers: h })
+    }
+
+    h.set('accept-ranges', 'bytes')
+    h.set('content-length', String(obj.size))
+    if (obj.size === 0) return new Response(null, { headers: h })
+    return new Response((obj as R2ObjectBody).body, { headers: h })
+  } catch (e) {
+    console.error('[r2] serveR2 failed:', e)
+    return new Response(
+      '<!doctype html><meta charset="utf-8"><title>Tacco</title><h1>页面暂时无法访问</h1><p>官网正在恢复中，请稍后刷新重试。</p>',
+      { status: 503, headers: { 'content-type': 'text/html; charset=utf-8', 'retry-after': '60' } },
+    )
+  }
+}
+
 async function proxySite(
   request: Request,
   pathname: string,
@@ -1650,9 +1872,12 @@ async function proxySite(
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext) {
     const url = new URL(request.url)
-    // 自定义域名上的非 API 请求一律转发到下载页(404 修复的关键)
+    // 自定义域名上的非 API 请求 = 下载站/后台/静态资源。
+    // 默认读自有 R2(根治平台分享码 403);USE_R2_STATIC=false 时回退旧的回源平台域链路。
     if (!url.pathname.startsWith('/api/')) {
-      return proxySite(request, url.pathname, url.search, ctx, env.SITE_SHARECODE || '')
+      return USE_R2_STATIC
+        ? serveR2(request, url.pathname, url.search, env, ctx)
+        : proxySite(request, url.pathname, url.search, ctx, env.SITE_SHARECODE || '')
     }
     // 首个请求同步补好表结构,确保后续 upsert 不再因缺列而 422。
     try {

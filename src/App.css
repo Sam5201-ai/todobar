@@ -3431,6 +3431,52 @@ kbd {
   color: #ffffff;
 }
 
+/* 深色主题下 accent 是浅色,选中 tab 不能再用白字(与 .fab-support 同处理) */
+.workspace.theme-dark .fb-tabs button.is-active {
+  color: #111318;
+}
+
+/* 加入反馈群:二维码 + 备注提示(该 tab 无表单/提交动作) */
+.fb-developer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 4px;
+}
+
+.fb-dev-qr-wrap {
+  /* 收缩到内容宽度并整体居中;内部再用 flex + auto margin 保证二维码水平居中,
+     避免白底卡片撑满一行时二维码却贴在左侧。 */
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--task-border);
+  border-radius: 12px;
+  /* 二维码必须白底才扫得出,暗色主题下同样固定白底 */
+  background: #ffffff;
+  line-height: 0;
+}
+
+.fb-dev-qr {
+  display: block;
+  width: min(210px, 64%);
+  height: auto;
+  margin-inline: auto;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.fb-dev-tip {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .fb-textarea-wrap {
   position: relative;
 }
@@ -3761,8 +3807,16 @@ kbd {
   font-size: 12.5px;
 }
 
-/* 列表卡片:整块可点,版本号 + 发布日期 + 标题 */
-.cl-card {
+/* 列表卡片:整块可点,版本号 + 发布日期 + 标题
+ * ★2026-11-15 类名前缀从 cl- 改为 rel-：这些类与晾衣绳绳窗卡片 (.cl-card) 同名。
+ *  绳窗会加载本全局 CSS，而 .cl-card:hover{background:var(--surface-hover)} 的
+ *  --surface-hover 只定义在主窗 .workspace 上 —— 绳窗里该变量不存在，background
+ *  简写整条 IACVT 失效（background-color 与 background-image 一起被清成透明），
+ *  且 :hover 伪类特异性 (0,2,0) 高于绳卡片的 .cl-card (0,1,0)、与加载顺序无关必然
+ *  胜出 → 绳卡片 hover 即纸底全透明（历经 17~21 轮窗口架构排查的真凶，2026-11-15
+ *  由运行中绳窗的 hover-enter/hover-recheck 计算样式日志实锤：bg 随 hover 翻转
+ *  rgba(0,0,0,0) ↔ rgb(255,253,247)）。 */
+.rel-card {
   display: block;
   width: 100%;
   text-align: left;
@@ -3775,16 +3829,16 @@ kbd {
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
-.cl-card:hover {
+.rel-card:hover {
   background: var(--surface-hover);
   border-color: rgba(31, 33, 38, 0.24);
 }
 
-.cl-card:active {
+.rel-card:active {
   transform: scale(0.995);
 }
 
-.cl-card.is-current {
+.rel-card.is-current {
   border-color: rgba(29, 126, 240, 0.55);
   background: rgba(29, 126, 240, 0.07);
 }
@@ -3883,11 +3937,11 @@ kbd {
   background: var(--muted);
 }
 
-.workspace.theme-dark .cl-card {
+.workspace.theme-dark .rel-card {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-.workspace.theme-dark .cl-card:hover {
+.workspace.theme-dark .rel-card:hover {
   border-color: rgba(255, 255, 255, 0.22);
 }
 

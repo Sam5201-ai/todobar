@@ -15,6 +15,7 @@ import { readDockPref, resolveDockTarget } from '../dock'
 import {
   canOpenAnother,
   createNote,
+  DEFAULT_NOTE_SIZE,
   getNotes,
   MAX_NOTES,
   MAX_VISIBLE_NOTES,
@@ -22,7 +23,7 @@ import {
   type Note,
 } from './store'
 
-const DEFAULT_SIZE = { w: 240, h: 220 }
+// 新建默认尺寸统一由 store 提供,此处不再保留第二份定义。
 
 export type FailReason = 'member' | 'total' | 'visible'
 
@@ -69,7 +70,7 @@ export type NoteSpot = {
  * 碰撞检测中用目标屏缩放近似换算,仅影响启发式排布、不影响显示位置。
  */
 export async function pickFreeSpot(
-  size = DEFAULT_SIZE,
+  size = DEFAULT_NOTE_SIZE,
   excludeId?: string,
 ): Promise<NoteSpot> {
   const { targetMonitor, dockSide, panelWidth, tabWidth } = readDockPref()
@@ -161,8 +162,8 @@ export async function createNoteWithWindow(
     ...(claimedId ? { id: claimedId } : {}),
     x: spot.x,
     y: spot.y,
-    w: DEFAULT_SIZE.w,
-    h: DEFAULT_SIZE.h,
+    w: DEFAULT_NOTE_SIZE.w,
+    h: DEFAULT_NOTE_SIZE.h,
     scaleFactor: spot.scaleFactor,
     monitorName: spot.monitorName ?? undefined,
   })

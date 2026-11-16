@@ -700,13 +700,14 @@ mod imp {
     /// 所在屏的 scaleFactor 做除法 → 100%/125%/150% 混接时覆盖层必错位。
     /// 现在抓哪块屏就带哪块屏的 scale,且窗口定位全走物理像素,不再做前端换算。
     ///
-    /// ⚠️ 晾衣绳 R54(PRD §14.3):BitBlt 抓的是「桌面合成帧」,默认 TOPMOST 的绳窗
-    /// 会被拍进每一张截图/贴图/OCR。这里首行挂 RAII 守卫,保证抓帧瞬间绳窗隐藏、
-    /// 且任何 return(含 Err)离开作用域都自动恢复。AppHandle 由 Tauri 自动注入,
-    /// 前端 `invoke('capture_screen')` 无参数调用方式不变。
+    /// ★2026-11-12 用户明确要求「操作截图时晾衣绳不要自动隐藏」。
+    ///   旧版首行挂 CaptureGuard 在抓帧瞬间 hide 绳窗（R54 防污染），但 hide/show
+    ///   会造成肉眼可见的闪烁，且异步窗口消息与 DWM 合成竞争，用户反馈体验很差。
+    ///   现在截图期间绳窗保持原样（代价：绳身可能被拍进截图，用户已明确接受）。
+    ///   `clothesline_capture_suspend/resume` 命令仍保留（只维护深度计数，不碰窗口
+    ///   可见性），供会话级显式调用；前端 `invoke('capture_screen')` 无参数调用方式不变。
     #[tauri::command]
-    pub fn capture_screen(app: tauri::AppHandle) -> Result<ScreenCapture, String> {
-        let _clothesline_guard = crate::clothesline::CaptureGuard::new(&app);
+    pub fn capture_screen(_app: tauri::AppHandle) -> Result<ScreenCapture, String> {
         unsafe {
             // 让进程按每显示器 DPI 感知,这样所有 GDI / monitor API 返回物理像素。
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -766,16 +767,29 @@ mod imp {
         let rgba = img.to_rgba8();
         let (w, h) = (rgba.width() as usize, rgba.height() as usize);
         let data = rgba.into_raw();
-        let mut clipboard =
-            arboard::Clipboard::new().map_err(|e| format!("剪贴板初始化失败: {e}"))?;
-        clipboard
-            .set_image(arboard::ImageData {
-                width: w,
-                height: h,
-                bytes: std::borrow::Cow::Owned(data),
-            })
-            .map_err(|e| format!("写入剪贴板失败: {e}"))?;
-        Ok(())
+        // 问题3：剪贴板是**全局资源**，后台历史监听线程(250ms 轮询 OpenClipboard)、
+        // 其他程序都会瞬时占用它。arboard 单次 OpenClipboard/SetClipboardData 偶发报
+        // 「线程没有打开的剪贴板 (os error 1418)」——单次失败≠真失败，带退避重试。
+        // 每次重试重新 new()（会重新 OleInitialize + OpenClipboard），绝大多数 1~2 次成功。
+        let mut last_err = String::new();
+        for attempt in 0..5 {
+            let result = arboard::Clipboard::new()
+                .map_err(|e| e.to_string())
+                .and_then(|mut cb| {
+                    cb.set_image(arboard::ImageData {
+                        width: w,
+                        height: h,
+                        bytes: std::borrow::Cow::Owned(data.clone()),
+                    })
+                    .map_err(|e| e.to_string())
+                });
+            match result {
+                Ok(()) => return Ok(()),
+                Err(e) => last_err = e,
+            }
+            std::thread::sleep(std::time::Duration::from_millis(80 * (attempt + 1)));
+        }
+        Err(format!("写入剪贴板失败(已重试 5 次): {last_err}"))
     }
 
     #[tauri::command]

@@ -124,18 +124,26 @@ export const BirthdayApp: React.FC = () => {
         </div>
 
         <div style={{ padding: '34px 28px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, padding: '0 12px', opacity: s }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 12px', opacity: s }}>
+            <span style={{ fontSize: 30 }}>🎂</span>
             <span style={{ fontFamily: FONT, fontSize: 34, fontWeight: 800, color: C.ink }}>生日</span>
             <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: C.ink3 }}>2</span>
+            <svg width={28} height={28} viewBox="0 0 24 24" style={{ marginLeft: 'auto' }}>
+              <path d="M6 9.5 12 15.5 18 9.5" stroke="#9aa0a8" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
           </div>
           <div style={{ marginTop: 18 }}>
             {BIRTHDAYS.map((c, i) => (
               <RCard key={c.name} c={c} delay={22 + i * 14} rgb="233,89,168" />
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, padding: '0 12px', marginTop: 14, opacity: s }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 12px', marginTop: 14, opacity: s }}>
+            <span style={{ fontSize: 30 }}>🎁</span>
             <span style={{ fontFamily: FONT, fontSize: 34, fontWeight: 800, color: C.ink }}>纪念日</span>
             <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: C.ink3 }}>1</span>
+            <svg width={28} height={28} viewBox="0 0 24 24" style={{ marginLeft: 'auto' }}>
+              <path d="M6 9.5 12 15.5 18 9.5" stroke="#9aa0a8" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
           </div>
           <div style={{ marginTop: 18 }}>
             {ANNIVERSARIES.map((c) => (
@@ -290,10 +298,21 @@ export const RecorderApp: React.FC<{ pressAt: number }> = ({ pressAt }) => {
         </div>
 
         {/* 列表头 */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '30px 40px 0', gap: 14 }}>
-          <span style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.ink3, flex: 1 }}>共 9 条 · 55.3MB</span>
-          <span style={{ fontFamily: FONT, fontSize: 24, fontWeight: 600, color: C.ink3, background: C.pill, borderRadius: 999, padding: '10px 22px' }}>📍 位置</span>
-          <span style={{ fontFamily: FONT, fontSize: 24, fontWeight: 600, color: C.ink3, background: C.pill, borderRadius: 999, padding: '10px 22px' }}>📁 文件夹</span>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '30px 40px 0', gap: 18 }}>
+          <span style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: C.ink3, flex: 1 }}>共 9 条 · 55.3 MB</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width={28} height={28} viewBox="0 0 24 24">
+              <path d="M12 21s-7-5.8-7-11a7 7 0 1 1 14 0c0 5.2-7 11-7 11Z" stroke="#9aa0a8" strokeWidth={2.2} fill="none" />
+              <circle cx={12} cy={10} r={2.6} stroke="#9aa0a8" strokeWidth={2.2} fill="none" />
+            </svg>
+            <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 600, color: C.ink3 }}>位置</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width={28} height={28} viewBox="0 0 24 24">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="#9aa0a8" strokeWidth={2.2} fill="none" strokeLinejoin="round" />
+            </svg>
+            <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 600, color: C.ink3 }}>文件夹</span>
+          </div>
         </div>
 
         {/* 搜索框 */}
@@ -322,10 +341,10 @@ export const RecorderApp: React.FC<{ pressAt: number }> = ({ pressAt }) => {
         {/* 归档列表 */}
         <div style={{ padding: '22px 28px 0' }}>
           <div style={{ fontFamily: FONT, fontSize: 27, fontWeight: 800, color: C.ink2, padding: '0 12px 14px' }}>11月2日</div>
-          <RecordingRow name="录音 11月2日 17:20" meta="2:00:00 · 54.8M" delay={120} />
-          <RecordingRow name="录音 11月2日 16:45" meta="00:26 · 199KB" delay={134} />
+          <RecordingRow name="录音 11月2日 17:20" meta="2:00:00 · 54.8M" delay={56} />
+          <RecordingRow name="录音 11月2日 16:45" meta="00:26 · 199KB" delay={68} />
           <div style={{ fontFamily: FONT, fontSize: 27, fontWeight: 800, color: C.ink2, padding: '6px 12px 14px' }}>10月30日</div>
-          <RecordingRow name="录音 10月30日 09:12" meta="00:03 · 24KB" delay={148} />
+          <RecordingRow name="录音 10月30日 09:12" meta="00:03 · 24KB" delay={80} />
         </div>
       </PageIn>
     </AbsoluteFill>

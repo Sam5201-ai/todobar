@@ -29,3 +29,9 @@ binding = "DB"
 database_name = "todobar"
 database_id = "ea88c0a3-b0d9-4bb9-9dc3-083bec0b8ce2"
 migrations_dir = "migrations"
+
+# 下载站静态内容(下载页/后台/version.json/安装包)自有托管,彻底不回源平台分享域。
+# 由 scripts/upload-site.mjs 上传;Worker 的 serveR2() 直接读取。
+[[r2_buckets]]
+binding = "SITE"
+bucket_name = "tuanzhangyinqing"

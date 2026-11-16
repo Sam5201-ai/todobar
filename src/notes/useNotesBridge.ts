@@ -11,13 +11,36 @@
 
 import { useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { emit, listen } from '@tauri-apps/api/event'
 
 import { readFreeQuotaUsed, useTaskStore } from '../useTaskStore'
 import { useAccount } from '../membership'
-import { CL_EDIT_NOTE_ITEM, CL_OPEN_NOTE } from '../clothesline/bridge'
+import {
+  CL_CREATE_NOTE,
+  CL_EDIT_NOTE_ITEM,
+  CL_NOTE_COLOR_ACTION,
+  CL_NOTE_HUNG,
+  CL_NOTE_ITEM_ACTION,
+  CL_OPEN_NOTE,
+  CL_TOAST,
+  type ClNoteColorAction,
+  type ClNoteHung,
+  type ClNoteItemAction,
+  type ClToastPayload,
+} from '../clothesline/bridge'
+import { clAddCard, clMakeCard } from '../clothesline/bridge'
 import { emitConvertResult, listenConvertRequest } from './bridge'
-import { getNotes, hydrateNotes, MAX_VISIBLE_NOTES, updateNoteItem } from './store'
+import {
+  addNoteItem,
+  createNote,
+  getNotes,
+  hydrateNotes,
+  MAX_VISIBLE_NOTES,
+  removeNoteItem,
+  toggleNoteItem,
+  updateNote,
+  updateNoteItem,
+} from './store'
 import { createNoteWithWindow, failText } from './manager'
 import { applyNoteShortcut, initNoteShortcuts } from './shortcuts'
 
@@ -34,12 +57,16 @@ export function useNotesBridge(params: {
   const { fullAccess } = useAccount()
 
   // 用 ref 持有最新值:事件回调是长期存活的监听器,不能闭包捕获旧快照。
+  // ★render 期不写 ref（React Compiler / react-hooks/refs）：统一在 effect 里同步，
+  //   监听器注册在挂载后运行，届时 ref 已同步完毕，语义完全等价。
   const fullAccessRef = useRef(fullAccess)
-  fullAccessRef.current = fullAccess
   const storeRef = useRef(store)
-  storeRef.current = store
   const setToastRef = useRef(setToast)
-  setToastRef.current = setToast
+  useEffect(() => {
+    fullAccessRef.current = fullAccess
+    storeRef.current = store
+    setToastRef.current = setToast
+  }, [fullAccess, store, setToast])
 
   // ⓪ 磁盘回灌 + 启动恢复:重装 / 清理 WebView 缓存后 localStorage 为空时,
   //    从 ~/.ticktask/prefs.json 恢复便利签数据(与录音 / 计薪同机制);
@@ -141,6 +168,9 @@ export function useNotesBridge(params: {
           setToastRef.current('err', '这张便利签已删除')
           return
         }
+        // 2026-11-15 需求:绳卡「打开原内容」时把桌面便利签标记为未折叠,
+        // 否则重启后 boot 自动恢复会把它过滤掉(collapsed 的不再弹窗)。
+        if (note.collapsed) updateNote(note.id, { collapsed: false })
         void invoke('notes_open_window', { noteId: note.id, pinned: note.pinned }).catch(() => {
           setToastRef.current('err', '便利签窗口打开失败')
         })
@@ -158,6 +188,83 @@ export function useNotesBridge(params: {
         },
       ).catch(() => null)
       if (u2) unsubs.push(u2)
+
+      // ⑥ 绳上便利签卡可交互：勾选 / 新增 / 删除 / 编辑条目。
+      //    绳窗只读 localStorage 快照，所有写回统一由主窗 store 单一写方执行，
+      //    避免绳窗直接写 prefs.json 造成整文件覆盖（既有功能红线）。
+      const u3 = await listen<ClNoteItemAction>(CL_NOTE_ITEM_ACTION, (e) => {
+        if (disposed) return
+        const p = e.payload
+        if (!p?.noteId) return
+        switch (p.action) {
+          case 'toggle':
+            toggleNoteItem(p.noteId, p.itemId)
+            break
+          case 'add':
+            if (p.text?.trim()) addNoteItem(p.noteId, p.text.trim())
+            break
+          case 'remove':
+            removeNoteItem(p.noteId, p.itemId)
+            break
+          case 'edit':
+            if (p.text?.trim()) updateNoteItem(p.noteId, p.itemId, { text: p.text.trim() })
+            break
+          case 'totask': {
+            // ★2026-11-15 反馈4：绳上便利签行操作「加入待办」→ 主窗任务单一写方建任务。
+            const text = p.text?.trim()
+            if (!text) break
+            const t = storeRef.current.addTask('today', text)
+            // ★批14：结果 toast 弹回绳窗并锚到该便利签卡（用户不会一直开着工具窗，
+            //   主窗 toast 等于没提示，会让用户以为没有添加成功）。
+            void emit(CL_TOAST, {
+              kind: t ? 'ok' : 'err',
+              msg: t ? '已加入今日待办' : '待办数量已达上限',
+              noteId: p.noteId,
+            } satisfies ClToastPayload).catch(() => undefined)
+            break
+          }
+        }
+      }).catch(() => null)
+      if (u3) unsubs.push(u3)
+
+      // ★2026-11-15 反馈6：绳窗 ＋ 菜单「新建便利签」→ 主窗单一写方创建便利签数据
+      //    （collapsed：不开桌面窗、重启也不再桌面弹出），随后直接挂上晾衣绳。
+      //    一步到位，不再需要「先建桌面便利签 → 再点挂绳」两步流程。
+      const uNoteCreate = await listen<unknown>(CL_CREATE_NOTE, () => {
+        if (disposed) return
+        if (!fullAccessRef.current) {
+          setToastRef.current('err', '新建便利签为会员功能，请先开通会员')
+          return
+        }
+        const note = createNote({ collapsed: true })
+        if (!note) {
+          setToastRef.current('err', '便利签数量已达上限')
+          return
+        }
+        void clAddCard(clMakeCard('note', { note_id: note.id }), true)
+          .then(() => setToastRef.current('ok', '已新建便利签并挂到晾衣绳'))
+          .catch((e) => setToastRef.current('err', failText(e)))
+      }).catch(() => null)
+      if (uNoteCreate) unsubs.push(uNoteCreate)
+
+      // ⑧ 问题1：便利签成功挂到绳上后，桌面那张便利签必须自动消失。
+      //    只把 collapsed 置 true + 关窗口，**绝不删数据**（绳上卡仍按 noteId 读快照）。
+      //    collapsed 后 visibleNotes() 不再包含它，重启也不会又冒出来。
+      const u4 = await listen<ClNoteHung>(CL_NOTE_HUNG, (e) => {
+        if (disposed || !e.payload?.noteId) return
+        const noteId = e.payload.noteId
+        if (!getNotes().some((n) => n.id === noteId)) return
+        updateNote(noteId, { collapsed: true })
+        void invoke('notes_close_window', { noteId }).catch(() => undefined)
+      }).catch(() => null)
+      if (u4) unsubs.push(u4)
+
+      // ⑨ 问题10：绳上便利签换色，仍由主窗 notes/store.ts 单一写方落盘。
+      const u5 = await listen<ClNoteColorAction>(CL_NOTE_COLOR_ACTION, (e) => {
+        if (disposed || !e.payload?.noteId || !e.payload?.colorKey) return
+        updateNote(e.payload.noteId, { colorKey: e.payload.colorKey })
+      }).catch(() => null)
+      if (u5) unsubs.push(u5)
     })()
     return () => {
       disposed = true

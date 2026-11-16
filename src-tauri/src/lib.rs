@@ -29,6 +29,15 @@ mod clothesline;
 /// `CalculateNativeWinOcclusion` 等三个开关:关闭 Chromium 对「被遮挡 / 后台」窗口的
 /// 渲染降频。截图覆盖层 / 贴图窗在隐藏⇄显示来回切换、或停在屏幕角落时,Chromium 可能
 /// 把页面判为后台而节流渲染;这几个开关是无害的保险,保证事件回调与绘制按正常节奏跑。
+///
+/// ⚠️ **禁止在此常量里增删任何开关**(2026-11-14 血案):
+/// 本串必须与 `tauri.conf.json` 中 8 个静态窗口的 `additionalBrowserArgs` **逐字符一致**。
+/// 0.4.74 / 0.4.75 曾只改本常量(加 `--disable-gpu` / `--disable-gpu-compositing`)却漏改 conf,
+/// 导致静态窗用旧串先建好 WebView2 环境,动态窗(晾衣绳/便利签/剪贴板/截图/组件)带新串
+/// 再建 → `CreateCoreWebView2EnvironmentWithOptions` 返回 0x8007139F(ERROR_INVALID_STATE)
+/// → 晾衣绳窗口创建失败、"启用后不显示"。与 0.4.38 血案同源。
+/// 教训:① 改这里必须同步改 conf 全部 8 处;② 不要为晾衣绳单点的视觉问题全局改 GPU/渲染
+/// 参数——所有透明窗共用同一环境,牵一发动全身。晾衣绳 hover 透底改走纯前端结构性方案。
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling";
 
 /// 截图 / 贴图快捷键托管状态:记录本轮已注册的全局快捷键,便于下次注册前注销。
@@ -1774,8 +1783,11 @@ pub fn run() {
             clothesline::clothesline_update_settings,
             clothesline::clothesline_set_always_on_top,
             clothesline::clothesline_apply_bounds_and_show,
+            clothesline::clothesline_set_bounds,
+            clothesline::clothesline_set_position,
             clothesline::clothesline_set_hit_rects,
             clothesline::clothesline_set_force_clickable,
+            clothesline::clothesline_set_dismiss_on_outside,
             clothesline::clothesline_capture_suspend,
             clothesline::clothesline_capture_resume,
             clothesline::clothesline_get_monitors,

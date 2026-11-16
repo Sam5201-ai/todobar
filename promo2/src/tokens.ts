@@ -26,5 +26,6 @@ export const FONT = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-seri
 export const MONO = 'Consolas, "Cascadia Code", monospace';
 
 // 各场景时长（帧，30fps）。与 Root.tsx 的 SCENES 数组一一对应。
-// 十一段：封面 / 痛点 / 品牌 / 待办全功能 / 黄历 / 牛马计薪器 / 计算器 / 生日纪念日 / 录音机 / 效率套件 / 落版
-export const SCENE_DURS = [90, 210, 210, 420, 300, 360, 270, 300, 270, 240, 240] as const;
+// 十二段：封面 / 痛点 / 品牌 / 一点即开 / 待办 / 黄历 / 牛马计薪器 / 计算器 / 生日纪念日 / 录音机 / 效率套件 / 落版
+// 时长 = 旁白帧 + 启动延迟(8) + 小幅缓冲，消除场景末尾空白停顿
+export const SCENE_DURS = [80, 135, 135, 120, 180, 165, 190, 130, 135, 120, 130, 150] as const;

@@ -8,12 +8,43 @@
 //! 1. **数据独立**：只读写 `~/.ticktask/clothesline/`，绝不调用 `crate::set_pref`。
 //!    `set_pref` 是「读整 prefs.json → 改一键 → 整文件覆盖」，多窗口并发会互相覆盖，
 //!    把主题 / 宽度 / 快捷键 / 登录态丢掉（R60）。
-//! 2. **截图防污染 R54（最高危）**：`capture_screen` 用 GDI BitBlt 抓「桌面合成帧」，
-//!    默认 TOPMOST 的绳窗会被拍进每一张截图 / 贴图 / OCR。抓屏前必须 `capture_suspend`
-//!    隐藏绳窗并等 DWM 合成生效，抓完（含所有错误路径，用 RAII guard）再 `capture_resume`。
+//! 2. **截图期间绳窗保持可见（2026-11-12 用户明确要求，取代旧 R54）**：
+//!    `capture_screen` 用 GDI BitBlt 抓桌面合成帧，旧版抓屏前 `capture_suspend` 隐藏绳窗
+//!    + sleep 90ms + show，会肉眼闪烁并与 DWM 合成竞争。现在 suspend/resume 只维护深度
+//!    计数，**绝不 hide/show 窗口**；代价是绳身可能被拍进截图，用户已明确接受。
 //! 3. **独立命中循环 R68**：Rust 侧没有可挂的 48ms 循环（主窗的是 App.tsx 前端 setInterval）。
-//!    绳窗自建独立线程，48ms 无条件重发 `set_ignore_cursor_events`（防穿透锁死），
-//!    **绝不改主窗 syncHitTest / dock.ts**。
+//!    绳窗自建独立线程，48ms 轮询 OS 光标自主判定穿透，**绝不改主窗 syncHitTest / dock.ts**。
+//!    ⚠️ **禁止在命中循环里调 tao 的 set_ignore_cursor_events**：tao 的该 API 会把
+//!    `WS_EX_LAYERED` + `WS_EX_TRANSPARENT` 作为 `IGNORE_CURSOR_EVENT` 的副作用位一起
+//!    写入，且每次都从 `to_window_styles()`（`window_state.rs:239`）重建整个 GWL_EXSTYLE
+//!    并发 `SWP_FRAMECHANGED`——这会破坏本模块「WS_EX_LAYERED 恒置位」的不变式（见下），
+//!    导致死区无法穿透或卡片透底。历史做法是穿透走自写 `set_click_through`（第十九轮
+//!    改为 SetWindowRgn 区域裁剪，第二十轮进一步退役——见下文铁律演进）。
+//!    透明本身靠 `transparent:true` → tao 在 `on_create` 调 `DwmEnableBlurBehindWindow`
+//!    空 region（window.rs:1204-1215）；但 tao 的 `to_window_styles()` **从不为 transparent
+//!    窗口加 `WS_EX_LAYERED`**（LAYERED 只随 IGNORE_CURSOR_EVENT 一起加）。
+//!    【历史·铁律演进】★★两条铁律（已对照 tao 0.37.2 源码验证）★★：
+//!      (A) 死区点击穿透【必须】`WS_EX_LAYERED`：它提供逐像素 alpha 命中测试
+//!          （透明像素透传、实色像素捕获）。无 LAYERED → 矩形命中 → 整窗吞点击 → 副屏冻死。
+//!          0.4.69~0.4.72 反复冻屏正是把 LAYERED 去掉、只切 TRANSPARENT，LAYERED 始终缺席。
+//!      (B) `WS_EX_LAYERED`【绝不】随 hover 翻转：翻转（任何运行期 GWL_EXSTYLE 写入）
+//!          触发 DWM 重建「分层窗口」绘制路径，WebView2 的 alpha 被错算 → 卡片实色
+//!          漏画 → hover 透底。
+//!    → ★★2026-11-14 第十九轮（已证伪，勿回退）★★：SetWindowRgn 区域裁剪——region
+//!      让 DWM 走旧式裁剪合成路径、区域内 alpha 通道失效：收起态横带白色底框恒定现形，
+//!      hover 重提交帧时卡片纸底 alpha 画丢（透底依旧）。
+//!    → ★★2026-11-14 第二十轮（已证伪，勿回退）★★：恒 WS_EX_LAYERED + 恒整屏窗——
+//!      逐像素 alpha 命中只存在于 UpdateLayeredWindow 的 GDI 分层路径；WebView2/DWM
+//!      合成窗挂 LAYERED 后仍按**矩形**命中 → 整屏窗口启动即整窗捕获点击 → 全屏冻结。
+//!    → ★★2026-11-14 第二十一轮定案（绳带窄窗，与便利签/贴图窗同构）★★：窗口本体 =
+//!      内容矩形（展开 = 顶部 mon.width×ropeH 横带；收起 = 拉杆处 180×96 小窗；
+//!      预览 = 临时放大整屏）。**不依赖任何穿透机制**：窗口矩形外点击天然直达桌面；
+//!      EXSTYLE / region 全进程零写入（便利签 / 剪贴板 / 贴图从不写窗口样式也从不
+//!      透底 / 冻屏，即同构证明）。窗口几何由前端 placeAndArm / 拖拽路径驱动，
+//!      见 clothesline_set_bounds / clothesline_set_position。
+//!    ⚠️ 便利签 / 剪贴板 / 贴图 / 主窗同为 `transparent:true`（notes.rs / clipboard.rs /
+//!      screenshot.rs），差异不在透明度，而在它们**从不随光标动态切换窗口样式**——
+//!      这就是 hover 透底只发生在绳窗、其他类似工具没有此问题的原因。
 //! 4. **双端编译 R65**：所有平台相关代码严格 `#[cfg(windows)]` / `#[cfg(not(windows))]`。
 //!    macOS 无抓屏实现（screenshot.rs 占位报错），本模块在 mac 上必须能编译且不建窗。
 //! 5. **动态建窗**：子线程 build + `crate::BROWSER_ARGS` 逐字一致 + `probe_alive`
@@ -55,7 +86,38 @@ pub struct ClotheslineSettings {
     pub anchor_y: i32,
     /// 收起态下拉绳把手水平位置（0.0~1.0）。
     pub pulltab_x_ratio: f64,
+    /// 整条绳窗在「可用区」内的水平位置（0.0=贴可用区左缘, 0.5=居中, 1.0=贴右缘）。
+    /// 问题1/4/11：旧版只有 anchor_y（垂直）与 pulltab_x_ratio（窗口内百分比，不移动窗口），
+    /// 导致绳子无法水平移动、收起态拖两次命中矩形错位卡死。统一用本字段驱动整窗 X。
+    #[serde(default = "default_half")]
+    pub win_x_ratio: f64,
+    /// 2026-11-13 问题4：收起态拉杆皮肤（porcelain / brass / glass）。配置页三选一，默认素瓷。
+    /// `#[serde(default)]` 必须保留：老档没有此字段时不能整份回落默认（会丢用户全部设置）。
+    #[serde(default = "default_pulltab_style")]
+    pub pulltab_style: String,
+    /// 一次性迁移标记：旧版 clamp bug 会把 win_x_ratio 写成 1.0（视觉却仍居中），
+    /// 新版把它按像素真源落位就会把绳窗钉在可移范围最右端 → 「无法向右拖」。
+    /// 升级后首次加载把极端脏值归位到 0.5 并写回磁盘，之后永不再迁移，
+    /// 用户此后主动拖到最右是合法偏好，不会被误重置。
+    #[serde(default)]
+    pub win_x_migrated_v2: bool,
+    /// 一次性迁移标记：0.4.68 把两个水平位置解绑后，pulltab_x_ratio 的语义从
+    /// 「拉杆在绳身上的位置」变成「收起态整窗的水平位置」。老档里的 0.92 之类的
+    /// 旧值若直接沿用，升级后拉杆会从居中突然跳到偏右（用户从未设置过的位置）。
+    /// 首次加载归位到 0.5 并写盘，之后用户各自拖动的偏好不再被重置。
+    #[serde(default)]
+    pub x_ratio_split_v1: bool,
+    /// 晾衣绳长度（可用区宽度占比 0.3~1.0，默认 0.86）。直接影响单屏可挂卡片数量。
+    #[serde(default = "default_rope_ratio")]
+    pub rope_width_ratio: f64,
+    /// 卡片尺寸缩放（1.0=当前最小尺寸，2.0=放大一倍）。前端按 CSS zoom 整组缩放。
+    #[serde(default = "default_card_size")]
+    pub card_size: f64,
 }
+fn default_half() -> f64 { 0.5 }
+fn default_pulltab_style() -> String { "porcelain".to_string() }
+fn default_rope_ratio() -> f64 { 0.86 }
+fn default_card_size() -> f64 { 1.0 }
 
 impl Default for ClotheslineSettings {
     fn default() -> Self {
@@ -69,6 +131,12 @@ impl Default for ClotheslineSettings {
             always_on_top: true,
             anchor_y: 72,
             pulltab_x_ratio: 0.5,
+            win_x_ratio: 0.5,
+            pulltab_style: default_pulltab_style(),
+            win_x_migrated_v2: true, // 全新安装无需迁移
+            x_ratio_split_v1: true,  // 全新安装无需迁移
+            rope_width_ratio: default_rope_ratio(),
+            card_size: default_card_size(),
         }
     }
 }
@@ -84,8 +152,68 @@ fn sanitize(raw: ClotheslineSettings) -> ClotheslineSettings {
         s.pulltab_x_ratio = 0.5;
     }
     s.pulltab_x_ratio = s.pulltab_x_ratio.clamp(0.05, 0.95);
+    if !s.win_x_ratio.is_finite() {
+        s.win_x_ratio = 0.5;
+    }
+    s.win_x_ratio = s.win_x_ratio.clamp(0.0, 1.0);
+    if !matches!(s.pulltab_style.as_str(), "porcelain" | "brass" | "glass") {
+        s.pulltab_style = default_pulltab_style();
+    }
+    if !s.rope_width_ratio.is_finite() {
+        s.rope_width_ratio = default_rope_ratio();
+    }
+    s.rope_width_ratio = s.rope_width_ratio.clamp(0.3, 1.0);
+    if !s.card_size.is_finite() {
+        s.card_size = default_card_size();
+    }
+    s.card_size = s.card_size.clamp(1.0, 2.0);
     s.monitor_stable_id = s.monitor_stable_id.chars().take(200).collect();
     s
+}
+
+/// 升级后一次性迁移旧版 clamp bug 留下的极端 win_x_ratio（实测脏值 1.0，画面却居中）。
+/// 用进程内 Once 保证只写一次盘，避免启动期多个加载点并发 remove+rename 竞态。
+static WINX_MIGRATION_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn migrate_dirty_winx(base: &Path, s: &mut ClotheslineSettings) {
+    if s.win_x_migrated_v2 || WINX_MIGRATION_DONE.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    WINX_MIGRATION_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
+    if s.win_x_ratio >= 0.999 || s.win_x_ratio <= 0.001 {
+        crate::append_app_log(&format!(
+            "[clothesline] 迁移旧版脏 win_x_ratio={} → 0.5（用户画面原本居中）",
+            s.win_x_ratio
+        ));
+        s.win_x_ratio = 0.5;
+    }
+    s.win_x_migrated_v2 = true;
+    // 写回磁盘后下次启动读到的就是 0.5 / true，天然幂等；用户此后主动拖到边缘是合法偏好。
+    if let Err(e) = save_settings_to(base, s) {
+        crate::append_app_log(&format!("[clothesline] win_x 迁移写盘失败: {e}"));
+    }
+}
+
+/// 0.4.68 两态位置解绑的存量迁移：老档 pulltab_x_ratio 语义完全不同，归位居中。
+static SPLIT_X_MIGRATION_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn migrate_split_x_ratios(base: &Path, s: &mut ClotheslineSettings) {
+    if s.x_ratio_split_v1
+        || SPLIT_X_MIGRATION_DONE.swap(true, std::sync::atomic::Ordering::SeqCst)
+    {
+        return;
+    }
+    crate::append_app_log(&format!(
+        "[clothesline] 两态位置解绑：旧 pulltab_x_ratio={} 归位 0.5（语义已变更）",
+        s.pulltab_x_ratio
+    ));
+    s.pulltab_x_ratio = 0.5;
+    s.x_ratio_split_v1 = true;
+    if let Err(e) = save_settings_to(base, s) {
+        crate::append_app_log(&format!("[clothesline] 两态位置迁移写盘失败: {e}"));
+    }
 }
 
 fn base_dir() -> Option<PathBuf> {
@@ -118,7 +246,12 @@ fn save_settings_to(base: &Path, s: &ClotheslineSettings) -> Result<(), String> 
 fn load_settings_from(base: &Path) -> ClotheslineSettings {
     match std::fs::read_to_string(settings_path(base)) {
         Ok(s) => match serde_json::from_str::<ClotheslineSettings>(&s) {
-            Ok(v) => sanitize(v),
+            Ok(v) => {
+                let mut v = sanitize(v);
+                migrate_dirty_winx(base, &mut v);
+                migrate_split_x_ratios(base, &mut v);
+                v
+            }
             Err(e) => {
                 crate::append_app_log(&format!("[clothesline] settings 解析失败，回落默认: {e}"));
                 ClotheslineSettings::default()
@@ -151,13 +284,19 @@ pub struct ClotheslineStateInner {
     /// 总开关内存镜像（仅 enabled 时存在窗口 / 循环 / 挂起逻辑）。
     pub enabled: AtomicBool,
     /// 可点矩形（**屏幕绝对物理坐标**），由前端布局后上报。
-    /// - 非空：仅当光标落在任一矩形内才可点，其余区域穿透（收起态 = 只有把手竖条）。
-    /// - 空数组：整窗可点（展开态），穿透恒 false。
-    /// ⚠️ 光标命中判定必须在 Rust 侧用 OS 轮询，**绝不能靠前端 pointermove 写回**：
-    ///    窗口一旦 set_ignore_cursor_events(true) 就收不到任何鼠标事件，前端无法把自己
-    ///    改回可点 → 点击穿透永久锁死（PRD R68 / 项目 MEMORY 铁律）。
+    /// ★第二十一轮起**只服务浮层关闭检测**（问题13「左键点在面板外」判定），不再参与
+    /// OS 命中测试——命中由绳带窄窗的普通矩形窗口语义天然完成。
+    /// - 非空：常态（展开面板矩形 / 收起拉绳横带）。
+    /// - 空数组：预览 / 拖放会话期间暂停窗外判定；超时 8s 自动回退到最近一次非空
+    ///          矩形（见 empty_hit_since）。
+    /// ⚠️ 命中判定必须在 Rust 侧用 OS 轮询，**绝不能靠前端 pointermove 写回**：
+    ///    窗外点击永远到不了前端，前端自写会永久锁死（PRD R68 / 项目 MEMORY 铁律）。
     pub hit_rects: Mutex<Vec<HitRect>>,
-    /// 前端拖拽期间的「临时强制可点」请求（退出拖拽会清）。每轮循环以 OS 命中为准覆盖。
+    /// 空 hit_rects（预览/拖放会话）的起算时刻；仅用于异常残留兜底，前端正常关闭会清空。
+    pub empty_hit_since: Mutex<Option<std::time::Instant>>,
+    /// 最近一次非空命中矩形快照：空列表超时后自动回退，保证 dismiss 判定始终有效。
+    pub last_non_empty_rects: Mutex<Vec<HitRect>>,
+    /// force 兼容桩的计时器（第二十轮起命中循环已不读取；保留仅为命令接口稳定）。
     pub force_clickable_until: Mutex<Option<std::time::Instant>>,
     /// 独立命中循环的停止标志。关闭总开关即置 true，线程下一轮 48ms 自行退出。
     pub stop_loop: AtomicBool,
@@ -165,6 +304,9 @@ pub struct ClotheslineStateInner {
     pub loop_running: AtomicBool,
     /// 截图挂起深度（支持前端会话级 + capture_screen 自守卫嵌套）。
     pub suspend_depth: AtomicU32,
+    /// 浮层（右键菜单 / ＋菜单）打开期间置 true：命中循环据此检测「左键点在可点区外」，
+    /// 发 cl-dismiss-overlay 让前端关闭浮层（问题13：透明穿透窗收不到窗外 click，必须 OS 轮询）。
+    pub dismiss_on_outside: AtomicBool,
     /// 挂起前绳窗是否可见（resume 时据此决定是否 show）。
     pub was_visible: AtomicBool,
     /// cards.json 唯一写锁：排序 / 增删 / 软删除共用同一临界区，
@@ -290,13 +432,21 @@ fn build_window(app: &tauri::AppHandle) -> bool {
         .skip_taskbar(true)
         .focused(false) // 绝不抢焦点（与 capture-overlay 同款克制）。
         .resizable(false)
-        .shadow(false);
+        .shadow(false)
+        // 问题9：把文件拖放交还 WebView DOM。否则 Windows 上 wry 原生接管拖放，
+        // DOM 的 onDrop 拿不到 dataTransfer.files，图片无法直接拖入挂绳。
+        // 仅影响本动态窗（drag_and_drop 是 Windows-only 方法，绳窗本身也 Windows-only），
+        // 不改 tauri.conf.json 静态窗，主窗 / 截图 / 贴图的拖放行为零影响。
+        .drag_and_drop(false);
 
     match builder.build() {
         Ok(win) => {
             if probe_alive(&win) {
-                let _ = win.set_ignore_cursor_events(true); // 收起态默认全穿透。
-                crate::append_app_log("[clothesline] 窗口创建成功");
+                // ★第二十一轮（绳带窄窗）：EXSTYLE / region 全进程零写入。窗口本体 =
+                //   内容矩形（冷启动由前端 placeAndArm 写横带 / 小窗矩形），命中 =
+                //   普通矩形窗口语义，窗口外点击天然直达桌面，无需任何穿透机制
+                //   （与便利签 / 贴图窗完全同构）。历史教训见文件头铁律演进。
+                crate::append_app_log("[clothesline] 窗口创建成功（绳带窄窗 · 零窗口样式写入）");
                 true
             } else {
                 crate::append_app_log("[clothesline] build() Ok 但探活失败 (ghost)，关闭");
@@ -360,6 +510,18 @@ fn cursor_physical() -> Option<(i32, i32)> {
     None
 }
 
+/// 鼠标左键此刻是否按下（边沿检测用）。仅 Windows 建绳窗，故只实现 Windows 分支。
+#[cfg(windows)]
+fn left_button_down() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+    // GetAsyncKeyState 高位(0x8000)表示当前按下。
+    unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 }
+}
+#[cfg(not(windows))]
+fn left_button_down() -> bool {
+    false
+}
+
 /// 光标是否落在任一可点矩形内（屏幕绝对坐标直接比对，零窗口位置 IPC）。
 fn cursor_on_clickable(cx: i32, cy: i32, rects: &[HitRect]) -> bool {
     rects
@@ -367,16 +529,97 @@ fn cursor_on_clickable(cx: i32, cy: i32, rects: &[HitRect]) -> bool {
         .any(|r| cx >= r.x && cx < r.x + r.width && cy >= r.y && cy < r.y + r.height)
 }
 
-/// 启动绳窗自有命中循环。**在 Rust 侧用 OS 光标轮询自主算穿透**，不由前端写回——
-/// 这是防「穿透锁死」的关键（PRD R68 / I14）。只对**本窗口**发 set_ignore_cursor_events，
-/// 绝不触碰主窗 48ms 循环、dock.ts、零 RPC 快路径。
+/// ★2026-11-14 第十四轮：hover 透底 / 副屏冻屏的统一解释（app.log 实证 + 全项目差异比对）。
 ///
-/// 判定：
-/// - 挂起截图期间 / 窗口不可达 → 跳过本轮（保留上次状态，避免闪烁）。
-/// - 拖拽临时强制可点且未过期 → ignore=false。
-/// - hit_rects 为空（展开态整窗可点）→ ignore=false。
-/// - 否则 → 光标在任一矩形内才 ignore=false，其余 ignore=true。
-/// 每轮**无条件重发**，任何一次 set_ignore 丢失都能在下一轮补回，永不锁死。
+/// 【证据链】
+/// · 前端 `.cl-card:hover` 为空、`opacity:1 !important`、无 JS hover state、清风动画只改
+///   transform；CSS 方向十余轮修改全部无效 → 问题不在 CSS，也不在 GPU 开关。
+/// · `app.log` 中每次鼠标移入 / 离开卡片都伴随一条「穿透切换 → 可点/穿透」：hover 真正
+///   触发的是 Rust 侧 48ms 命中循环改写 `GWL_EXSTYLE`。
+/// · 全项目只有本文件有「随光标切窗口样式 + `SetWindowPos`」这条路径。便利签 / 剪贴板 /
+///   贴图 / 主窗同为 `transparent(true)`，但从不动态切样式 → 这正是「为什么桌面便利签
+///   置顶在其他页面上不会出现该问题，而晾衣绳会」的答案。
+///
+/// 【两条铁律，缺一则死】
+///  (A) 死区穿透【必须】`WS_EX_LAYERED` 恒置位：缺位 → 窗口按矩形命中 → 整窗吞点击 →
+///      副屏冻死（0.4.69~0.4.72 反复冻屏即因只切 TRANSPARENT、LAYERED 始终缺席）。
+///      tao 的 `to_window_styles()`（window_state.rs:239-298）从不为 transparent 窗口自动
+///      加该位，且 `set_always_on_top` / `show()` 经 apply_diff 会抹掉它 → 调用后须即时补回。
+///  (B) `WS_EX_LAYERED`【绝不】翻转：翻转触发 DWM 重建分层窗口绘制路径 → WebView2 提交的
+///      alpha 被错算 → 卡片实色纸底漏画（0.4.68 在「可点态」移除 LAYERED 即此病）。
+///
+/// 【0.4.77 写法，0.4.79 保留】hover 切换只写 `GWL_EXSTYLE` 的 `WS_EX_TRANSPARENT`
+/// 一位、不调 `SetWindowPos`，仅首次补 LAYERED 时调一次。它消除了 0.4.73 起每次切换
+/// 补 `SWP_FRAMECHANGED` 带来的额外整窗重绘，但**并未**解决 hover 透底（0.4.77 实机
+/// 证伪）。保留只因为它稳定、不冻屏、可交互。
+///
+/// ★2026-11-14 第十八轮：hover 透底经 17 轮排除，已确认与 CSS（:hover 为空、
+///   opacity:1、无滤镜/混合模式）、清风动画（关掉仍复现）、GPU 开关、SetWindowPos
+///   重绘（0.4.77 零重绘仍复现）均无关。剩余最强差异：只有本窗是**整屏**透明窗，
+///   卡片仅占顶部一条，其余为大面积 alpha=0 死区。详见下方输入通道注释。
+///   日志仍打印「首次建层 / 零重绘」与 EXSTYLE 实值作为诊断证据。
+///
+/// 写入仅在状态翻转时发生，交互锁（force / overlay）期间连这一位都不写；命中循环每轮
+/// 回读 OS 真实样式自愈，不留 48ms 空窗。
+// ★2026-11-14 第十九轮（已证伪，勿回退）：SetWindowRgn 区域裁剪实测引入两个新症状——
+// ① 收起态横带内出现恒定白色底框（DOM 无任何元素能画出它）：DWM 对带 region 的窗口
+//    走旧式裁剪合成路径，区域内 alpha 通道失效，WebView 空白底色 + 裁剪边缘现形；
+// ② hover 透底依旧：app.log 证实 hover 期间零 SetWindowRgn，但 hover 触发 WebView2
+//    重提交合成帧时，被 region 毒化的合成路径把卡片纸底的 alpha 画丢。
+//
+// ★★2026-11-14 第二十轮（已证伪，勿回退）：恒 WS_EX_LAYERED + 恒整屏窗——
+// 上述「全程零运行期窗口写入」形态实测**启动即全屏冻结**：逐像素 alpha 命中只存在于
+// UpdateLayeredWindow 的 GDI 分层路径；WebView2/DWM 合成窗挂 LAYERED 后命中测试仍是
+// **矩形** → 整屏窗口把整个桌面罩住、整窗捕获点击 → 全屏无法操作。铁律 A「死区穿透
+// 必须 LAYERED」对整屏合成窗不成立，已随第二十一轮一并作废。
+//
+// ★★★ 2026-11-14 第二十一轮定案（绳带窄窗 · 零穿透机制 · 零窗口样式写入）★★★
+// 窗口本体 = 内容矩形（与便利签 / 贴图 / 剪贴板窗同构）：
+//  · 展开 = 顶部一条 mon.width × ropeH 横带；收起 = 拉杆处 180×96 小窗；
+//    大图预览 = 临时放大整屏，关闭即恢复横带（均为离散 resize，可接受）；
+//  · 命中回归普通矩形窗口语义：窗口矩形外点击天然直达桌面，窗口内透明区随窗存在
+//    （展开横带仅占屏幕顶部一条，可接受；收起小窗不再阻挡桌面——旧 complaint 的根因）；
+//  · EXSTYLE / region 全进程零写入：透底的两大触发源（运行期 EXSTYLE 写入、region
+//    毒化 alpha）在架构上不存在；冻屏触发源（整屏矩形窗）同样不存在。
+
+/// ★第二十轮函数 apply_constant_layered 已随第二十一轮拆除（勿回退）：恒 LAYERED 在
+/// WebView2/DWM 合成窗上没有逐像素命中（那只存在于 UpdateLayeredWindow 的 GDI 路径），
+/// 整屏窗 + 恒 LAYERED 实测启动即整窗捕获点击 → 全屏冻结。绳带窄窗架构下命中回归
+/// 普通矩形窗口语义，任何 EXSTYLE 写入都不再需要——这也正是便利签 / 贴图窗的形态。
+
+// ————————————————— 输入通道（0.4.78 低级钩子方案：已证伪、已移除）—————————————————
+//
+// ★2026-11-14 第十八轮 app.log 实测结论，勿再重试此路线：
+//   `WH_MOUSE_LL` 全局钩子「hover 恒穿透、按键瞬间切可点」在本窗失效且引入严重回归：
+//   1) 钩子回调发生时系统已完成命中测试，按键时才清 WS_EX_TRANSPARENT，来不及把
+//      目标已定为下层窗口的消息改投给本窗；
+//   2) 命中循环在 86% 的情况下 100~150ms 后就把窗口切回穿透（本次启动 21 组
+//      「钩子按下→命中循环穿透」配对，平均 440ms），down/move/up 序列断裂，
+//      卡片点击、拖动排序、拉杆展开全部无反应；
+//   3) 钩子回调里做 EXSTYLE 写入 + 磁盘日志 I/O，拖慢系统鼠标输入 → 体感整屏冻住。
+//   4) 用户仍报告 hover 透底，但本轮测试伴随反复点击（21 组按下配对）触发了
+//      可点态脉冲，日志无法区分「纯 hover 透明」与「点击瞬间透明」，因此 0.4.78
+//      不能作为「恒穿透能否消除透底」的干净判定，勿据此下结论或推翻前轮推断。
+//   ⇒ 窗口穿透时收不到鼠标消息，「恒穿透 + 事后补发输入」在本实现下不可用。
+//   ⇒ 已确定事实：0.4.77 下「可点态=卡片透明 / 穿透态=正常」稳定复现；且
+//      只有本窗是**整屏**透明窗（卡片仅占顶部一条，其余为大面积 alpha=0 死区），
+//      便利签 / 剪贴板 / 贴图窗口内容铺满、无大面积全透明区，从不复现。
+//      具体合成机制未定，但差异点明确落在「窗口几何 + 大面积透明区」上。
+//   ★2026-11-14 第十九轮 SetWindowRgn 区域裁剪已证伪（勿回退）：region 让 DWM 走旧式
+//   裁剪合成路径、alpha 通道在区域内失效 → 收起态横带白色底框现形 + hover 透底依旧。
+//   ★2026-11-14 第二十一轮定案：绳带窄窗（窗口本体 = 内容矩形，与便利签 / 贴图窗同构），
+//   EXSTYLE / region 全进程零写入，命中 = 普通矩形窗口语义，无需任何穿透机制。
+//   第二十轮「恒 LAYERED 逐像素命中」已证伪（整屏窗 + LAYERED = 启动即全屏冻结），
+//   第二十轮两处定案注释（此处与 rects_sig 旧址）以本轮为准。
+
+/// 启动绳窗自有命中循环（48ms OS 轮询）。★第二十一轮起职责收敛为两件事：
+/// 1. **命中矩形簿记**：维护 hit_rects / 最近非空快照（仅服务浮层关闭检测）；
+///    空矩形超时 8s → 回退最近非空快照。命中由绳带窄窗的普通矩形窗口语义天然完成，
+///    循环对 hover / 光标移动**零窗口操作**（第二十轮形态保留）。
+/// 2. **浮层关闭检测**（问题13）：菜单打开时轮询「左键按下边沿 + 光标在矩形外」
+///    → 发 cl-dismiss-overlay（透明区域外收不到 click，必须 OS 轮询）。
+///
+/// 只作用于本窗，绝不触碰主窗 48ms 循环、dock.ts、零 RPC 快路径。
 fn spawn_hit_loop(app: tauri::AppHandle, state: ClotheslineState) {
     if state.loop_running.swap(true, Ordering::SeqCst) {
         // 关→开快速切换时，上一轮线程可能还在 48ms sleep 里、尚未执行结尾的
@@ -394,27 +637,59 @@ fn spawn_hit_loop(app: tauri::AppHandle, state: ClotheslineState) {
     }
     state.stop_loop.store(false, Ordering::SeqCst);
     std::thread::spawn(move || {
-        crate::append_app_log("[clothesline] 独立命中循环启动 (48ms, OS 轮询)");
+        crate::append_app_log("[clothesline] 独立命中循环启动 (48ms · 绳带窄窗 · 零窗口操作)");
         let mut last_seen = std::time::Instant::now();
+        let mut prev_lbuttondown = false; // 左键上一帧状态，用于边沿检测（问题13）。
         while !state.stop_loop.load(Ordering::Relaxed) {
-            // 截图挂起期间不干预穿透，避免与 hide/show 竞态。
+            // 截图挂起期间不干预，避免与 hide/show 竞态。
             let suspended = state.suspend_depth.load(Ordering::Relaxed) > 0;
             if !suspended {
-                let force = state
-                    .force_clickable_until
-                    .lock()
-                    .unwrap()
-                    .map(|t| std::time::Instant::now() < t)
-                    .unwrap_or(false);
-                let rects = state.hit_rects.lock().unwrap().clone();
-                let on_clickable = match cursor_physical() {
-                    Some((cx, cy)) => rects.is_empty() || cursor_on_clickable(cx, cy, &rects),
-                    None => true, // 拿不到光标（非 Windows / 异常）→ 保守可点，绝不锁死。
-                };
-                let ignore = !(force || on_clickable);
-                if let Some(win) = app.get_webview_window(LABEL) {
-                    let _ = win.set_ignore_cursor_events(ignore);
+                let mut rects = state.hit_rects.lock().unwrap().clone();
+                // 空矩形兜底：矩形表只服务浮层关闭检测，前端正常永远上报面板矩形；
+                // 若前端异常停在空列表（预览/拖放会话丢失收尾），8s 后回退最近非空
+                // 快照，保证 dismiss 检测始终有有效的「面板内/外」判定依据。
+                if rects.is_empty() {
+                    let expired = state
+                        .empty_hit_since
+                        .lock()
+                        .unwrap()
+                        .map(|t| t.elapsed() >= Duration::from_secs(8))
+                        .unwrap_or(false);
+                    if expired {
+                        let fallback = state.last_non_empty_rects.lock().unwrap().clone();
+                        if !fallback.is_empty() {
+                            *state.hit_rects.lock().unwrap() = fallback.clone();
+                            *state.empty_hit_since.lock().unwrap() = None;
+                            rects = fallback;
+                            crate::append_app_log(
+                                "[clothesline] 空命中矩形超时，已自动回退到面板矩形",
+                            );
+                        }
+                    }
+                }
+                // ★第二十一轮：循环内零窗口操作——命中由绳带窄窗的矩形窗口语义天然完成，
+                if app.get_webview_window(LABEL).is_some() {
                     last_seen = std::time::Instant::now();
+                }
+
+                // 问题13：右键菜单 / ＋菜单打开时，区域外点击（事件直达桌面）收不到
+                // click。用 OS 轮询检测「左键按下边沿」且光标不在任何可点矩形内 →
+                // 发关闭事件。只在浮层打开时检测；一次按下只发一次（清标志），避免连发。
+                let cursor = cursor_physical();
+                if state.dismiss_on_outside.load(Ordering::Relaxed) {
+                    let ldown = left_button_down();
+                    let just_pressed = ldown && !prev_lbuttondown;
+                    let outside = match cursor {
+                        Some((cx, cy)) => !rects.is_empty() && !cursor_on_clickable(cx, cy, &rects),
+                        None => false,
+                    };
+                    if just_pressed && outside {
+                        state.dismiss_on_outside.store(false, Ordering::SeqCst);
+                        let _ = app.emit("cl-dismiss-overlay", ());
+                    }
+                    prev_lbuttondown = ldown;
+                } else {
+                    prev_lbuttondown = false;
                 }
             }
             if last_seen.elapsed() > Duration::from_millis(1500) {
@@ -430,79 +705,28 @@ fn spawn_hit_loop(app: tauri::AppHandle, state: ClotheslineState) {
 
 // ————————————————————————— 截图防污染（R54，最高危）—————————————————————————
 
-/// 挂起绳窗：隐藏 + 等 DWM 合成生效，确保这一帧 BitBlt 不含绳窗。
-/// 用深度计数支持「前端会话级 suspend」与「capture_screen 自守卫」嵌套。
+/// 截图会话开始：★2026-11-12 用户明确要求「操作截图时晾衣绳不要自动隐藏」。
+///
+/// 旧版 capture_screen 首行挂 CaptureGuard → hide 绳窗 + sleep 90ms + show，
+/// 造成肉眼可见的闪烁，且 hide/show 与 DWM 合成竞争还会诱发透底 / 抖动。
+/// 现在只维护深度计数（供命中循环识别「截图会话中」），**绝无任何窗口可见性副作用**。
+/// 代价：绳身可能被拍进截图 / 贴图，用户已明确接受。
 pub fn capture_suspend(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<ClotheslineState>() else {
         return;
     };
-    let prev = state.suspend_depth.fetch_add(1, Ordering::SeqCst);
-    if prev != 0 {
-        return; // 已挂起，不重复 hide / 不重复等待。
-    }
-    if let Some(win) = app.get_webview_window(LABEL) {
-        let visible = win.is_visible().unwrap_or(false);
-        state.was_visible.store(visible, Ordering::SeqCst);
-        if visible {
-            let _ = win.hide();
-            // ⚠️ hide 是异步窗口消息，必须给 DWM 一帧合成时间，否则 BitBlt 仍可能拍到绳窗。
-            std::thread::sleep(Duration::from_millis(90));
-        }
-    }
-    crate::append_app_log("[clothesline] 截图挂起：绳窗已隐藏");
-
-    // 看门狗：前端崩溃 / Esc 未走到 resume 时，3s 后强制恢复，避免绳窗永久消失。
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(3));
-        if let Some(s) = handle.try_state::<ClotheslineState>() {
-                if s.suspend_depth.load(Ordering::SeqCst) > 0 {
-                    crate::append_app_log("[clothesline] 截图挂起看门狗触发：强制恢复绳窗");
-                    s.suspend_depth.store(0, Ordering::SeqCst);
-                    resume_window(&handle, s.inner());
-                }
-        }
-    });
+    state.suspend_depth.fetch_add(1, Ordering::SeqCst);
+    crate::append_app_log("[clothesline] 截图会话开始：绳窗保持可见");
 }
 
-fn resume_window(app: &tauri::AppHandle, state: &ClotheslineState) {
-    if state.was_visible.swap(false, Ordering::SeqCst) {
-        if let Some(win) = app.get_webview_window(LABEL) {
-            let _ = win.show();
-            crate::append_app_log("[clothesline] 截图恢复：绳窗已显示");
-        }
-    }
-}
-
-/// 恢复绳窗（深度归零才真正 show）。
+/// 截图会话结束：只减深度计数，绝不 show / hide 窗口。
 pub fn capture_resume(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<ClotheslineState>() else {
         return;
     };
-    // fetch_sub 返回旧值；旧值 <=1 表示本次归零（饱和：已为 0 时不再减）。
     let prev = state.suspend_depth.load(Ordering::SeqCst);
     if prev > 0 {
         state.suspend_depth.fetch_sub(1, Ordering::SeqCst);
-    }
-    if prev <= 1 {
-        resume_window(app, state.inner());
-    }
-}
-
-/// RAII 守卫：capture_screen 内 `let _g = CaptureGuard::new(&app);`，
-/// 任何 return（含 Err / 提前返回）离开作用域都自动 resume，杜绝「截图失败后绳窗永久隐藏」。
-pub struct CaptureGuard(tauri::AppHandle);
-
-impl CaptureGuard {
-    pub fn new(app: &tauri::AppHandle) -> Self {
-        capture_suspend(app);
-        Self(app.clone())
-    }
-}
-
-impl Drop for CaptureGuard {
-    fn drop(&mut self) {
-        capture_resume(&self.0);
     }
 }
 
@@ -570,6 +794,18 @@ pub fn clothesline_update_settings(
                 "pulltab_x_ratio" => {
                     if let Some(n) = v.as_f64() { s.pulltab_x_ratio = n }
                 }
+                "win_x_ratio" => {
+                    if let Some(n) = v.as_f64() { s.win_x_ratio = n }
+                }
+                "pulltab_style" => {
+                    if let Some(v) = v.as_str() { s.pulltab_style = v.to_string() }
+                }
+                "rope_width_ratio" => {
+                    if let Some(n) = v.as_f64() { s.rope_width_ratio = n }
+                }
+                "card_size" => {
+                    if let Some(n) = v.as_f64() { s.card_size = n }
+                }
                 _ => {} // 未知键忽略，防止前端误写污染。
             }
         }
@@ -596,12 +832,97 @@ pub fn clothesline_set_always_on_top(app: tauri::AppHandle, on: bool) -> Result<
         save_settings_to(&base, &s)?;
     }
     if let Some(win) = app.get_webview_window(LABEL) {
+        // ★第十九轮：区域裁剪架构不再写 EXSTYLE，tao apply_diff 重建的样式与我们的
+        //    期望一致（从不设 LAYERED / TRANSPARENT），置顶切换零补写；窗口区域不受影响。
         win.set_always_on_top(on).map_err(|e| e.to_string())?;
-        // 层级切换不改窗口矩形、不碰 GWL_EXSTYLE（PRD v1.3）；命中由独立循环
-        // 下一轮 48ms 自动重算重发，这里不需要手动写穿透态。
     }
     let _ = app.emit("clothesline-topmost-changed", on);
     Ok(())
+}
+
+/// 一次性写入窗口矩形（物理像素）：Windows 侧用**一条** `SetWindowPos` 同时改位置 + 尺寸。
+///
+/// ★2026-11-13 问题3「每点一次大图预览晾衣绳都晃一下 / 像重新调整位置」的根因：
+///   `apply_bounds_inner` 是「set_position → sleep 16ms → set_size」×3 的三连写，
+///   中间必然出现「新位置 + 旧尺寸」的过渡帧。冷启动首帧必须这么写（混合 DPI 下
+///   `set_size` 可能被 `/1.5` 吞掉，需要重复校验），但**运行期的预览放大 / 复原**
+///   走三连写就是纯抖动源。这里提供单次原子写入的通道，供预览与稳态重定位使用。
+#[cfg(windows)]
+fn set_bounds_one_shot(
+    win: &tauri::WebviewWindow,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+    };
+    let raw = win.hwnd().map_err(|e| format!("取窗口句柄失败: {e}"))?;
+    // tauri 与业务代码各用一版 windows crate，HWND 是同构 newtype，按裸指针重建即可。
+    let hwnd = HWND(raw.0);
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            x,
+            y,
+            w as i32,
+            h as i32,
+            SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER,
+        )
+        .map_err(|e| format!("设置窗口矩形失败: {e}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn set_bounds_one_shot(
+    win: &tauri::WebviewWindow,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    win.set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    win.set_size(tauri::PhysicalSize::new(w, h))
+        .map_err(|e| e.to_string())
+}
+
+/// 运行期重定位 / 预览放大复原：单次写入，**不 show、不重试**。
+#[tauri::command]
+pub fn clothesline_set_bounds(
+    app: tauri::AppHandle,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let win = app
+        .get_webview_window(LABEL)
+        .ok_or_else(|| "晾衣绳窗口不存在".to_string())?;
+    if win.is_visible().is_err() {
+        return Err("晾衣绳窗口句柄失效 (ghost)".to_string());
+    }
+    set_bounds_one_shot(&win, x, y, width, height)
+}
+
+/// 拖拽逐帧移动（第二十一轮绳带窄窗）：只改位置、**绝不改尺寸**。
+/// set_position 不触碰窗口宽度 / 高度 → WebView2 视口恒定 → 零重排零重绘，
+/// 逐帧调用也只产生一次普通 SetWindowPos。收起态拉杆拖动 / 展开态垂直 anchor
+/// 拖动走这条通道；展开态水平拖动仍走纯 CSS 变量（窗口恒为整屏宽横带，不动）。
+#[tauri::command]
+pub fn clothesline_set_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let win = app
+        .get_webview_window(LABEL)
+        .ok_or_else(|| "晾衣绳窗口不存在".to_string())?;
+    if win.is_visible().is_err() {
+        return Err("晾衣绳窗口句柄失效 (ghost)".to_string());
+    }
+    win.set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| format!("设置位置失败: {e}"))
 }
 
 /// 前端首帧就绪后：三连写物理矩形 → 显示。顺序保证「先定位再 show」，零闪现错位。
@@ -618,29 +939,56 @@ pub fn clothesline_apply_bounds_and_show(
         .get_webview_window(LABEL)
         .ok_or_else(|| "晾衣绳窗口不存在".to_string())?;
     if !win.is_visible().unwrap_or(false) {
+        // ★第二十一轮：裸 show（绳带窄窗 · 全进程零 EXSTYLE 写入，show / 置顶不需要
+        //   任何样式补写；与便利签 / 贴图窗同构）。
         win.show().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
-/// 前端布局完成后上报「可点矩形」（屏幕绝对物理坐标）。独立命中循环据此自主判定。
-/// - 传空数组 [] = 展开态整窗可点（穿透恒 false）。
-/// - 传若干矩形 = 收起态仅有把手竖条 / 下拉绳 / 卡片可点，其余穿透。
-/// ⚠️ 绝不让前端根据 pointermove 写穿透布尔值——窗口穿透后收不到鼠标事件会永久锁死（R68）。
+/// 前端布局完成后上报「可点矩形」（屏幕绝对物理坐标）。★第二十一轮起本表**只服务
+/// 浮层关闭检测**（问题13：判定「左键点在面板外」），不再参与 OS 命中测试——
+/// 命中由绳带窄窗的普通矩形窗口语义天然完成（窗口外点击直达桌面）。
+/// - 传若干矩形 = 常态（展开面板矩形 / 收起拉绳横带）。
+/// - 传空数组 [] = 预览 / 拖放会话（浮层铺满窗口期间暂停窗外判定）；仅记录起算
+///   时刻并保留上一次非空矩形快照，前端异常丢失收尾时 8s 后命中循环自动回退。
+/// ⚠️ 绝不让前端根据 pointermove 写穿透布尔值——历史上正是这类运行期窗口样式写入
+///    触发 DWM 重建合成层（hover 透底），绳带窄窗架构下已无该通道（R68）。
 #[tauri::command]
 pub fn clothesline_set_hit_rects(app: tauri::AppHandle, rects: Vec<HitRect>) {
     if let Some(state) = app.try_state::<ClotheslineState>() {
-        *state.hit_rects.lock().unwrap() = rects;
+        if rects.is_empty() {
+            *state.empty_hit_since.lock().unwrap() = Some(std::time::Instant::now());
+        } else {
+            *state.empty_hit_since.lock().unwrap() = None;
+            *state.last_non_empty_rects.lock().unwrap() = rects.clone();
+        }
+        *state.hit_rects.lock().unwrap() = rects.clone();
     }
 }
 
-/// 拖拽 / 编辑期间的「临时强制可点」请求（避免拖到一半因光标离开把手区而穿透）。
-/// duration_ms 后自动过期，命中循环恢复 OS 判定。
+/// 「临时强制可点」请求。★第二十一轮起为**无副作用兼容桩**：绳带窄窗下不存在
+/// 「穿透/可点」双态，force 对窗口零操作（拖拽会话由按下期间 OS 鼠标捕获
+/// 保障消息连续，不需要窗口级强制）。命令与前端调用点保留，避免无谓的接口 churn；
+/// timer 仅作记录，命中循环已不再读取。
+///
+/// ★2026-11-13 安全钳制（历史留存）：单次 force 存活上限 MAX_FORCE_MS（2.5s）。
+const MAX_FORCE_MS: u64 = 2500;
 #[tauri::command]
 pub fn clothesline_set_force_clickable(app: tauri::AppHandle, duration_ms: u64) {
     if let Some(state) = app.try_state::<ClotheslineState>() {
+        let dur = duration_ms.min(MAX_FORCE_MS);
         *state.force_clickable_until.lock().unwrap() =
-            Some(std::time::Instant::now() + Duration::from_millis(duration_ms));
+            Some(std::time::Instant::now() + Duration::from_millis(dur));
+    }
+}
+
+/// 浮层（右键菜单 / ＋菜单）开合时由前端调用。打开→命中循环检测窗外左键→发关闭事件；
+/// 关闭→停止检测。透明穿透窗收不到窗外 click，这是唯一可靠的「点外面关菜单」通道（问题13）。
+#[tauri::command]
+pub fn clothesline_set_dismiss_on_outside(app: tauri::AppHandle, on: bool) {
+    if let Some(state) = app.try_state::<ClotheslineState>() {
+        state.dismiss_on_outside.store(on, Ordering::SeqCst);
     }
 }
 
@@ -696,6 +1044,7 @@ pub enum CardKind {
     Task,       // 待办引用
     Text,       // 纯文字卡（cards.json 自持 text）
     Timer,      // 番茄计时（endAt 绝对时间戳）
+    Audio,      // 一键录音卡（会话级：录音引擎在主窗内存里，重启后不可能续录，故不恢复）
 }
 
 /// 晾衣绳上一张卡片的持久化形态。
@@ -737,12 +1086,47 @@ pub struct ClotheslineCard {
     pub end_at: Option<i64>,
     #[serde(default)]
     pub elapsed_before_pause_ms: i64,
+    /// 番茄总时长（正计时暂停后恢复 / 小重置 / +5 分需要；倒计时可由 end_at-created_at 推出，
+    /// 但正计时暂停时 end_at 已置空，没有它就推不出总时长 → 2026-11-15 反馈4 修复）。
+    #[serde(default)]
+    pub timer_total_ms: Option<i64>,
     #[serde(default = "default_timer_direction")]
     pub timer_direction: String, // countdown | countup
     #[serde(default = "default_timer_mode")]
     pub timer_elapsed_mode: String, // wallclock | runtime
     #[serde(default)]
     pub fired_at: Option<i64>, // 提醒已触发去重，防重启重复弹
+    /// 自定义卡片底色（CSS 十六进制；None/None = 沿用类型默认纸色）。
+    #[serde(default)]
+    pub card_color: Option<String>,
+    /// 番茄钟卡片样式（paper=纸感 / minimal=极简 / glass=玻璃；默认 paper）。
+    #[serde(default)]
+    pub card_style: Option<String>,
+    /// 计时卡结束是否弹提醒（默认 true）。
+    #[serde(default = "default_true")]
+    pub remind: bool,
+    /// 卡内文字缩放（0.6~1.4；None = 1）。便利签 / 随手记卡的字号调节真源。
+    #[serde(default)]
+    pub font_scale: Option<f64>,
+    /// ★批12 随手记字体格式：标题字号（px，None=默认 12.5，恒不受 font_scale 影响）。
+    #[serde(default)]
+    pub title_size: Option<f64>,
+    /// 正文字号基准（px，实际渲染仍乘 font_scale；None=默认 10）。
+    #[serde(default)]
+    pub body_size: Option<f64>,
+    /// 自定义字体族（CSS font-family 值，如 'Microsoft YaHei'；None=默认 Segoe UI）。
+    #[serde(default)]
+    pub font_family: Option<String>,
+    /// 标题加粗（None/Some(true)=默认加粗 800；Some(false)=常规 500）。
+    #[serde(default)]
+    pub title_bold: Option<bool>,
+    #[serde(default)]
+    pub title_italic: Option<bool>,
+    /// 正文加粗（None=常规 500；Some(true)=700）。
+    #[serde(default)]
+    pub body_bold: Option<bool>,
+    #[serde(default)]
+    pub body_italic: Option<bool>,
     pub created_at: i64,
     #[serde(default)]
     pub updated_at: i64,
@@ -838,10 +1222,12 @@ fn atomic_write_json<T: Serialize>(final_path: &Path, bak_path: Option<&Path>, v
 }
 
 /// 解析卡片数组 + 过滤软删除 + 稳定排序（order asc, id asc tie-break）。
+/// ★一键录音卡（kind=audio）是会话级卡片：录音引擎在主窗内存中，重启后该卡的
+/// 「录音进行中」状态不可能恢复，恢复出来只会是一张死卡 → 启动时一律丢弃。
 fn parse_cards(raw: &str) -> Result<Vec<ClotheslineCard>, String> {
     let mut cards: Vec<ClotheslineCard> =
         serde_json::from_str(raw).map_err(|e| format!("cards.json 解析失败: {e}"))?;
-    cards.retain(|c| c.deleted_at.is_none()); // 「没删就一定在」；软删除的卡不恢复。
+    cards.retain(|c| c.deleted_at.is_none() && c.kind != CardKind::Audio); // 「没删就一定在」；软删除的卡不恢复。
     cards.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
     Ok(cards)
 }
@@ -1143,11 +1529,36 @@ pub struct CardPatch {
     #[serde(default)]
     pub elapsed_before_pause_ms: Option<i64>,
     #[serde(default)]
+    pub timer_total_ms: Option<i64>,
+    #[serde(default)]
     pub timer_direction: Option<String>,
     #[serde(default, deserialize_with = "de_double_option")]
     pub fired_at: Option<Option<i64>>,
     #[serde(default)]
     pub pinned: Option<bool>,
+    #[serde(default)]
+    pub card_color: Option<String>,
+    #[serde(default)]
+    pub card_style: Option<String>,
+    #[serde(default)]
+    pub remind: Option<bool>,
+    #[serde(default)]
+    pub font_scale: Option<f64>,
+    /// ★批12 随手记字体格式（DoubleOption：缺失=不改 / null=清空回默认 / 值=设置）。
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub title_size: Option<Option<f64>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub body_size: Option<Option<f64>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub font_family: Option<Option<String>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub title_bold: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub title_italic: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub body_bold: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub body_italic: Option<Option<bool>>,
 }
 
 /// 新增卡片：order 永远追加到尾部（不动已有卡的槽位）。
@@ -1269,6 +1680,19 @@ pub fn clothesline_update_card(
     if let Some(v) = patch.timer_direction { c.timer_direction = v; }
     if let Some(v) = patch.fired_at { c.fired_at = v; }
     if let Some(v) = patch.pinned { c.pinned = v; }
+    if let Some(v) = patch.card_color { c.card_color = Some(v); }
+    if let Some(v) = patch.card_style { c.card_style = Some(v); }
+    if let Some(v) = patch.remind { c.remind = v; }
+    if let Some(v) = patch.font_scale { c.font_scale = Some(v); }
+    // ★批12 随手记字体格式（DoubleOption：Some(内层) → 写入/清空）。
+    if let Some(v) = patch.title_size { c.title_size = v; }
+    if let Some(v) = patch.body_size { c.body_size = v; }
+    if let Some(v) = patch.font_family { c.font_family = v; }
+    if let Some(v) = patch.title_bold { c.title_bold = v; }
+    if let Some(v) = patch.title_italic { c.title_italic = v; }
+    if let Some(v) = patch.body_bold { c.body_bold = v; }
+    if let Some(v) = patch.body_italic { c.body_italic = v; }
+    if let Some(v) = patch.timer_total_ms { c.timer_total_ms = Some(v); }
     c.updated_at = now_ms();
     let updated = c.clone();
     atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;
@@ -1442,6 +1866,7 @@ mod tests {
         assert!(!s.enabled, "总开关必须默认关闭");
         s.enabled = true;
         s.anchor_y = 128;
+        s.win_x_ratio = 0.72;
         s.monitor_stable_id = "DELA0A2:2560x1440".into();
         save_settings_to(&base, &s).unwrap();
         // 原子写后不应残留 tmp。
@@ -1456,10 +1881,12 @@ mod tests {
         let mut s = ClotheslineSettings::default();
         s.anchor_y = -50;
         s.pulltab_x_ratio = 9.9;
+        s.win_x_ratio = 4.2;
         s.monitor_stable_id = "x".repeat(500);
         let s = sanitize(s);
         assert_eq!(s.anchor_y, 72);
         assert_eq!(s.pulltab_x_ratio, 0.95);
+        assert_eq!(s.win_x_ratio, 1.0);
         assert_eq!(s.monitor_stable_id.len(), 200);
     }
 
@@ -1497,9 +1924,21 @@ mod tests {
             src_path: None,
             end_at: None,
             elapsed_before_pause_ms: 0,
+            timer_total_ms: None,
             timer_direction: "countdown".into(),
             timer_elapsed_mode: "wallclock".into(),
             fired_at: None,
+            card_color: None,
+            card_style: None,
+            remind: true,
+            font_scale: None,
+            title_size: None,
+            body_size: None,
+            font_family: None,
+            title_bold: None,
+            title_italic: None,
+            body_bold: None,
+            body_italic: None,
             created_at: 1000,
             updated_at: 1000,
             deleted_at: if deleted { Some(2000) } else { None },

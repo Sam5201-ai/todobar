@@ -13,9 +13,9 @@ export const Scene05: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: '#eef2f7' }}>
       <SalaryApp />
 
-      <Chip text="上班打开，自动开始算钱" x={50} y={88} delay={24} hide={108} variant="dark" />
-      <Chip text="工资一秒一秒进账" x={50} y={88} delay={118} hide={196} variant="dark" dotRgb="62,224,127" />
-      <Chip text="距下班还有多久，一目了然" x={50} y={88} delay={206} variant="amber" />
+      <Chip text="上班打开，自动开始算钱" x={50} y={88} delay={12} hide={70} variant="dark" />
+      <Chip text="工资一秒一秒进账" x={50} y={88} delay={78} hide={132} variant="dark" dotRgb="62,224,127" />
+      <Chip text="距下班还有多久，一目了然" x={50} y={88} delay={140} variant="amber" />
 
       <FlashIn />
       <FlashOut dur={DUR} />

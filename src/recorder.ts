@@ -314,8 +314,10 @@ function classifyMicError(err: unknown): { kind: MicErrorKind; text: string } {
 // 引擎公开操作
 // ---------------------------------------------------------------------------
 
-/** 开始一段新录音(仅 idle 状态可调用)。抛出的错误带 errorKind 供视图引导。 */
-export async function startRecording(): Promise<void> {
+/** 开始一段新录音(仅 idle 状态可调用)。抛出的错误带 errorKind 供视图引导。
+ *  opts.title:晾衣绳「一键录音」传入卡上标题(方案A 自动命名由绳窗生成后带来);
+ *  不传则按「录音 M月D日 HH:MM」自动命名(与文件名保持一致)。 */
+export async function startRecording(opts?: { title?: string }): Promise<void> {
   if (snapshot.status !== 'idle') return
   if (!isTauriRuntime()) {
     patch({ error: '请在 Tacco 桌面版中使用录音功能', errorKind: 'nottauri' })
@@ -341,9 +343,10 @@ export async function startRecording(): Promise<void> {
   // 文件名 = 标题:默认标题在开始录音时即生成(旧版在保存时生成,没法和文件名对上)。
   const pad0 = (n: number) => String(n).padStart(2, '0')
   const startedAt = new Date()
-  const baseTitle = `录音 ${startedAt.getMonth() + 1}月${startedAt.getDate()}日 ${pad0(
+  const fallbackTitle = `录音 ${startedAt.getMonth() + 1}月${startedAt.getDate()}日 ${pad0(
     startedAt.getHours(),
   )}:${pad0(startedAt.getMinutes())}`
+  const baseTitle = opts?.title?.trim() ? opts.title.trim() : fallbackTitle
   const dir = loadRecordingsDir()
   // 同目录下文件名查重(基于现有记录;磁盘孤儿文件冲突由 recording_begin 兜底加序号)。
   const used = new Set(
@@ -444,9 +447,12 @@ export function resumeRecording(): void {
 /**
  * 完成录音并保存。返回保存结果(异常时 status 回到 idle 并置 error)。
  * reason: manual=用户点完成;limit=到达时长上限;device=设备断开自动保存。
+ * opts.title:晾衣绳「一键录音」卡上编辑后的标题 —— 与开始时的文件名不同时,
+ * 先把已落盘的 mp3 重命名(recording_rename,冲突自动加序号),保证「文件名 = 标题」。
  */
 export async function stopRecording(
   reason: RecordingResult['reason'] = 'manual',
+  opts?: { title?: string },
 ): Promise<RecordingResult | null> {
   if (snapshot.status !== 'recording' && snapshot.status !== 'paused') return null
   const id = recId!
@@ -475,8 +481,22 @@ export async function stopRecording(
   const bytes = savedOk ? bytesOnDisk : bytesOnDisk + pendingBytes
   const result: RecordingResult = { id, durationMs, bytes, reason, savedOk }
   // 元数据持久化放在引擎侧:即使录音页未打开(收起侧栏时点完成),记录也不丢。
-  // 标题取自实际文件名(begin 重名加序号后标题同步,保证「文件名 = 标题」)。
-  const title = file.replace(/\.mp3$/i, '')
+  // 标题取自实际文件名(begin/rename 重名加序号后标题同步,保证「文件名 = 标题」)。
+  let finalFile = file
+  const wantTitle = opts?.title?.trim()
+  if (wantTitle && wantTitle !== file.replace(/\.mp3$/i, '')) {
+    try {
+      finalFile = await invoke<string>('recording_rename', {
+        dir,
+        oldFile: file,
+        newFile: sanitizeFileName(wantTitle),
+      })
+    } catch {
+      /* 重命名失败(磁盘异常等):保留原文件名,元数据仍用用户要的标题 */
+      finalFile = file
+    }
+  }
+  const title = wantTitle && finalFile === file ? wantTitle : finalFile.replace(/\.mp3$/i, '')
   const all = loadRecordings()
   all.push({
     id,
@@ -486,7 +506,7 @@ export async function stopRecording(
     bytes,
     createdAtIso: endedAt.toISOString(),
     dir,
-    file,
+    file: finalFile,
   })
   saveRecordings(all)
   trackFeature('record-save')

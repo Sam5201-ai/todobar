@@ -531,12 +531,13 @@ export default function PinWindow() {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const seed = clMakeCard('pin', {
         pin_id: pinIdRef.current,
-        title: '贴图',
-        text: `${img.naturalWidth}×${img.naturalHeight}`,
       });
       const path = await clSavePreview(seed.id, canvas.toDataURL('image/png'));
       await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()));
       showToast('已挂到晾衣绳');
+      // 问题6：挂绳成功后桌面上的这张贴图要自动关闭，否则桌面 + 晾衣绳同时存在两张。
+      // 走 closeToHistory（进历史、不销毁数据），而不是 destroy（会删掉贴图记录）。
+      closeToHistory();
     } catch (e) {
       showToast(`挂绳失败: ${String(e)}`);
     }

@@ -4,7 +4,7 @@ import { FlashIn, FlashOut, MonoTag, ShotCard, SlamText } from '../components';
 import { FONT } from '../tokens';
 
 // S9 效率套件：深色底 + 真实截图卡片横向滑过（跑马灯式），表达「小工具不止这些」
-const DUR = 240;
+const DUR = 130;
 const CARDS = [
   { img: 'shot-todo.png', label: '待办清单' },
   { img: 'shot-huangli.png', label: '万年历' },

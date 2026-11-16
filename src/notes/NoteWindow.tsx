@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
-import { Check, Palette, Pin, PinOff, Shirt, X } from 'lucide-react'
+import { emit } from '@tauri-apps/api/event'
+import { Check, Copy, Palette, Pin, PinOff, Shirt, X } from 'lucide-react'
 
 import './notes.css'
 import {
   addNoteItem,
   clearConvertedItems,
+  getNoteSync,
   MIN_BG_ALPHA,
   NOTE_COLORS,
+  collapseNote,
   noteColorOf,
-  removeNote,
   removeNoteItem,
   toggleNoteItem,
   updateNote,
@@ -18,7 +20,8 @@ import {
   useNotes,
 } from './store'
 import { listenConvertResult, requestConvert } from './bridge'
-import { clAddCard, clMakeCard } from '../clothesline/bridge'
+import { copyText } from '../clipboard'
+import { clAddCard, clGetRestoreState, clMakeCard, CL_DROP_NOTE_WINDOW, CL_NOTE_HUNG } from '../clothesline/bridge'
 import { isFullAccess, loadAccount } from '../account'
 
 const win = getCurrentWindow()
@@ -59,6 +62,10 @@ export function NoteWindow() {
           }),
           isFullAccess(loadAccount()),
         )
+        // 问题1：整张挂绳成功后桌面便利签自动消失，避免桌面 + 绳上同时存在两张。
+        // 只发事件给主窗统一收起（数据保留），便利签窗口不自己改 notes 数据。
+        // 「单条挂绳」只挂一条、桌面便利签仍要继续用，故不隐藏。
+        if (!itemId) void emit(CL_NOTE_HUNG, { noteId: note.id }).catch(() => {})
         flash('已挂到晾衣绳')
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
@@ -136,26 +143,155 @@ export function NoteWindow() {
     })()
   }, [note])
 
-  // ——— 删除(用完即撕):彻底删除数据 + 销毁窗口 ———
+  // ——— 关闭窗口:只隐藏不删除(2026-11-15 需求:桌面便利签右上角 × 仅做关闭显示,
+  //      数据保留;绳上便利签只有点绳卡片 × 才删除)。折叠 = collapsed:true,
+  //      重启不再自动弹窗,数据仍留在 notes/store,可从管理面板重新取出。
+  //    彻底删除入口仍在主窗便利签管理面板的删除按钮。 ———
   const handleClose = useCallback(() => {
     if (!note) return
-    removeNote(note.id)
+    collapseNote(note.id)
     void invoke('notes_close_window', { noteId: note.id }).catch(() => {})
   }, [note])
 
-  // ——— 拖动(仅标题栏) + 拖动结束保存位置 ———
-  // startDragging 会进入原生移动循环,与文本选择冲突,故只挂在标题栏上。
-  const onTitleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0 || !note) return
-    // 点控制按钮时不触发拖动。
-    if ((e.target as HTMLElement).closest('.ns-btn')) return
-    e.preventDefault()
-    // 仅发起原生拖动;位置落盘交由下方 onMoved 兜底。
-    // ⚠️ 切勿在 startDragging() 之后立刻 outerPosition():
-    // 该 Promise resolve 时 OS 尚未回写最终坐标,读到的是拖动前的旧坐标,
-    // 会把旧位置存盘 → 重启后便利签弹回原位(实测踩过)。
-    void win.startDragging().catch(() => {})
-  }
+  // ——— 标题栏拖动 + 磁力吸附挂绳 ———
+  // 改用「自主拖拽」而非原生 startDragging：原生拖动进入 OS 移动循环后 WebView 拿不到
+  // 实时坐标,无法做「靠近绳线自动吸附」的磁铁效果。自主拖拽用屏幕绝对坐标(e.screenX/Y)
+  // 驱动 setPosition,既保留标题栏拖动手感,又能在便利签上边框靠近绳线时把它吸到绳上。
+  // 关键修正:挂绳判定从「顶部长达 360px 的整片区域」收敛为「上边框贴住绳线那一刻」,
+  // 因此小幅度移动、左右移动、向下移动都不会误挂。
+  const MAGNET_APPROACH = 30 // 绳线下方的磁吸触发带(物理 px):进入即把上边框吸到绳线
+  const MAGNET_UP_TOL = 8 // 绳线上方 8px 内也吸(允许略微越过绳线)
+
+  const dragRef = useRef<{
+    noteId: string
+    startScreenX: number
+    startScreenY: number
+    startOuterX: number
+    startOuterY: number
+    sf: number
+    ropeY: number | null
+    snapped: boolean
+    lastX: number
+    lastY: number
+    raf: number | null
+  } | null>(null)
+
+  /** 绳线在屏幕上的物理 Y(便利签上边框对齐目标)。
+   *  绳窗恒为目标显示器整屏,绳线 = 显示器顶(mon.y,物理) + 面板 Y(逻辑)× 缩放。
+   *  展开态面板 Y = clamp 后的 anchor_y;收起态贴顶 = 0。未启用 / 取不到则返回 null。 */
+  const computeRopeY = useCallback(async (): Promise<number | null> => {
+    try {
+      const st = await clGetRestoreState()
+      if (!st.settings.enabled) return null
+      const mon =
+        st.monitors.find((m) => m.stable_id === st.target_monitor_stable_id) ??
+        st.monitors.find((m) => m.is_primary) ??
+        st.monitors[0]
+      if (!mon) return null
+      const sf = mon.scale_factor || 1
+      const panelY = st.settings.expanded ? st.session.anchor_y : 0
+      return Math.round(mon.y + panelY * sf)
+    } catch {
+      return null
+    }
+  }, [])
+
+  // 拖动中:屏幕绝对坐标差 → 物理位移;进入磁吸带则把上边框对齐绳线。
+  const onDragMove = useCallback((ev: MouseEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    const nx = d.startOuterX + (ev.screenX - d.startScreenX) * d.sf
+    let ny = d.startOuterY + (ev.screenY - d.startScreenY) * d.sf
+    d.snapped = false
+    if (d.ropeY != null && ny >= d.ropeY - MAGNET_UP_TOL && ny <= d.ropeY + MAGNET_APPROACH) {
+      ny = d.ropeY // 磁吸:上边框对齐绳线
+      d.snapped = true
+    }
+    d.lastX = nx
+    d.lastY = ny
+    // rAF 合并:每帧至多一次 setPosition,避免鼠标高频事件刷爆 IPC。
+    if (d.raf == null) {
+      d.raf = window.requestAnimationFrame(() => {
+        const dd = dragRef.current
+        if (!dd) return
+        dd.raf = null
+        void win
+          .setPosition(new PhysicalPosition(Math.round(dd.lastX), Math.round(dd.lastY)))
+          .catch(() => {})
+      })
+    }
+  }, [])
+
+  const onDragUp = useCallback(async () => {
+    const d = dragRef.current
+    if (!d) return
+    document.removeEventListener('mousemove', onDragMove)
+    document.removeEventListener('mouseup', onDragUp)
+    document.body.style.userSelect = ''
+    if (d.raf != null) {
+      window.cancelAnimationFrame(d.raf)
+      d.raf = null
+    }
+    const snapped = d.snapped
+    dragRef.current = null
+    // 落盘最终位置(与 onMoved 防抖写盘互补,确保松手即保存)。
+    try {
+      await win.setPosition(new PhysicalPosition(Math.round(d.lastX), Math.round(d.lastY)))
+    } catch {
+      /* ignore */
+    }
+    const pos = await win.outerPosition().catch(() => null)
+    if (pos) {
+      const sf = d.sf || 1
+      updateNote(d.noteId, {
+        x: Math.round(pos.x / sf),
+        y: Math.round(pos.y / sf),
+        scaleFactor: sf,
+      })
+    }
+    // 只有被磁吸到绳线(上边框贴绳)才挂绳;其余位置正常留在桌面。
+    if (snapped) {
+      const n = getNoteSync(d.noteId)
+      const text = (n?.items ?? []).map((it) => it.text).join(' · ').slice(0, 120)
+      void emit(CL_DROP_NOTE_WINDOW, { noteId: d.noteId, text }).catch(() => {})
+      flash('已挂到晾衣绳')
+    }
+  }, [onDragMove, flash])
+
+  const onTitleMouseDown = useCallback(
+    async (e: React.MouseEvent) => {
+      if (e.button !== 0 || !note) return
+      // 点控制按钮时不触发拖动。
+      if ((e.target as HTMLElement).closest('.ns-btn')) return
+      e.preventDefault()
+      let outer: { x: number; y: number }
+      let sf: number
+      try {
+        outer = await win.outerPosition()
+        sf = await win.scaleFactor()
+      } catch {
+        return
+      }
+      const ropeY = await computeRopeY()
+      dragRef.current = {
+        noteId: note.id,
+        startScreenX: e.screenX,
+        startScreenY: e.screenY,
+        startOuterX: outer.x,
+        startOuterY: outer.y,
+        sf,
+        ropeY,
+        snapped: false,
+        lastX: outer.x,
+        lastY: outer.y,
+        raf: null,
+      }
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', onDragMove)
+      document.addEventListener('mouseup', onDragUp)
+    },
+    [note, computeRopeY, onDragMove, onDragUp, flash],
+  )
 
   // ——— 条目 ———
   const submitNew = () => {
@@ -192,6 +328,14 @@ export function NoteWindow() {
   const handleConvert = (noteId: string, itemId: string, text: string) => {
     // 由主窗口执行真正的 addTask(保留会员闸门/配额/reload/同步),这里等回执。
     void requestConvert({ noteId, itemId, text }).catch(() => flash('转待办失败'))
+  }
+
+  // 复制单条内容到系统剪贴板(走 copyText 统一通道,带 self-write 标记不污染剪贴板历史)。
+  const handleCopy = (text: string) => {
+    if (!text.trim()) return
+    void copyText(text)
+      .then(() => flash('已复制'))
+      .catch(() => flash('复制失败'))
   }
 
   // 监听转换回执(emit 是全局广播,故按 noteId 过滤)。
@@ -249,9 +393,7 @@ export function NoteWindow() {
   }, [note])
 
   // ——— 拖动位置落盘:onMoved 兜底 ———
-  // startDragging 后读 outerPosition 在部分 Tauri 版本会拿到旧坐标(见上),
-  // 故改为监听 onMoved:窗口真正被 OS 移动后才触发,拿到的是最终坐标。
-  // 拖动中每帧都会回调,用 150ms 防抖只在用户停手后落盘一次。
+  // 自主拖拽(鼠标 → setPosition)每次移动都触发 onMoved,这里用 150ms 防抖只在停手后落盘一次。
   // payload 为物理像素,按 DPI 换算回逻辑像素(与首次显示时 ×sf 互逆)。
   useEffect(() => {
     if (!note) return
@@ -265,13 +407,15 @@ export function NoteWindow() {
         if (moveTimer) clearTimeout(moveTimer)
         moveTimer = setTimeout(() => {
           void win.scaleFactor().then((sf) => {
+            const logicalY = Math.round(payload.y / sf)
             updateNote(noteId, {
               x: Math.round(payload.x / sf),
-              y: Math.round(payload.y / sf),
+              y: logicalY,
               // 手动拖到别的屏后,把坐标系切换到该屏缩放 —— 下次恢复仍原位,
               // 不会被「新建跟随目标屏」强行拉回(用户决策 3)。
               scaleFactor: sf,
             })
+            // 挂绳判定已移到 onTitleMouseDown 的自主拖拽:只有便利签上边框被磁吸贴到绳线才挂绳。
           })
         }, 150)
       })
@@ -408,7 +552,16 @@ export function NoteWindow() {
                     {it.text}
                   </span>
                 )}
+                {editingId !== it.id ? (
                 <span className="ns-item-ops">
+                  <button
+                    type="button"
+                    className="ns-btn"
+                    title="复制内容"
+                    onClick={() => handleCopy(it.text)}
+                  >
+                    <Copy size={12} />
+                  </button>
                   <button
                     type="button"
                     className="ns-btn"
@@ -443,6 +596,7 @@ export function NoteWindow() {
                     ×
                   </button>
                 </span>
+                ) : null}
               </li>
             ))}
           </ol>

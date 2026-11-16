@@ -217,6 +217,8 @@
   font-size: 12.5px;
   line-height: 1.5;
   border-radius: 5px;
+  /* 操作组改为悬浮定位,这里作为定位基准 */
+  position: relative;
 }
 
 .ns-item:hover {
@@ -251,15 +253,27 @@
   display: flex;
   align-items: center;
   gap: 1px;
-  flex: none;
-  /* 默认隐藏 hover 才显形,保持便签整洁 */
+  /* 悬浮在文本右侧上方,绝对定位 → 不预留行内宽度,文本可用整行宽度 */
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  z-index: 2;
+  padding: 1px 2px;
+  border-radius: 5px;
+  /* 浅底遮住被覆盖的文本,保证悬浮时清晰可读 */
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  /* 默认隐藏且不占位、不拦截点击;hover / 键盘聚焦才显形 */
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
 .ns-item:hover .ns-item-ops,
 .ns-item:focus-within .ns-item-ops {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .ns-to-todo {

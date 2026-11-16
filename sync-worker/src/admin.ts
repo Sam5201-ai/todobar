@@ -500,6 +500,8 @@ export type Overview = {
     newToday: number
     newInRange: number
     member: number
+    memberNewToday: number
+    memberNewInRange: number
     trial: number
     churned: number
     blacklist: number
@@ -516,6 +518,8 @@ export type Overview = {
     days: string[]
     newUsers: number[]
     cumulativeUsers: number[]
+    newMembers: number[]
+    cumulativeMembers: number[]
     activeUsers: number[]
     pageviews: number[] // 每日下载站独立设备(页面访问/进入)
     downloadClicks: number[] // 每日下载独立设备
@@ -528,7 +532,7 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
   const today = bjdToday()
   const d7Since = new Date(Date.now() - 6 * 86_400_000).toISOString()
 
-  const [userAgg, newTodayRow, registerRow] = await Promise.all([
+  const [userAgg, newTodayRow, registerRow, memberNewTodayRow] = await Promise.all([
     db
       .prepare(
         `SELECT
@@ -554,6 +558,15 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
     db
       .prepare(`SELECT COUNT(*) AS n FROM users WHERE created_at >= ?`)
       .bind(sinceIso)
+      .first<{ n: number }>(),
+    // 今日新增会员:按激活时间 activated_at 归入北京日期,只计当前有效会员
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM users
+         WHERE disabled = 0 AND activated = 1
+           AND date(activated_at, '+8 hours') = ?`,
+      )
+      .bind(today)
       .first<{ n: number }>(),
   ])
 
@@ -654,10 +667,34 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
   const siteMap = new Map<string, { pv: number; dl: number }>()
   for (const r of siteTrendRows.results ?? []) siteMap.set(r.day, { pv: Number(r.pv ?? 0), dl: Number(r.dl ?? 0) })
 
-  const newUsersRows = await db
-    .prepare(`SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS c FROM users WHERE created_at >= ? GROUP BY d`)
-    .bind(sinceIso)
-    .all<{ d: string; c: number }>()
+  // 注册趋势、累计基线、会员趋势与会员基线互不依赖,一次性并行发出减少 D1 往返。
+  const [newUsersRows, beforeRow, memberTrendRows, memberBeforeRow] = await Promise.all([
+    db
+      .prepare(`SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS c FROM users WHERE created_at >= ? GROUP BY d`)
+      .bind(sinceIso)
+      .all<{ d: string; c: number }>(),
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM users WHERE created_at < ?`)
+      .bind(sinceIso)
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        `SELECT date(activated_at, '+8 hours') AS d, COUNT(*) AS c
+         FROM users
+         WHERE disabled = 0 AND activated = 1 AND activated_at >= ?
+         GROUP BY d`,
+      )
+      .bind(sinceIso)
+      .all<{ d: string; c: number }>(),
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM users
+         WHERE disabled = 0 AND activated = 1
+           AND (activated_at IS NULL OR activated_at < ?)`,
+      )
+      .bind(sinceIso)
+      .first<{ n: number }>(),
+  ])
   const newUsersMap = new Map<string, number>()
   for (const r of newUsersRows.results ?? []) newUsersMap.set(r.d, Number(r.c ?? 0))
 
@@ -673,12 +710,17 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
     downloadClicks.push(s?.dl ?? 0)
   }
   // 累计用户:窗口起点之前的总数 + 逐日累加
-  const beforeRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM users WHERE created_at < ?`)
-    .bind(sinceIso)
-    .first<{ n: number }>()
   let cum = Number(beforeRow?.n ?? 0)
   const cumulativeUsers = newUsers.map((v) => (cum += v))
+
+  // 会员增长:按 activated_at(激活码兑换 / 后台手动激活写入)归入北京日期桶。
+  // activated_at 为空的历史会员无法归日,统一计入窗口起点之前的存量,
+  // 保证累计序列末值恒等于当前会员总数 member。
+  const memberMap = new Map<string, number>()
+  for (const r of memberTrendRows.results ?? []) memberMap.set(r.d, Number(r.c ?? 0))
+  const newMembers = list.map((d) => memberMap.get(d) ?? 0)
+  let memberCum = Number(memberBeforeRow?.n ?? 0)
+  const cumulativeMembers = newMembers.map((v) => (memberCum += v))
 
   const total = Number(userAgg?.total ?? 0)
   const member = Number(userAgg?.member ?? 0)
@@ -689,6 +731,8 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
       newToday: Number(newTodayRow?.n ?? 0),
       newInRange: Number(registerRow?.n ?? 0),
       member,
+      memberNewToday: Number(memberNewTodayRow?.n ?? 0),
+      memberNewInRange: newMembers.reduce((s, v) => s + v, 0),
       trial: Number(userAgg?.trial ?? 0),
       churned: Number(userAgg?.churned ?? 0),
       blacklist: Number(userAgg?.blacklist ?? 0),
@@ -705,7 +749,16 @@ export async function overviewStats(db: D1Database, days = 30): Promise<Overview
       installs: Number(installRow?.n ?? 0),
       registrations: Number(regRow?.n ?? 0),
     },
-    trends: { days: list, newUsers, cumulativeUsers, activeUsers, pageviews, downloadClicks },
+    trends: {
+      days: list,
+      newUsers,
+      cumulativeUsers,
+      newMembers,
+      cumulativeMembers,
+      activeUsers,
+      pageviews,
+      downloadClicks,
+    },
   }
 }
 

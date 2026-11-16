@@ -76,10 +76,7 @@ async function flyShotToClothesline(png: string): Promise<void> {
     if (!ctx) return;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const thumb = canvas.toDataURL('image/png');
-    const seed = clMakeCard('shot', {
-      title: '截图',
-      text: `${img.naturalWidth}×${img.naturalHeight}`,
-    });
+    const seed = clMakeCard('shot', {});
     const path = await clSavePreview(seed.id, thumb);
     await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()), true);
     await shotLog(`clothesline fly ok ${seed.id}`);
@@ -720,20 +717,37 @@ export default function CaptureOverlay() {
     const sel = confirmedSelRef.current;
     if (!sel || busy) return;
     setBusy(true);
+    const png = extractPng(sel);
+    // ★问题3 根因：旧写法把「写剪贴板」放在最外层 try，剪贴板偶发 os error 1418
+    //   （全局资源被后台历史监听 250ms 轮询或其他程序瞬时抢占）一抛错就跳到 catch，
+    //   飞入链整段不执行 → 用户既看到红色报错、截图又没挂上晾衣绳。Rust 侧已加 5 次
+    //   退避重试，但重试耗尽仍会抛；故三条任务彻底解耦：复制失败也照常挂绳。
+    let copyErr = "";
     try {
-      const png = extractPng(sel);
       await writeClipboardImage(png);
       await stashImage(LAST_KEY, png);
       await shotLog(`copy ok ${Math.round(sel.w)}x${Math.round(sel.h)}`);
-      // 飞入是旁路：不 await、不阻塞复制与关窗；失败只写截图日志。
-      void flyShotToClothesline(png);
-      // 复制后直接退出截图模式(原「复制后自动关闭」开关已移除,行为固定)。
+    } catch (e) {
+      copyErr = String(e);
+      void shotLog(`clipboard/stash fail: ${copyErr}`);
+      // LAST_KEY 兜底：写剪贴板失败时仍 stash 一份，保证「再贴一张」不丢图。
+      try { await stashImage(LAST_KEY, png); } catch { /* 已记录主错误 */ }
+    }
+    // ★飞入与复制结果无关，独立执行。仍 await + 1.5s 超时，确保 canvas 解码在
+    //   finish() 隐藏覆盖层窗口「之前」完成（隐藏后 WebView2 会挂起 Image.onload）。
+    await Promise.race([
+      flyShotToClothesline(png),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
+    ]);
+    // 复制后直接退出截图模式(原「复制后自动关闭」开关已移除,行为固定)。
+    try {
       await finish();
     } catch (e) {
       setBusy(false);
-      void shotLog(`copy fail: ${String(e)}`);
-      showToast(`复制失败: ${String(e)}`);
+      void shotLog(`finish fail: ${String(e)}`);
     }
+    // 失败提示最后弹，绝不阻断飞入 / 关窗；文案区分「已挂绳但剪贴板失败」。
+    if (copyErr) showToast(`截图已挂到晾衣绳，但复制剪贴板失败：${copyErr}`);
   }, [busy, finish]);
 
   const onPin = useCallback(async () => {

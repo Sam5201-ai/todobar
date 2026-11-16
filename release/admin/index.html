@@ -329,6 +329,20 @@
     // 基础工具
     // =====================================================================
     const TOKEN_KEY = 'ticktask-admin-token'
+    // 「记住账号密码」:仅在用户主动勾选时明文保存于本机浏览器;退出登录不清除。
+    const REMEMBER_KEY = 'ticktask-admin-remember'
+    function readRemember() {
+      try {
+        const v = JSON.parse(localStorage.getItem(REMEMBER_KEY) || 'null')
+        return v && typeof v === 'object' ? v : null
+      } catch { return null }
+    }
+    function writeRemember(on, email, password) {
+      try {
+        if (on) localStorage.setItem(REMEMBER_KEY, JSON.stringify({ on: true, email, password }))
+        else localStorage.removeItem(REMEMBER_KEY)
+      } catch { /* 隐私模式忽略 */ }
+    }
     // 工具同款 LOGO(取自应用图标,内联 base64 保持零 CDN 依赖)
     const LOGO_URI = 'data:image/png;base64,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'
     ;(() => { const fav = document.querySelector('link[rel="icon"]'); if (fav) fav.href = LOGO_URI })()
@@ -705,7 +719,11 @@
       render()
     }
 
-    function renderLogin(err) {
+    function renderLogin(err, draft) {
+      const saved = readRemember()
+      const form = draft || (saved && saved.on
+        ? { email: saved.email || '', password: saved.password || '', remember: true }
+        : { email: '', password: '', remember: false })
       document.getElementById('app').innerHTML = `
         <div class="login-page">
           <div class="card login-card">
@@ -717,11 +735,15 @@
             <form id="login-form">
               <div class="form-row">
                 <label>管理员账号</label>
-                <input id="login-email" type="email" placeholder="邮箱" autocomplete="username" required />
+                <input id="login-email" type="email" placeholder="邮箱" autocomplete="username" value="${esc(form.email)}" required />
               </div>
               <div class="form-row">
                 <label>密码</label>
-                <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" required />
+                <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" value="${esc(form.password)}" required />
+              </div>
+              <div class="form-row" style="display:flex;align-items:center;gap:8px;margin:0 0 14px">
+                <input id="login-remember" type="checkbox" style="width:15px;height:15px;margin:0;flex:0 0 auto" ${form.remember ? 'checked' : ''} />
+                <label for="login-remember" style="margin:0;font-weight:400;cursor:pointer;color:var(--text-2)">记住账号密码 <span style="font-size:11.5px;color:var(--text-3)">（仅存本机浏览器）</span></label>
               </div>
               <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:10px">登 录</button>
             </form>
@@ -732,6 +754,8 @@
         e.preventDefault()
         const email = document.getElementById('login-email').value.trim()
         const password = document.getElementById('login-password').value
+        const remember = document.getElementById('login-remember').checked
+        writeRemember(remember, email, password)
         try {
           const data = await api('/api/admin/login', {
             method: 'POST',
@@ -739,10 +763,11 @@
           })
           localStorage.setItem(TOKEN_KEY, data.token)
           toast('登录成功')
-          location.hash = '#/overview'
-          render()
-        } catch (err) {
-          renderLogin(err.message || '登录失败')
+          // 只触发一次 render:hash 变化本身会触发 hashchange → render
+          if (location.hash === '#/overview') render()
+          else location.hash = '#/overview'
+        } catch (er) {
+          renderLogin(er.message || '登录失败', { email, password, remember })
         }
       }
     }
@@ -752,34 +777,67 @@
     // =====================================================================
     const ovState = { days: 30, loading: false }
 
-    async function renderOverview() {
+    function setUpdated(ts) {
+      const el = document.getElementById('ov-updated')
+      if (!el) return
+      el.textContent = ts ? '最后更新 ' + new Date(ts).toLocaleTimeString('zh-CN', { hour12: false }) : ''
+    }
+
+    function renderOverview() {
       shell(`<div class="page-head"><div><h1>数据概览</h1><div class="sub">关键指标、趋势与功能页面统计(按北京时间统计)</div></div>
-        <div class="seg" id="ov-days">
-          ${[7, 30, 90].map((d) => `<button data-d="${d}" class="${ovState.days === d ? 'active' : ''}">近 ${d} 天</button>`).join('')}
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="seg" id="ov-days">
+            ${[7, 30, 90].map((d) => `<button data-d="${d}" class="${ovState.days === d ? 'active' : ''}">近 ${d} 天</button>`).join('')}
+          </div>
+          <button class="btn" id="ov-refresh" type="button">↻ 刷新数据</button>
+          <span id="ov-updated" style="font-size:12px;color:var(--text-3)"></span>
         </div></div>
         <div id="ov-body"><div class="loading">加载中…</div></div>`)
       document.querySelectorAll('#ov-days button').forEach((b) => {
         b.onclick = () => { ovState.days = Number(b.dataset.d); renderOverview() }
       })
-      loadOverview()
-      // 立即用本地缓存渲染「功能页面统计」,不等概览网络(缓存未命中时容器尚不存在,自然跳过)
-      loadAppStats()
+      document.getElementById('ov-refresh').onclick = async () => {
+        const btn = document.getElementById('ov-refresh')
+        if (!btn || btn.disabled) return
+        const label = btn.innerHTML
+        btn.disabled = true
+        btn.textContent = '刷新中…'
+        toast('正在获取最新数据')
+        try {
+          await loadOverview(true)
+          toast('数据已更新')
+        } finally {
+          const b = document.getElementById('ov-refresh')
+          if (b) { b.disabled = false; b.innerHTML = label }
+        }
+      }
+      loadOverview(false)
     }
 
-    async function loadOverview() {
+    async function loadOverview(force) {
       const body = document.getElementById('ov-body')
       if (!body) return
       const key = 'overview:' + ovState.days
-      const cached = cacheGet(key)
+      const statsKey = 'stats:' + ovState.days
+      if (force) {
+        // 强制刷新:丢弃本档缓存,避免「点了刷新还是旧数字」
+        try { localStorage.removeItem(CACHE_PREFIX + key); localStorage.removeItem(CACHE_PREFIX + statsKey) } catch { /* 忽略 */ }
+      }
+      const cached = force ? null : cacheGet(key)
       if (cached) {
         body.innerHTML = buildOverviewBody(cached.data)
+        const sc = cacheGet(statsKey)
+        const sbox = document.getElementById('ov-app-stats')
+        if (sc && sbox) { try { sbox.innerHTML = buildAppStatsSection(sc.data) } catch { /* 等新数据 */ } }
+        setUpdated(cached.ts)
         chipShow('缓存数据 · 同步中…')
-      } else {
+      } else if (!force) {
         body.innerHTML = '<div class="loading">加载中…</div>'
       }
+      // force 时保留当前画面,避免刷新过程中闪烁或 DOM 重建
       let d
       try {
-        d = await api('/api/admin/overview?days=' + ovState.days)
+        d = await api('/api/admin/overview?days=' + ovState.days + (force ? '&_t=' + Date.now() : ''))
       } catch (e) {
         chipHide()
         if (!cached) body.innerHTML = `<div class="empty">${esc(e.message)}</div>`
@@ -787,10 +845,13 @@
         return
       }
       cacheSet(key, d)
-      if (document.getElementById('ov-body')) body.innerHTML = buildOverviewBody(d)
+      // 异步期间可能已切页/重建 DOM,必须重新取节点再回填
+      const target = document.getElementById('ov-body')
+      if (target) target.innerHTML = buildOverviewBody(d)
+      setUpdated(Date.now())
       chipHide()
-      // 概览渲染完成后,再加载合并进来的「功能页面统计」区块(原数据统计页,去重后)
-      loadAppStats()
+      // 统计接口(D1 全量聚合)较慢,不阻塞刷新按钮恢复;数据回来后自行回填。
+      loadAppStats(force)
     }
 
     function buildOverviewBody(d) {
@@ -802,6 +863,7 @@
         <div class="kpi-grid">
           <div class="card kpi"><div class="label"><span class="dot" style="background:#1d7ef0"></span>累计用户</div><div class="value">${fmt(u.total)}</div><div class="extra">近 ${d.range} 天新增 ${fmt(u.newInRange)}</div></div>
           <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>今日新增</div><div class="value">${fmt(u.newToday)}</div><div class="extra">注册用户(今日)</div></div>
+          <div class="card kpi"><div class="label"><span class="dot" style="background:#0d9488"></span>今日新增会员</div><div class="value">${fmt(u.memberNewToday ?? 0)}</div><div class="extra">累计会员 ${fmt(u.member)} · 近 ${d.range} 天 +${fmt(u.memberNewInRange ?? 0)}</div></div>
           <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>今日活跃</div><div class="value">${fmt(d.active.today)}</div><div class="extra">近 7 天 ${fmt(d.active.d7)} · 近 30 天 ${fmt(d.active.d30)}</div></div>
           <div class="card kpi"><div class="label"><span class="dot" style="background:#8b5cf6"></span>会员转化率</div><div class="value">${conv}%</div><div class="extra">会员 ${fmt(u.member)} / 总 ${fmt(u.total)}</div></div>
         </div>`
@@ -819,6 +881,20 @@
         <div class="card card-pad">
           <div class="card-title">活跃用户趋势 <span class="hint">每日活跃用户（已登录按账号、未登录按设备）</span></div>
           ${lineChartSvg(labels, [{ name: '活跃用户', color: CHART_COLORS[2], data: t.activeUsers, area: true }], { w: 370, height: 250 })}
+        </div>`
+
+      // 会员增长趋势:后端新增字段;若接口尚未升级则降级为平的 0 序列,保证图表不崩。
+      const newMemberSeries = Array.isArray(t.newMembers) && t.newMembers.length === labels.length
+        ? t.newMembers : labels.map(() => 0)
+      const cumulativeMemberSeries = Array.isArray(t.cumulativeMembers) && t.cumulativeMembers.length === labels.length
+        ? t.cumulativeMembers : labels.map(() => u.member)
+      const memberTrendCard = `
+        <div class="card card-pad">
+          <div class="card-title">会员增长趋势 <span class="hint">累计会员(左轴) + 每日新增会员(右轴) · 按会员激活时间统计</span></div>
+          ${lineChartSvg(labels, [
+        { name: '累计会员', color: CHART_COLORS[2], data: cumulativeMemberSeries, area: true },
+      ], { w: 980, height: 240, bars: { name: '每日新增会员', color: '#86efac', data: newMemberSeries } })}
+          <div class="legend"><span class="item"><span class="sw" style="background:${CHART_COLORS[2]}"></span>累计会员(左轴)</span><span class="item"><span class="sw" style="background:#86efac"></span>每日新增会员(右轴)</span></div>
         </div>`
 
       const donutCard = `
@@ -890,12 +966,14 @@
             <li><b>点击数</b>：进入下载站的累计次数，进入 1 次计 1 次，页内点击/操作不计。因与访客数不同量纲（人均可&gt;1），转化以「人均 X 次/设备」展示。</li>
             <li><b>安装数</b>：窗口内上报过安装记录的设备数，按设备指纹去重（同设备重复上报=1，不做 IP 归因）。</li>
             <li><b>注册数</b>：窗口内完成注册，且其绑定设备在注册前有过安装记录的账号数。</li>
+            <li><b>会员增长趋势</b>：按会员激活时间（激活码兑换 / 后台手动激活写入的 activated_at）归入北京时间日期；累计会员为截至当日仍有效的会员数，末值与「用户状态占比」的会员数一致。少数无激活时间的历史会员计入窗口起点前存量，不摊到某一天。</li>
             <li><b>下载站流量趋势</b>：页面访问与下载均为每日独立设备数（按设备指纹去重）。</li>
             <li><b>工具内页面访客</b>：按设备指纹去重的独立设备数；功能点击为真实点击次数。</li>
             <li>历史埋点已回填设备标识（旧访客 ID 兜底）并从历史会话补齐设备↔账号绑定；2026-10-27 起按新口径统计，App 端账号 ID 随版本更新逐步覆盖。</li>
           </ul>
         </details>
         <div class="grid-charts">${trendCard}${activeCard}</div>
+        <div style="margin-top:14px">${memberTrendCard}</div>
         <div class="grid-2">${donutCard}${funnelCard}</div>
         <div style="margin-top:14px">${siteCard}</div>
         <div class="ov-section-title">功能页面统计</div>
@@ -1669,52 +1747,108 @@
       calculator: '计算器',
       salary: '计薪器',
       screenshot: '截图',
+      recorder: '录音机',
+      clothesline: '晾衣绳',
       // 以下为功能点击入口(feature_click 的 name 会落在 page 字段)
       sync: '手动同步',
       'add-task': '添加任务',
       'check-update': '检查更新',
       account: '账号页',
       app: '应用',
+      'record-start': '开始录音',
+      'record-save': '保存录音',
+      clipboard: '剪贴板',
+      note: '便利签',
     }
-    function pageLabel(p) { return PAGE_NAMES[p] || p }
+    // 顶栏工具 id → 中文名(topbar:xxx 由 App.tsx runTopbarTool 上报)
+    const TOOL_NAMES = {
+      screenshot: '截图', note: '便利签', clipboard: '剪贴板', calculator: '计算器',
+      huangli: '黄历', salary: '计薪器', recorder: '录音机', clothesline: '晾衣绳', sync: '同步',
+    }
+    function pageLabel(p) {
+      if (PAGE_NAMES[p]) return PAGE_NAMES[p]
+      // 未收录的顶栏代号也自动译为中文,避免以后新增工具又显示英文
+      if (p && p.indexOf('topbar:') === 0) {
+        const id = p.slice(7)
+        return '顶栏·' + (TOOL_NAMES[id] || PAGE_NAMES[id] || id)
+      }
+      return p
+    }
+    // 需要在趋势图与明细中固定关注的四个工具。
+    // pages = 页面访问埋点(page_visit),entries = 顶栏入口点击(feature_click)。
+    // 剪贴板 / 便利签是独立窗口,客户端目前只有入口点击、没有 page_visit。
+    const FOCUS_TOOLS = [
+      { name: '日历（万年历 / 黄历）', pages: ['huangli'], entries: ['topbar:huangli'] },
+      { name: '计算器', pages: ['calculator'], entries: ['topbar:calculator'] },
+      { name: '剪贴板', pages: ['clipboard'], entries: ['topbar:clipboard'] },
+      { name: '便利签', pages: ['note'], entries: ['topbar:note'] },
+    ]
+    function focusIds() {
+      const s = new Set()
+      FOCUS_TOOLS.forEach((t) => { t.pages.forEach((x) => s.add(x)); t.entries.forEach((x) => s.add(x)) })
+      return s
+    }
 
-    async function loadAppStats() {
+    async function loadAppStats(force) {
       const box = document.getElementById('ov-app-stats')
       if (!box) return
       const key = 'stats:' + ovState.days
-      const cached = cacheGet(key)
+      const cached = force ? null : cacheGet(key)
       if (cached) {
-        try {
-          box.innerHTML = buildAppStatsSection(cached.data)
-        } catch {
-          /* 缓存渲染失败则等新数据 */
-        }
+        try { box.innerHTML = buildAppStatsSection(cached.data) } catch { /* 等新数据 */ }
       }
       let data
       try {
-        data = await api('/api/admin/stats?days=' + ovState.days)
+        data = await api('/api/admin/stats?days=' + ovState.days + (force ? '&_t=' + Date.now() : ''))
       } catch (e) {
         if (!cached) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`
         return
       }
       cacheSet(key, data)
-      if (!document.getElementById('ov-app-stats')) return
+      // 异步期间可能已切页/重建 DOM,必须重新取节点再回填
+      const target = document.getElementById('ov-app-stats')
+      if (!target) return
       try {
-        box.innerHTML = buildAppStatsSection(data)
+        target.innerHTML = buildAppStatsSection(data)
       } catch (err) {
-        box.innerHTML = `<div class="empty">渲染出错:${esc(String((err && err.message) || err))}</div>`
+        target.innerHTML = `<div class="empty">渲染出错:${esc(String((err && err.message) || err))}</div>`
       }
+    }
+
+    function buildFocusToolsSection(data) {
+      const pages = (data.app && data.app.pages) || []
+      const by = new Map(pages.map((p) => [p.page, p]))
+      const rows = FOCUS_TOOLS.map((t) => {
+        const visitors = t.pages.reduce((s, id) => s + (by.get(id)?.visitors || 0), 0)
+        const clicks = t.entries.reduce((s, id) => s + (by.get(id)?.clicks || 0), 0)
+        const tracked = t.pages.some((id) => by.has(id))
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+            <div class="mon-kv-row"><span class="k">${esc(t.name)}</span><span class="v">${fmt(visitors)} 访客 · ${fmt(clicks)} 入口点击</span></div>
+            ${tracked ? '' : '<div style="font-size:11.5px;color:var(--text-3);margin-top:3px">独立窗口，客户端暂未上报页面访问，访客显示为 0</div>'}
+          </div>`
+      }).join('')
+      return `<div class="card card-pad" style="margin-bottom:14px">
+        <div class="card-title">重点工具访问统计 <span class="hint">近 ${data.days} 天 · 访客按设备去重，入口点击为次数</span></div>
+        ${rows}
+        <div style="font-size:11.5px;color:var(--text-3);margin-top:8px">日历对应「黄历 / 万年历」页面；剪贴板、便利签为独立窗口，目前只统计顶栏入口点击。</div>
+      </div>`
     }
 
     function buildAppStatsSection(data) {
       // Worker 返回:{ days:number, app:{pages,trend,days:[]}, site:{trend,days:[],totals} }
       const dayList = (data.app && data.app.days) || []
       const labels = dayList.map(fmtDay)
+      const allPages = (data.app && data.app.pages) || []
 
-      // 工具内页面 Top:取访客数前 6 的页面画多序列折线
-      const topPages = data.app.pages.slice(0, 6)
+      // 趋势图:访客 Top 6 + 四个重点工具(即使访客为 0 也纳入,便于持续观察)
+      const focus = focusIds()
+      const topPages = allPages.slice(0, 6).slice()
+      for (const p of allPages) {
+        if (topPages.length >= 10) break
+        if (focus.has(p.page) && !topPages.some((x) => x.page === p.page)) topPages.push(p)
+      }
       const dayPage = new Map()
-      for (const p of data.app.trend) {
+      for (const p of (data.app.trend || [])) {
         if (!dayPage.has(p.page)) dayPage.set(p.page, new Map())
         dayPage.get(p.page).set(p.day, p.visitors)
       }
@@ -1722,25 +1856,27 @@
         name: pageLabel(p.page),
         color: CHART_COLORS[i % CHART_COLORS.length],
         data: dayList.map((d) => dayPage.get(p.page)?.get(d) ?? 0),
+        total: p.visitors,
       }))
 
-      const totalAppVisitors = data.app.pages.reduce((s, p) => s + p.visitors, 0)
-      const totalAppClicks = data.app.pages.reduce((s, p) => s + p.clicks, 0)
+      const totalAppVisitors = allPages.reduce((s, p) => s + p.visitors, 0)
+      const totalAppClicks = allPages.reduce((s, p) => s + p.clicks, 0)
 
       return `
         <div class="kpi-grid">
           <div class="card kpi"><div class="label"><span class="dot" style="background:#16a34a"></span>工具内页面访问</div><div class="value">${fmt(totalAppVisitors)}</div><div class="extra">各页面独立设备数合计(近${data.days}天)</div></div>
           <div class="card kpi"><div class="label"><span class="dot" style="background:#f59e0b"></span>功能点击</div><div class="value">${fmt(totalAppClicks)}</div><div class="extra">App 内功能点击次数合计</div></div>
         </div>
+        ${buildFocusToolsSection(data)}
         <div class="card card-pad" style="margin-bottom:14px">
-          <div class="card-title">工具内页面访客趋势 <span class="hint">Top ${topPages.length} 页面</span></div>
+          <div class="card-title">工具内页面访客趋势 <span class="hint">Top 6 + 重点工具 · 共 ${pageSeries.length} 条</span></div>
           ${pageSeries.length ? lineChartSvg(labels, pageSeries, { w: 980, height: 240 }) : '<div class="empty">暂无数据</div>'}
-          <div class="legend">${pageSeries.map((s) => `<span class="item"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('')}</div>
+          <div class="legend">${pageSeries.map((s) => `<span class="item"><span class="sw" style="background:${s.color}"></span>${esc(s.name)} ${fmt(s.total)}</span>`).join('')}</div>
         </div>
         <div class="card table-wrap">
           <table>
             <thead><tr><th>页面</th><th>独立设备数</th><th>功能点击次数</th></tr></thead>
-            <tbody>${data.app.pages.map((p) => `
+            <tbody>${allPages.map((p) => `
               <tr>
                 <td>${esc(pageLabel(p.page))}</td>
                 <td class="num">${fmt(p.visitors)}</td>

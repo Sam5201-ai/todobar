@@ -38,6 +38,8 @@ import avatarA2 from './assets/avatars/a2.png'
 import avatarA3 from './assets/avatars/a3.png'
 import avatarA4 from './assets/avatars/a4.png'
 import avatarA5 from './assets/avatars/a5.png'
+// 「联系客服 - 加入反馈群」微信二维码(本地打包,不依赖联网)。
+import devWechatQr from './assets/dev-wechat-qr.jpg'
 import { useSidebarSettings, fontStackOf, FONT_OPTIONS, BACKGROUND_OPTIONS } from './sidebarSettings'
 import type { SidebarSettings } from './sidebarSettings'
 import {
@@ -138,12 +140,24 @@ import { ClotheslineSettingsPage } from './clothesline/ClotheslineSettingsPage'
 import {
   clGetSettings,
   clSetAlwaysOnTop,
-  clAddCard,
-  clMakeCard,
   CL_OPEN_TASK,
+  CL_OPEN_SETTINGS,
+  CL_RECORDER_CMD,
+  CL_RECORDER_STATE,
+  type ClRecorderCmd,
+  type ClRecorderState,
 } from './clothesline/bridge'
-import { listen } from '@tauri-apps/api/event'
-import { useRecorderActive } from './recorder'
+import { emit, listen } from '@tauri-apps/api/event'
+import {
+  useRecorderActive,
+  startRecording,
+  pauseRecording,
+  resumeRecording,
+  stopRecording,
+  cancelRecording,
+  getRecorderSnapshot,
+  subscribeRecorder,
+} from './recorder'
 import { loadDiskPref, saveDiskPref } from './prefs'
 import {
   SALARY_WIDGET_KEY,
@@ -774,6 +788,23 @@ function App() {
   useEffect(() => {
     let cancelled = false
     let un: (() => void) | undefined
+    // 2026-11-15 反馈2：绳窗 ＋ 菜单「晾衣绳设置」→ 主窗折叠时先展开侧栏，
+    // 再打开晾衣绳设置页（与其它独立页面互斥，见 toggleClothesline 的互斥逻辑）。
+    void listen<unknown>(CL_OPEN_SETTINGS, () => {
+      if (cancelled) return
+      setIsSettingsOpen(false)
+      setHuangliOpen(false)
+      setCalculatorOpen(false)
+      setSalaryOpen(false)
+      setRecorderOpen(false)
+      setClotheslineOpen(true)
+      setIsOpen(true)
+    })
+      .then((fn) => {
+        if (cancelled) fn()
+        else un = fn
+      })
+      .catch(() => undefined)
     void listen<{ id: string }>(CL_OPEN_TASK, (e) => {
       if (cancelled) return
       const t = store.tasks.find((x) => x.id === e.payload.id)
@@ -796,6 +827,106 @@ function App() {
       un?.()
     }
   }, [store.tasks, setClotheslineOpen, setActiveTab, setSelectedDateKey])
+
+  // ★2026-11-15 一键录音：绳窗遥控主窗录音引擎（主窗是 recorder.ts 单例唯一宿主）。
+  // 主窗职责：① 执行 CL_RECORDER_CMD（start/pause/resume/reset/save/abort）；
+  // ② subscribeRecorder 把引擎快照广播回绳窗（CL_RECORDER_STATE，录音中约 5Hz）。
+  // cardId/title 是 start 命令带来的绳卡关联：广播与终态都带回 cardId，绳窗据此把
+  // 状态渲染到对应卡片；录音页发起的录音 cardId=null，绳窗忽略。
+  useEffect(() => {
+    let recCardId: string | null = null
+    let recTitle: string | null = null
+    let unCmd: (() => void) | undefined
+    let alive = true
+    const emitState = (extra?: Partial<ClRecorderState>) => {
+      if (!alive) return
+      const s = getRecorderSnapshot()
+      const payload: ClRecorderState = {
+        status: s.status,
+        elapsedMs: s.elapsedMs,
+        title: recTitle,
+        cardId: recCardId,
+        error: s.error,
+        done: null,
+        ...extra,
+      }
+      void emit(CL_RECORDER_STATE, payload).catch(() => undefined)
+    }
+    const failStart = (error: string) => {
+      emitState({ status: 'idle', done: 'failed', error })
+      recCardId = null
+      recTitle = null
+    }
+    const beginFromCmd = async (cardId: string, title: string) => {
+      recCardId = cardId
+      recTitle = title
+      if (getRecorderSnapshot().status !== 'idle') {
+        failStart('已有录音在进行中')
+        return
+      }
+      await startRecording({ title })
+      const s = getRecorderSnapshot()
+      if (s.status === 'idle' && s.error) failStart(s.error)
+      else emitState()
+    }
+    void listen<ClRecorderCmd>(CL_RECORDER_CMD, (e) => {
+      const cmd = e.payload
+      void (async () => {
+        switch (cmd.action) {
+          case 'start':
+            await beginFromCmd(cmd.cardId, cmd.title)
+            return
+          case 'pause':
+            pauseRecording()
+            emitState()
+            return
+          case 'resume':
+            resumeRecording()
+            emitState()
+            return
+          case 'reset': {
+            // 重置 = 重新计时：丢弃已录内容（删半成品文件），以卡上当前标题立即重开。
+            const s0 = getRecorderSnapshot()
+            if (s0.status !== 'recording' && s0.status !== 'paused') return
+            await cancelRecording()
+            await beginFromCmd(recCardId ?? '', cmd.title)
+            return
+          }
+          case 'save': {
+            const res = await stopRecording('manual', { title: cmd.title })
+            emitState(
+              res
+                ? { status: 'idle', done: 'saved', error: null }
+                : { status: 'idle', done: 'failed', error: '当前没有进行中的录音' },
+            )
+            recCardId = null
+            recTitle = null
+            return
+          }
+          case 'abort':
+            await cancelRecording()
+            emitState({ status: 'idle' })
+            recCardId = null
+            recTitle = null
+            return
+        }
+      })()
+    })
+      .then((fn) => {
+        if (!alive) fn()
+        else unCmd = fn
+      })
+      .catch(() => undefined)
+    // 状态广播：录音中由 200ms 计时 tick 驱动（约 5Hz）；空闲且无绳卡关联时不刷屏。
+    const unSub = subscribeRecorder(() => {
+      if (recCardId !== null || getRecorderSnapshot().status !== 'idle') emitState()
+    })
+    return () => {
+      alive = false
+      unSub()
+      unCmd?.()
+    }
+  }, [])
 
   // ---- 首页顶栏快捷入口:动态槽位 + 「⋯ 更多」溢出菜单 -----------------------
   const [moreOpen, setMoreOpen] = useState(false)
@@ -1949,27 +2080,9 @@ function App() {
     window.addEventListener('pointerup', onUp)
   }
 
-  /** 把主任务挂到顶部晾衣绳。只写 cards.json，不碰任务库 / 同步引擎。 */
-  const hangTaskToClothesline = async (task: Task) => {
-    try {
-      await clAddCard(
-        clMakeCard('task', {
-          task_id: task.id,
-          title: task.title,
-          text: task.meta || (task.dueDate ? task.dueDate.slice(0, 10) : ''),
-        }),
-        fullAccess,
-      )
-      setToast({ kind: 'ok', text: '已挂到晾衣绳' })
-    } catch (e) {
-      setToast({ kind: 'err', text: e instanceof Error ? e.message : String(e) })
-    }
-  }
-
   const treeCtx = {
     childMap,
     onToggleDone: (id: string) => store.toggleDone(id),
-    onHang: (task: Task) => void hangTaskToClothesline(task),
     onToggleSeriesSub: (subId: string, dateKey: string) =>
       store.toggleSubtaskOccurrence(subId, dateKey),
     onRename: handleRename,
@@ -4278,8 +4391,6 @@ type RowDragState = {
 type TreeCtx = {
   childMap: Map<string, Task[]>
   onToggleDone: (id: string) => void
-  /** 挂到顶部晾衣绳（只写 clothesline/cards.json）。 */
-  onHang: (task: Task) => void
   /** 「整组」子任务在某个发生日下的独立勾选(写子任务 completedDates,不影响其他日期)。 */
   onToggleSeriesSub: (subtaskId: string, dateKey: string) => void
   onRename: (task: Task, title: string) => void
@@ -4454,17 +4565,6 @@ function TaskNode({
             </button>
           ) : (
             <>
-              {level === 1 && (
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={`把 ${task.title} 挂到晾衣绳`}
-                  title="挂到晾衣绳"
-                  onClick={() => ctx.onHang(task)}
-                >
-                  <Shirt size={13} />
-                </button>
-              )}
               {level < 3 && (
                 <button
                   type="button"
@@ -5425,13 +5525,13 @@ function useSheetClose(onClose: () => void) {
   return { closing, requestClose }
 }
 
-/** 联系客服底部弹窗:tab1 问题反馈 / tab2 需求提报,提交到后台「用户反馈」。
+/** 联系客服底部弹窗:tab1 问题反馈 / tab2 需求提报 / tab3 加入反馈群(扫码加开发者微信)。
  *  由父组件条件渲染(关即卸载),与 AddTaskSheet 等弹窗同模式——
  *  不能做成 open 常驻组件:useSheetClose 的 closingRef 关闭后不复位,
  *  复用实例会让下次打开带着 is-closing 遮罩盖死整页。 */
 function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenHistory: () => void }) {
   const { closing, requestClose } = useSheetClose(onClose)
-  const [tab, setTab] = useState<'issue' | 'demand'>('issue')
+  const [tab, setTab] = useState<'issue' | 'demand' | 'developer'>('issue')
   const [text, setText] = useState('')
   const [contact, setContact] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -5455,6 +5555,8 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
   }, [])
 
   const submit = () => {
+    // 加入反馈群 tab 无提交动作(按钮不渲染),此处守卫同时收窄 FeedbackKind 类型
+    if (tab === 'developer') return
     const content = text.trim()
     if (!content) {
       setStatus({ ok: false, text: '请先填写内容' })
@@ -5506,48 +5608,71 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
           >
             需求提报
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'developer'}
+            className={tab === 'developer' ? 'is-active' : ''}
+            onClick={() => setTab('developer')}
+          >
+            加入反馈群
+          </button>
         </div>
-        {/* 字数上限固定显示在文本框右下角(overlay,不占独立行) */}
-        <div className="fb-textarea-wrap">
-          <textarea
-            className="fb-textarea"
-            placeholder={
-              tab === 'issue'
-                ? '请描述你遇到的问题,例如:同步失败、提醒不生效、界面显示异常…'
-                : '说出你想要的功能,例如:待办导出、日历订阅、数据统计…'
-            }
-            rows={5}
-            maxLength={1000}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={submitting}
-          />
-          <span className="fb-count">{text.length}/1000</span>
-        </div>
-        <input
-          className="fb-contact"
-          type="text"
-          placeholder="请填写你的微信,以便详细沟通(选填)"
-          maxLength={60}
-          value={contact}
-          onChange={(e) => setContact(e.target.value)}
-          disabled={submitting}
-        />
-        {status ? (
-          <div className={`fb-status ${status.ok ? 'is-ok' : 'is-err'}`} aria-live="polite">
-            {status.text}
+        {tab === 'developer' ? (
+          /* 扫码加开发者微信:无提交动作,表单整体让位给二维码 */
+          <div className="fb-developer">
+            <div className="fb-dev-qr-wrap">
+              <img className="fb-dev-qr" src={devWechatQr} alt="开发者微信二维码" draggable={false} />
+            </div>
+            <div className="fb-dev-tip">加开发者个人微信，备注“加入反馈群”</div>
           </div>
-        ) : null}
-        {/* 提交与历史记录同一行,宽度比 历史:提交 = 1:3 */}
+        ) : (
+          <>
+            {/* 字数上限固定显示在文本框右下角(overlay,不占独立行) */}
+            <div className="fb-textarea-wrap">
+              <textarea
+                className="fb-textarea"
+                placeholder={
+                  tab === 'issue'
+                    ? '请描述你遇到的问题,例如:同步失败、提醒不生效、界面显示异常…'
+                    : '说出你想要的功能,例如:待办导出、日历订阅、数据统计…'
+                }
+                rows={5}
+                maxLength={1000}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                disabled={submitting}
+              />
+              <span className="fb-count">{text.length}/1000</span>
+            </div>
+            <input
+              className="fb-contact"
+              type="text"
+              placeholder="请填写你的微信,以便详细沟通(选填)"
+              maxLength={60}
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              disabled={submitting}
+            />
+            {status ? (
+              <div className={`fb-status ${status.ok ? 'is-ok' : 'is-err'}`} aria-live="polite">
+                {status.text}
+              </div>
+            ) : null}
+          </>
+        )}
+        {/* 提交与历史记录同一行,宽度比 历史:提交 = 1:3;加入反馈群无需提交,历史记录独占整行 */}
         <div className="fb-foot">
           <button type="button" className="fb-history-btn" onClick={onOpenHistory}>
             <History size={14} />
             历史记录
             {unread ? <span className="fb-dot" aria-label="有未读回复" /> : null}
           </button>
-          <button type="button" className="fb-submit" onClick={submit} disabled={submitting}>
-            {submitting ? '提交中…' : '提交'}
-          </button>
+          {tab === 'developer' ? null : (
+            <button type="button" className="fb-submit" onClick={submit} disabled={submitting}>
+              {submitting ? '提交中…' : '提交'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -5740,7 +5865,7 @@ function ChangelogSheet({
               return (
                 <button
                   type="button"
-                  className={`cl-card ${isCurrent ? 'is-current' : ''}`}
+                  className={`rel-card ${isCurrent ? 'is-current' : ''}`}
                   key={r.version}
                   onClick={() => onOpenDetail(r)}
                 >
