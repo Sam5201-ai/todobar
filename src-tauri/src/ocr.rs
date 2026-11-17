@@ -555,22 +555,23 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use super::{OcrBox, OcrLine, OcrResult, OcrStatus};
+    use super::{OcrResult, OcrStatus};
 
     pub fn warmup() {
-        // Vision 无持久引擎对象,预热收益极低,空操作。
+        // Mac 首发不提供 OCR,空操作。
     }
 
     pub fn status() -> OcrStatus {
         // OCR 依附「截图→框选→ocr_save_input」输入链路;Mac 首发不提供截图,
-        // 因此引擎虽在,整体能力仍报告不可用,避免设置页误报「引擎已就绪」。
-        let available = crate::capabilities::current().screenshot;
+        // 因此整体能力恒为不可用,避免设置页误报「引擎已就绪」。
+        // 能力表 capabilities.current().screenshot 在 Mac 上本就为 false(见 capabilities.rs)。
+        let available = false;
         OcrStatus {
             available,
-            engine: "macos-vision".into(),
-            zh_available: true, // 系统内置 zh-Hans 识别(10.15+)
-            en_available: true,
-            warmed: true,
+            engine: "unavailable".into(),
+            zh_available: false,
+            en_available: false,
+            warmed: false,
             message: if available {
                 String::new()
             } else {
@@ -579,82 +580,13 @@ mod imp {
         }
     }
 
-    pub fn recognize(png: &[u8]) -> Result<OcrResult, String> {
-        use objc2::runtime::ProtocolObject;
-        use objc2_foundation::{NSArray, NSData, NSString};
-        use objc2_vision::{
-            VNImageRequestHandler, VNRecognizeTextRequest, VNRequestProtocol,
-            VNRequestTextRecognitionLevel,
-        };
-
-        unsafe {
-            // PNG bytes 原样交给 Vision(handler 内部解码,不做任何预处理)。
-            let data = NSData::with_bytes(png);
-            let handler = VNImageRequestHandler::initWithData_options(
-                VNImageRequestHandler::alloc(),
-                &data,
-                None,
-            );
-
-            let req = VNRecognizeTextRequest::new();
-            // 精度优先:强制 accurate 档,禁用 fast;开启语言纠正提升中文成句准确率。
-            req.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
-            req.setRecognitionLanguages(&NSArray::from_slice(&[
-                NSString::from_str("zh-Hans"),
-                NSString::from_str("en-US"),
-            ]));
-            req.setUsesLanguageCorrection(true);
-
-            let requests: NSArray<ProtocolObject<dyn VNRequestProtocol>> =
-                NSArray::from_slice(&[ProtocolObject::from_retained(&req)]);
-            handler
-                .performRequests_error(&requests)
-                .map_err(|e| format!("Vision 识别失败: {e:?}"))?;
-
-            let results = req
-                .results()
-                .ok_or_else(|| "Vision 未返回结果".to_string())?;
-            // boundingBox 为归一化坐标(y 轴向上),需图像宽高还原;从 PNG 头直接解析。
-            let (img_w, img_h) = png_dimensions(png)?;
-            let mut lines = Vec::new();
-            for obs in results.iter() {
-                let cands = obs.topCandidates_count(1);
-                let Some(cand) = cands.first() else { continue };
-                let text = cand.string().to_string();
-                if text.trim().is_empty() {
-                    continue;
-                }
-                let bb = obs.boundingBox();
-                // 归一化(y 原点在底部)→ 物理像素(y 原点在顶部)。
-                let x = (bb.origin.x * img_w).round();
-                let y = ((1.0 - bb.origin.y - bb.size.height) * img_h).round();
-                lines.push(OcrLine {
-                    text,
-                    confidence: Some(cand.confidence()),
-                    bbox: Some(OcrBox {
-                        x,
-                        y,
-                        w: (bb.size.width * img_w).round(),
-                        h: (bb.size.height * img_h).round(),
-                    }),
-                });
-            }
-            Ok(OcrResult {
-                lines,
-                engine: "macos-vision".into(),
-                language: "zh-Hans,en-US".into(),
-            })
-        }
-    }
-
-    /// 从 PNG 头解析宽高(ihdr 固定偏移 16/20,大端 u32)。
-    fn png_dimensions(png: &[u8]) -> Result<(f32, f32), String> {
-        if png.len() < 24 || &png[12..16] != b"IHDR" {
-            return Err("非法 PNG".into());
-        }
-        let w = u32::from_be_bytes([png[16], png[17], png[18], png[19]]) as f32;
-        let h = u32::from_be_bytes([png[20], png[21], png[22], png[23]]) as f32;
-        Ok((w, h))
+    pub fn recognize(_png: &[u8]) -> Result<OcrResult, String> {
+        // Mac 首发不提供截图→框选输入链路,OCR 整体能力已关闭(见 status() 的能力表判定)。
+        // 这里保留降级实现:即便被误调用也返回明确错误,不触发任何 objc2/Vision 调用。
+        // 原 Vision 实现依赖 objc2-vision 0.3 的具体 API 签名,在 Windows 开发机无法编译校准,
+        // 曾在 macOS CI 触发 E0432/E0599/E0308 导致整个 crate 编译失败、Mac 包无法产出。
+        // 待后续接入 Mac 截图能力时再按真机 SDK 校准后恢复。
+        Err("当前平台不支持本地 OCR".into())
     }
 }
 
