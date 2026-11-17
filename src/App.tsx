@@ -102,7 +102,7 @@ import {
   markUpdateShown,
   downloadAndInstall,
 } from './update'
-import { SqliteStore } from './db/repository'
+import { SqliteStore, SYNC_INTERVAL_OPTIONS, DEFAULT_SYNC_INTERVAL_SEC } from './db/repository'
 import {
   CN_DAYS,
   CN_MONTHS,
@@ -132,6 +132,7 @@ import { loadHolidays } from './holidays'
 import { HuangliView } from './HuangliView'
 import { CalculatorView } from './CalculatorView'
 import { ErrorBoundary } from './ErrorBoundary'
+import { loadCapabilities, caps, capsReady, allows } from './platformCapabilities'
 import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { SalaryView, STORE_KEY as SALARY_STORE_KEY } from './SalaryView'
@@ -513,11 +514,17 @@ function App() {
 
   // 启动取当前版本号 + 拉取远程法定节假日。原先这两件事挂在设置页组件里,
   // 用户不进设置页就不跑;上移到根后首页弹窗才能拿到版本号,节假日也不再依赖设置页。
+  /** 能力表就绪触发器:仅用于强制重渲染,不承载业务数据(真源在 platformCapabilities 模块)。 */
+  const [capsTick, setCapsTick] = useState(0)
+
   useEffect(() => {
     void currentAppVersion()
       .then(setAppVersion)
       .catch(() => setAppVersion(''))
     void loadHolidays()
+    // 平台能力表:进程内取一次即可(模块缓存)。加载完成后触发一次重渲染,
+    // 让顶栏 / 设置页等受控入口按真实能力刷新;加载前的首帧已由 splitTopbarTools 兜底隐藏。
+    void loadCapabilities().then(() => setCapsTick((n) => n + 1))
   }, [])
 
   // 启动约 1.5s 后检查更新:version.json 判定最新版本 + 安装包 URL,
@@ -529,6 +536,7 @@ function App() {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
+          await loadCapabilities()
           const latest = await fetchLatestVersion()
           if (!alive) return
           const hasNew = isNewerVersion(latest.version, appVersion)
@@ -538,6 +546,8 @@ function App() {
               : { status: 'latest' },
           )
           if (!hasNew) return
+          // Mac 无应用内安装能力:只更新状态,不弹更新弹窗(设置页仍显示新版提示并导向官网)。
+          if (!caps().inAppUpdate) return
           // 版本记录:网络优先,失败用本地缓存;都没有时靠 notes 兜底,不阻塞弹窗。
           let releases = readReleaseCache() ?? []
           try {
@@ -936,8 +946,9 @@ function App() {
   const moreBtnRef = useRef<HTMLButtonElement | null>(null)
 
   const topbar = useMemo(
+    // capsTick 作为依赖:能力表加载完成后重算,Mac 上剔除截图/晾衣绳。
     () => splitTopbarTools(settings.topbarTools, settings.panelWidth),
-    [settings.topbarTools, settings.panelWidth],
+    [settings.topbarTools, settings.panelWidth, capsTick],
   )
 
   // 菜单里的快捷键提示跟随设置页里用户改过的值(截图快捷键读运行时缓存)。
@@ -982,6 +993,8 @@ function App() {
     trackFeature(`topbar:${id}`)
     switch (id) {
       case 'screenshot':
+        // 平台能力防御:UI 已隐藏入口,此处再拦截残留路径(如旧快捷键回调)。
+        if (!caps().screenshot) return
         // 区域模式进入,覆盖层工具栏可现场切换窗口 / 全屏(与截图快捷键一致)。
         void startCapture('region')
         break
@@ -1008,6 +1021,7 @@ function App() {
         toggleRecorder()
         break
       case 'clothesline':
+        if (!caps().clothesline) return
         toggleClothesline()
         break
       case 'sync':
@@ -1342,8 +1356,15 @@ function App() {
       const now = Date.now()
       const notify = async (title: string, body: string) => {
         try {
-          const { sendNotification } = await import('@tauri-apps/plugin-notification')
-          sendNotification({ title, body })
+          const { sendNotification, isPermissionGranted, requestPermission } =
+            await import('@tauri-apps/plugin-notification')
+          // macOS 首次需运行时授权;不请求时提醒会被系统静默丢弃。
+          let granted = await isPermissionGranted()
+          if (!granted) {
+            const result = await requestPermission()
+            granted = result === 'granted'
+          }
+          if (granted) sendNotification({ title, body })
         } catch {
           // Notifications are best-effort.
         }
@@ -1484,11 +1505,14 @@ function App() {
   }, [isNative])
 
   // 截图/贴图:恢复设置并注册全局快捷键(仅主窗口原生环境执行一次)。
+  // Mac 不提供截图,能力表加载完成后跳过注册,避免快捷键触发一段必失败的链路。
   useEffect(() => {
     if (!isNative) return
     let cancelled = false
     void (async () => {
       try {
+        await loadCapabilities()
+        if (!caps().screenshot) return
         const { hydrateSettings } = await import('./screenshot/store')
         const { initScreenshotShortcuts } = await import('./screenshot/shortcuts')
         await hydrateSettings()
@@ -2300,12 +2324,14 @@ function App() {
               topbarFocus={topbarFocus}
               dockFallback={dockGeom?.fallback ?? false}
             />
-            <ErrorBoundary label="截图与贴图">
-              <ScreenshotSettingsPanel
-                onToast={(kind, text) => setToast({ kind, text })}
-                onLocked={handleLocked}
-              />
-            </ErrorBoundary>
+            {caps().screenshot && (
+              <ErrorBoundary label="截图与贴图">
+                <ScreenshotSettingsPanel
+                  onToast={(kind, text) => setToast({ kind, text })}
+                  onLocked={handleLocked}
+                />
+              </ErrorBoundary>
+            )}
           </div>
         </PageShell>
         <PageShell open={huangliOpen} title="万年历" onClose={() => setHuangliOpen(false)}>
@@ -2326,11 +2352,13 @@ function App() {
             <RecorderView />
           </ErrorBoundary>
         </PageShell>
-        <PageShell open={clotheslineOpen} title="晾衣绳" onClose={() => setClotheslineOpen(false)}>
-          <ErrorBoundary label="晾衣绳设置">
-            <ClotheslineSettingsPage />
-          </ErrorBoundary>
-        </PageShell>
+        {caps().clothesline && (
+          <PageShell open={clotheslineOpen} title="晾衣绳" onClose={() => setClotheslineOpen(false)}>
+            <ErrorBoundary label="晾衣绳设置">
+              <ClotheslineSettingsPage />
+            </ErrorBoundary>
+          </PageShell>
+        )}
         {/* 待办主视图:页面打开时被覆盖层遮在下方,关闭动画过程中可透视 */}
         <div className="sidebar-main" aria-hidden={isSettingsOpen || huangliOpen || calculatorOpen || salaryOpen || recorderOpen || clotheslineOpen}>
           <header className="sidebar-header">
@@ -3084,7 +3112,13 @@ function TopbarToolsSetting({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const { shown, hidden } = splitTopbarTools(pref, panelWidth)
-  const offCount = TOPBAR_TOOLS.length - pref.enabled.length
+  // 统计口径与可见工具一致:剔除当前平台不支持的工具。
+  const supportedTools = TOPBAR_TOOLS.filter((t) => !t.requires || (capsReady() && allows(t.requires)))
+  const supportedEnabled = pref.enabled.filter((id) => {
+    const t = TOPBAR_TOOLS.find((x) => x.id === id)
+    return t && (!t.requires || (capsReady() && allows(t.requires)))
+  })
+  const offCount = supportedTools.length - supportedEnabled.length
 
   // 「⋯ 更多 → 管理顶栏入口…」:直接打开配置弹窗(不再滚动到平铺分组)。
   useEffect(() => {
@@ -3150,9 +3184,11 @@ function TopbarToolsSheet({
     return () => window.removeEventListener('keydown', onKey)
   }, [requestClose])
 
+  // 平台不支持的工具整行不渲染(如 Mac 的截图/晾衣绳),避免绕过门控。
   const rows = draft.order
     .map((id) => TOPBAR_TOOLS.find((t) => t.id === id))
     .filter((t): t is TopbarTool => Boolean(t))
+    .filter((t) => !t.requires || (capsReady() && allows(t.requires)))
 
   const toggle = (id: TopbarToolId) => {
     const enabled = draft.enabled.includes(id)
@@ -3451,7 +3487,9 @@ function VersionSetting({
           className="sync-now-button"
           onClick={() => void downloadAndInstall(update.version, update.url, setUpdate)}
         >
-          {`下载并安装 v${update.version}`}
+          {caps().inAppUpdate
+            ? `下载并安装 v${update.version}`
+            : `前往官网下载 v${update.version}`}
         </button>
       ) : null}
       {update.status === 'latest' ? (
@@ -4085,7 +4123,7 @@ function SidebarSettingsPanel({
             value={
               SYNC_INTERVAL_OPTIONS.some((o) => o.value === syncConfig.intervalSec)
                 ? syncConfig.intervalSec
-                : 300
+                : DEFAULT_SYNC_INTERVAL_SEC
             }
             options={SYNC_INTERVAL_OPTIONS}
             onChange={(intervalSec) => onSyncChange({ intervalSec })}
@@ -4238,17 +4276,6 @@ function SidebarSettingsPanel({
     </div>
   )
 }
-
-/** 自动同步间隔预设:最短 5 分钟,最长 12 小时。 */
-const SYNC_INTERVAL_OPTIONS: { value: number; label: string }[] = [
-  { value: 300, label: '5分钟' },
-  { value: 600, label: '10分钟' },
-  { value: 1800, label: '30分钟' },
-  { value: 3600, label: '1小时' },
-  { value: 10800, label: '3小时' },
-  { value: 21600, label: '6小时' },
-  { value: 43200, label: '12小时' },
-]
 
 function OptionSetting({
   label,
@@ -6480,7 +6507,9 @@ function UpdateNoticeSheet({
               ? '下载中…'
               : update.status === 'installing'
                 ? '即将安装…'
-                : '立即更新'}
+                : caps().inAppUpdate
+                  ? '立即更新'
+                  : '前往官网下载'}
           </button>
         </div>
       </div>

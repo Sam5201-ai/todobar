@@ -1766,9 +1766,10 @@ async function renderMonitor() {
 }
 
 // ---------- 启动 ----------
+// token 校验用轻量 ping,不再跑 overview 的整套 D1 聚合(降 D1 读取)。
 ;(async function init() {
   if (localStorage.getItem(TOKEN_KEY)) {
-    try { await api('/api/admin/overview?days=1') }
+    try { await api('/api/admin/ping') }
     catch { localStorage.removeItem(TOKEN_KEY) }
   }
   render()
@@ -1778,7 +1779,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden || !localStorage.getItem(TOKEN_KEY) || location.hash === '#/login') return
   if (Date.now() - _lastTokenCheck < 5 * 60_000) return
   _lastTokenCheck = Date.now()
-  api('/api/admin/overview?days=1').catch(() => {})
+  api('/api/admin/ping').catch(() => {})
 })
 </script>
 </body>

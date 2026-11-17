@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import {
   BrowserStore,
   SqliteStore,
+  DEFAULT_SYNC_INTERVAL_SEC,
   getActiveProfile,
   resolveBootProfile,
   setActiveProfile,
@@ -240,7 +241,7 @@ export function useTaskStore() {
     endpoint: '',
     token: '',
     autoSync: true,
-    intervalSec: 30,
+    intervalSec: DEFAULT_SYNC_INTERVAL_SEC,
   })
   const [syncState, setSyncState] = useState<SyncState>({
     status: 'idle',
@@ -455,7 +456,7 @@ export function useTaskStore() {
     // 试用期在应用常驻期间自然到期不会有账号事件(账号数据本身没变),
     // 这里低频检测「刚从全功能变为受限」并补一次 stopAuto。
     // ⚠️ 只在状态翻转时调用 apply:每轮无条件 startAuto 会重置 SyncEngine 的
-    // setInterval,自动间隔(最长 12 小时)会被无限推迟,等于再也不自动同步。
+    // setInterval,自动间隔(最长 120 分钟)会被无限推迟,等于再也不自动同步。
     let wasFull = hasFullAccess()
     const trialGuard = window.setInterval(() => {
       const now = hasFullAccess()

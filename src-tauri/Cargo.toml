@@ -27,6 +27,9 @@ tauri-plugin-log = "2"
 dirs = "5"
 # base64 原本只在 windows 块;录音分片落盘在所有平台编译期都会用到,挪到通用依赖
 base64 = "0.22"
+# 剪贴板读写:Windows 走 Win32 原生路径(CF_UNICODETEXT),macOS 走 arboard(NSPasteboard)。
+# macOS 侧所有 NSPasteboard 访问必须派发主线程,见 clipboard.rs 的 read/set_clipboard_text。
+arboard = "3"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
@@ -62,7 +65,7 @@ windows = { version = "0.61", features = [
 ] }
 # 自启动注册表自愈:删除 productName 改名前(Todobar)遗留的 Run 条目
 winreg = "0.55"
-arboard = "3"
+# arboard 已移至通用依赖(macOS 剪贴板历史需要)
 image = "0.25"
 # OCR(PP-OCRv4 本地神经网络模型,POC 验证精度显著优于系统引擎):
 # onnxruntime 推理;load-dynamic = 运行时加载随包分发的 onnxruntime.dll

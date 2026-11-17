@@ -24,6 +24,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { isTauriRuntime } from './useTaskStore'
 import { saveDiskPref } from './prefs'
 import { trackFeature } from './analytics'
+import { isMac } from './platformCapabilities'
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -298,7 +299,12 @@ function classifyMicError(err: unknown): { kind: MicErrorKind; text: string } {
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return { kind: 'denied', text: '麦克风访问被拒绝,请检查 Windows 隐私设置' }
+      return {
+        kind: 'denied',
+        text: isMac()
+          ? '麦克风访问被拒绝,请在「系统设置 → 隐私与安全性 → 麦克风」中允许'
+          : '麦克风访问被拒绝,请检查 Windows 隐私设置',
+      }
     case 'NotFoundError':
     case 'OverconstrainedError':
       return { kind: 'notfound', text: '未检测到麦克风设备,请检查连接' }

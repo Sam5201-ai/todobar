@@ -2504,11 +2504,12 @@
     }
 
     window.addEventListener('hashchange', render)
-    // 启动:有令牌先校验(失败自动跳登录)
+    // 启动:有令牌先校验(失败自动跳登录)。用轻量 ping 而非 overview:
+    // overview 会跑整套 D1 全表聚合,仅仅为了校验 token 太重,是 D1 读取峰值的主因之一。
     ;(async function init() {
       if (localStorage.getItem(TOKEN_KEY)) {
         try {
-          await api('/api/admin/overview?days=1')
+          await api('/api/admin/ping')
         } catch {
           localStorage.removeItem(TOKEN_KEY)
         }

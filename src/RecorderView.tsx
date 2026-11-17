@@ -342,21 +342,33 @@ export function RecorderView(): ReactNode {
     saveRecordings(next)
   }
 
+  // 后端有两类 Err:文件确实丢失(「录音文件不存在或已被移动」)与打开系统失败
+  // (如「打开录音失败: os error」)。只有前者才标记丢失,否则会误报已存在的文件。
   const handleOpen = async (item: RecordingMeta) => {
     try {
       await invoke('recording_open', { dir: item.dir, file: item.file })
-    } catch {
-      setMissing((prev) => new Set(prev).add(item.id))
-      showToast('err', '录音文件不存在或已被移动')
+    } catch (e) {
+      const msg = String(e ?? '')
+      if (msg.includes('不存在')) {
+        setMissing((prev) => new Set(prev).add(item.id))
+        showToast('err', '录音文件不存在或已被移动')
+      } else {
+        showToast('err', msg || '打开录音失败')
+      }
     }
   }
 
   const handleReveal = async (item: RecordingMeta) => {
     try {
       await invoke('recording_reveal', { dir: item.dir, file: item.file })
-    } catch {
-      setMissing((prev) => new Set(prev).add(item.id))
-      showToast('err', '录音文件不存在或已被移动')
+    } catch (e) {
+      const msg = String(e ?? '')
+      if (msg.includes('不存在')) {
+        setMissing((prev) => new Set(prev).add(item.id))
+        showToast('err', '录音文件不存在或已被移动')
+      } else {
+        showToast('err', msg || '打开文件夹失败')
+      }
     }
   }
 

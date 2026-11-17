@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import worker from './index'
+import { invalidate } from './admin-cache'
 import { makeD1 } from '../test/d1-shim.mjs'
 
 const ctx = { waitUntil: () => {} } as unknown as ExecutionContext
@@ -7,6 +8,9 @@ const ctx = { waitUntil: () => {} } as unknown as ExecutionContext
 const ADMIN = { email: '396770760@qq.com', password: '66666666' }
 
 async function makeEnv() {
+  // 缓存是 isolate 级模块状态,而每个测试新建独立 DB;清缓存保证测试间隔离,
+  // 否则同参数(days=30)会命中上一个测试的统计结果。
+  await invalidate(['overview', 'stats', 'codes'])
   const env = { DB: await makeD1() } as any
   // 首个请求同步建表(与线上 ensureSchema 同一路径)
   await worker.fetch(new Request('https://x/api/health'), env, ctx)
@@ -387,5 +391,26 @@ describe('admin users trial', () => {
     // 用户不存在 → 404
     const missing = await adminPost(env, '/api/admin/users/trial', token, { id: 'nope', expired: true })
     expect(missing.status).toBe(404)
+  })
+})
+
+describe('admin cache observation header', () => {
+  it('overview 首查 MISS、再查 HIT、带 _t 强制 MISS；ping 无观测头', async () => {
+    const env = await makeEnv()
+    const { token } = (await (await adminLogin(env)).json()) as { token: string }
+
+    const first = await adminGet(env, '/api/admin/overview?days=30', token)
+    expect(first.headers.get('X-Admin-Cache')).toBe('MISS')
+    expect(first.headers.get('cache-control')).toBe('private, no-store')
+
+    const second = await adminGet(env, '/api/admin/overview?days=30', token)
+    expect(second.headers.get('X-Admin-Cache')).toBe('HIT')
+
+    const forced = await adminGet(env, `/api/admin/overview?days=30&_t=${Date.now()}`, token)
+    expect(forced.headers.get('X-Admin-Cache')).toBe('MISS')
+
+    const ping = await adminGet(env, '/api/admin/ping', token)
+    expect(ping.status).toBe(200)
+    expect(ping.headers.get('X-Admin-Cache')).toBeNull()
   })
 })

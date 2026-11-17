@@ -8,9 +8,16 @@
  * 安装包是完整 NSIS 全量程序(不是增量补丁),跨任意多个版本都只需下载安装一次。
  */
 import type { ReleaseRecord } from './changelog'
+import { caps } from './platformCapabilities'
 
 /** 自有域(Cloudflare Worker 反代),版本检查与安装包下载都走这里;不经平台分享网关,避免被强制 sharecode 拦截返回 403。 */
 export const OFFICIAL_SITE = 'https://sync.tuanzhang.site'
+
+/** 打开官网下载页(浏览器)。Mac 无应用内安装能力,统一走手动下载覆盖安装。 */
+export async function openDownloadPage(): Promise<void> {
+  const { openUrl } = await import('@tauri-apps/plugin-opener')
+  await openUrl(OFFICIAL_SITE)
+}
 
 export type UpdateState =
   | { status: 'idle' }
@@ -132,6 +139,15 @@ export async function downloadAndInstall(
   url: string,
   setUpdate: (s: UpdateState) => void,
 ): Promise<void> {
+  // Mac 无应用内安装能力:直接打开官网下载页手动覆盖安装,不下载 NSIS .exe。
+  if (!caps().inAppUpdate) {
+    try {
+      await openDownloadPage()
+    } catch {
+      setUpdate({ status: 'error', message: '无法打开下载页,请手动访问官网', url })
+    }
+    return
+  }
   setUpdate({ status: 'downloading', version })
   try {
     const { invoke } = await import('@tauri-apps/api/core')

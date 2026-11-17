@@ -7,6 +7,12 @@ import { hydrateIdentity } from './account'
 
 // —— 启动兜底:任何未捕获错误 / Promise 拒绝 / 挂载超时,都在窗口里显示【可见】错误面板,
 // 避免"白屏静默卡死"无法排查。窗口本身是 transparent,故错误面板用不透明背景确保看得见。
+// 启动早期错误面板:此时能力表尚未加载,用 UA 仅作「数据目录文案」分流(不涉及功能门控)。
+const IS_MAC_UA = /Mac/i.test(navigator.userAgent)
+const DATA_DIR_HINT = IS_MAC_UA
+  ? '~/Library/Application Support/dev.todobar.desktop 与 ~/.ticktask'
+  : '%LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask'
+
 function showFatal(title: string, detail?: string) {
   const root = document.getElementById('root')
   if (!root) return
@@ -24,7 +30,11 @@ function showFatal(title: string, detail?: string) {
         String(detail).slice(0, 2000) +
         '</div>'
       : '') +
-    '<div style="margin-top:16px;color:#555">如反复出现,可删除应用数据目录后重试(Windows: %LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask),并查看 ~/.ticktask/logs/app.log</div>'
+    '<div style="margin-top:16px;color:#555">如反复出现,可删除应用数据目录后重试(' +
+    (IS_MAC_UA ? 'macOS' : 'Windows') +
+    ': ' +
+    DATA_DIR_HINT +
+    '),并查看 ~/.ticktask/logs/app.log</div>'
   root.appendChild(box)
 }
 
@@ -44,7 +54,7 @@ window.setTimeout(() => {
       '应用启动超时(界面未能加载)',
       '可能是本地数据库初始化阻塞或环境异常。请尝试:\n' +
         '1) 关闭后重新打开;\n' +
-        '2) 删除 %LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask 后重开;\n' +
+        '2) 删除 ' + DATA_DIR_HINT + ' 后重开;\n' +
         '3) 查看 ~/.ticktask/logs/app.log 中的报错。',
     )
   }

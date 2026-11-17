@@ -39,12 +39,37 @@ export interface TaskRepository {
   clearBirthdayOutbox(ids: string[], deleted: string[]): Promise<void>
 }
 
+/**
+ * 自动同步间隔档位(秒)。仅保留 30/60/120 分钟三档,默认 60 分钟:客户端每到一个
+ * 间隔就发一次 GET /api/tasks,30 秒空转是 Workers 请求额度偏高的主因,拉长档位可显著降载。
+ * 该文件是档位的单一真源,设置页选项与存量归一化都从这里取,避免两处不一致。
+ */
+export const SYNC_INTERVAL_OPTIONS: { value: number; label: string }[] = [
+  { value: 1800, label: '30分钟' },
+  { value: 3600, label: '60分钟' },
+  { value: 7200, label: '120分钟' },
+]
+export const DEFAULT_SYNC_INTERVAL_SEC = 3600
+
+/**
+ * 把历史/非法间隔值归一化到合法档位:取不超过该值的最大档;低于最小档的非法值
+ * (30s/300s/600s)回落到默认档 60 分钟。存量选过 3/6/12 小时的降到 2 小时,
+ * 因不在允许列表内且 2 小时已是最大档,不会让老用户同步变得过于频繁。
+ */
+export function normalizeSyncInterval(sec: unknown): number {
+  const n = typeof sec === 'number' ? sec : Number(sec)
+  if (!Number.isFinite(n)) return DEFAULT_SYNC_INTERVAL_SEC
+  let best = DEFAULT_SYNC_INTERVAL_SEC
+  for (const o of SYNC_INTERVAL_OPTIONS) if (n >= o.value) best = o.value
+  return best
+}
+
 const DEFAULT_SYNC_CONFIG: SyncConfig = {
   enabled: false,
   endpoint: '',
   token: '',
   autoSync: true,
-  intervalSec: 30,
+  intervalSec: DEFAULT_SYNC_INTERVAL_SEC,
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +314,9 @@ export class MapStore implements TaskRepository {
   }
 
   async getSettings(): Promise<SyncConfig> {
-    return { ...this.syncConfig }
+    // 存量归一化:老配置可能存着 30s/300s 等已下架档位,读取时钳到合法档,
+    // 避免 UI 显示与实跑间隔不一致、以及 30 秒空转继续消耗额度。
+    return { ...this.syncConfig, intervalSec: normalizeSyncInterval(this.syncConfig.intervalSec) }
   }
 
   async saveSettings(config: SyncConfig): Promise<void> {
@@ -360,7 +387,10 @@ export class BrowserStore extends MapStore {
         for (const [k, v] of Object.entries(JSON.parse(bOutbox) as Record<string, OutboxEntry>))
           this.bOutbox.set(k, v)
       const cfg = localStorage.getItem(prefixedKey('todobar.sync.v2'))
-      if (cfg) this.syncConfig = { ...DEFAULT_SYNC_CONFIG, ...JSON.parse(cfg) }
+      if (cfg) {
+        const parsed = { ...DEFAULT_SYNC_CONFIG, ...JSON.parse(cfg) } as SyncConfig
+        this.syncConfig = { ...parsed, intervalSec: normalizeSyncInterval(parsed.intervalSec) }
+      }
       const st = localStorage.getItem(prefixedKey('todobar.syncstate.v2'))
       if (st) this.syncState = { ...DEFAULT_SYNC_STATE, ...JSON.parse(st) }
     } catch {
@@ -966,7 +996,10 @@ export class SqliteStore implements TaskRepository {
   async getSettings(): Promise<SyncConfig> {
     const db = await this.ensure()
     const rows = (await db.select("SELECT value FROM sync_config WHERE key='cfg'")) as Row[]
-    return rows[0] ? { ...DEFAULT_SYNC_CONFIG, ...JSON.parse(rows[0].value as string) } : { ...DEFAULT_SYNC_CONFIG }
+    const cfg: SyncConfig = rows[0]
+      ? { ...DEFAULT_SYNC_CONFIG, ...JSON.parse(rows[0].value as string) }
+      : { ...DEFAULT_SYNC_CONFIG }
+    return { ...cfg, intervalSec: normalizeSyncInterval(cfg.intervalSec) }
   }
 
   async saveSettings(config: SyncConfig): Promise<void> {

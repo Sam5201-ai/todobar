@@ -18,6 +18,7 @@ mod screenshot;
 mod clipboard;
 mod ocr;
 mod clothesline;
+mod capabilities;
 
 /// **所有窗口**共用的 WebView2 启动参数。
 ///
@@ -482,7 +483,7 @@ fn reveal_path(app: tauri::AppHandle, path: Option<String>) -> Result<(), String
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(&path)
+            .arg(&target)
             .spawn()
             .map_err(|e| format!("打开文件夹失败: {e}"))?;
     }
@@ -679,13 +680,21 @@ fn set_persist_config(
     write_persist(&cfg)
 }
 
-/// 设备硬件指纹:读取系统 MachineGuid 并做确定性 FNV 哈希。
+/// 设备硬件指纹:读取系统唯一机器标识并做确定性 FNV 哈希。
 /// 重装 App、清除 WebView 数据、重置 deviceId 后仍可识别同一台物理机器,
 /// 用于统计口径的"设备去重"与"下载→安装归因"的跨设备缝合。
 #[tauri::command]
 fn device_fingerprint() -> String {
+    let guid = raw_device_guid();
+    let salted = format!("ticktask-device-{}", guid);
+    fnv1a_64(salted.as_bytes())
+}
+
+/// Windows:保留原始 reg 读取逻辑,逐字符不变 —— 改 salt 或提取规则会重置存量用户设备数。
+#[cfg(target_os = "windows")]
+fn raw_device_guid() -> String {
     use std::process::Command;
-    let guid = Command::new("reg")
+    Command::new("reg")
         .args(["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"])
         .output()
         .ok()
@@ -697,9 +706,60 @@ fn device_fingerprint() -> String {
                 .and_then(|tail| tail.split("REG_SZ").nth(1))
                 .map(|v| v.trim().to_string())
         })
-        .unwrap_or_else(|| "unknown".to_string());
-    let salted = format!("ticktask-device-{}", guid);
-    fnv1a_64(salted.as_bytes())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// macOS:IOPlatformUUID(kern.uuid)。失败回落独立文件 ~/.ticktask/device-id。
+#[cfg(target_os = "macos")]
+fn raw_device_guid() -> String {
+    use std::process::Command;
+    Command::new("sysctl")
+        .args(["-n", "kern.uuid"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(persistent_device_id)
+}
+
+/// Linux:/etc/machine-id;失败回落同一独立文件。
+#[cfg(not(any(windows, target_os = "macos")))]
+fn raw_device_guid() -> String {
+    std::fs::read_to_string("/etc/machine-id")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(persistent_device_id)
+}
+
+/// 跨安装持久化设备 ID。独立文件 + tmp/rename 原子写,绝不写 prefs.json
+/// (prefs.json 存在整文件覆盖风险,见项目 MEMORY)。仅非 Windows 分支使用。
+#[cfg(not(target_os = "windows"))]
+fn persistent_device_id() -> String {
+    let Some(home) = std::env::var_os("HOME") else {
+        return "unknown".to_string();
+    };
+    let dir = Path::new(&home).join(".ticktask");
+    let path = dir.join("device-id");
+    if let Ok(s) = std::fs::read_to_string(&path) {
+        let v = s.trim().to_string();
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let id = format!("local-{:x}-{}", nanos, std::process::id());
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let tmp = dir.join("device-id.tmp");
+        if std::fs::write(&tmp, &id).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
+            return id;
+        }
+    }
+    id
 }
 
 fn fnv1a_64(data: &[u8]) -> String {
@@ -1479,7 +1539,14 @@ fn recording_open(dir: String, file: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("打开录音失败: {e}"))?;
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("打开录音失败: {e}"))?;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         std::process::Command::new("xdg-open")
             .arg(&path_str)
@@ -1503,7 +1570,15 @@ fn recording_reveal(dir: String, file: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("打开文件夹失败: {e}"))?;
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        // open -R 在访达中选中文件(而非只打开父目录)。
+        std::process::Command::new("open")
+            .args(["-R", &path.to_string_lossy()])
+            .spawn()
+            .map_err(|e| format!("打开文件夹失败: {e}"))?;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         if let Some(parent) = path.parent() {
             std::process::Command::new("xdg-open")
@@ -1528,7 +1603,14 @@ fn recordings_open_folder(dir: String) -> Result<String, String> {
             .spawn()
             .map_err(|e| format!("打开文件夹失败: {e}"))?;
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dir_str)
+            .spawn()
+            .map_err(|e| format!("打开文件夹失败: {e}"))?;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         std::process::Command::new("xdg-open")
             .arg(&dir_str)
@@ -1565,7 +1647,7 @@ fn recordings_default_dir() -> Result<String, String> {
     recordings_dir_path().map(|p| p.to_string_lossy().into_owned())
 }
 
-/// 打开 Windows 麦克风隐私设置页(getUserMedia 报 NotAllowedError 时的引导入口)。
+/// 打开系统麦克风隐私设置页(getUserMedia 报 NotAllowedError 时的引导入口)。
 #[tauri::command]
 fn open_mic_privacy_settings() -> Result<(), String> {
     #[cfg(windows)]
@@ -1575,9 +1657,16 @@ fn open_mic_privacy_settings() -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("打开系统设置失败: {e}"))?;
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // 非 Windows 无对应设置页,静默成功即可(本项目仅发 Windows 版)。
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+            .spawn()
+            .map_err(|e| format!("打开系统设置失败: {e}"))?;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        // 其他平台无对应设置页,静默成功。
     }
     Ok(())
 }
@@ -1700,6 +1789,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            capabilities::platform_capabilities,
             save_update_file,
             install_update,
             set_data_dir,

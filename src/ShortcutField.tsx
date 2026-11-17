@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { VipBadge } from './VipBadge'
+import { isMac } from './platformCapabilities'
 
 // 单独的修饰键(不作为组合主键)。
 const MODIFIER_KEYS = new Set([
@@ -26,19 +27,22 @@ const MODIFIER_KEYS = new Set([
   'MetaRight',
 ])
 
-/** Tauri 快捷键串 → 键盘缩写展示(CommandOrControl→Ctrl、Escape→Esc、方向键→箭头)。 */
+/** Tauri 快捷键串 → 键盘缩写展示。
+ *  Mac 下 CommandOrControl / Command / Meta → ⌘,Alt → ⌥;Windows 维持 Ctrl / Alt。
+ *  注册逻辑不变(ShortcutField 已用 CommandOrControl 兼容)。 */
 export function displayShortcut(raw: string): string {
+  const mac = isMac()
   const MAP: Record<string, string> = {
-    commandorcontrol: 'Ctrl',
-    cmdorctrl: 'Ctrl',
+    commandorcontrol: mac ? '⌘' : 'Ctrl',
+    cmdorctrl: mac ? '⌘' : 'Ctrl',
     control: 'Ctrl',
     ctrl: 'Ctrl',
-    command: 'Win',
-    cmd: 'Win',
-    meta: 'Win',
-    super: 'Win',
-    alt: 'Alt',
-    option: 'Alt',
+    command: mac ? '⌘' : 'Win',
+    cmd: mac ? '⌘' : 'Win',
+    meta: mac ? '⌘' : 'Win',
+    super: mac ? '⌘' : 'Win',
+    alt: mac ? '⌥' : 'Alt',
+    option: mac ? '⌥' : 'Alt',
     shift: 'Shift',
     escape: 'Esc',
     esc: 'Esc',

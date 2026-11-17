@@ -11,6 +11,9 @@
  * 367 / 327 / 295 容器查询阈值(容器内容盒 = 面板宽度 − 33)。
  */
 
+import { allows, capsReady, isMac } from './platformCapabilities'
+import type { CapabilityId } from './platformCapabilities'
+
 export type TopbarToolId =
   | 'screenshot'
   | 'note'
@@ -36,11 +39,14 @@ export type TopbarTool = {
   gated: boolean
   /** 菜单右侧的默认快捷键提示(用户改过快捷键时由 App 动态覆盖)。 */
   keyHint: string
+  /** 当前平台是否提供该工具。带此字段的工具在能力缺失的平台被整体隐藏,不置灰不报错。
+   *  剪贴板历史已在 Mac 实现,故不标记此字段。 */
+  requires?: CapabilityId
 }
 
 /** 顺序即默认优先级:新工具优先,同步与设置收尾。 */
 export const TOPBAR_TOOLS: TopbarTool[] = [
-  { id: 'screenshot', name: '截图', tip: '截图 · 框选识别', vip: true, gated: true, keyHint: 'Ctrl+Shift+A' },
+  { id: 'screenshot', name: '截图', tip: '截图 · 框选识别', vip: true, gated: true, keyHint: 'Ctrl+Shift+A', requires: 'screenshot' },
   { id: 'note', name: '便利签', tip: '新建便利签', vip: true, gated: true, keyHint: 'Alt+N' },
   { id: 'clipboard', name: '剪贴板', tip: '剪贴板历史', vip: true, gated: true, keyHint: 'Ctrl+Shift+V' },
   { id: 'calculator', name: '计算器', tip: '计算器', vip: false, gated: false, keyHint: '' },
@@ -49,7 +55,7 @@ export const TOPBAR_TOOLS: TopbarTool[] = [
   { id: 'recorder', name: '录音机', tip: '录音机', vip: true, gated: false, keyHint: '' },
   // 晾衣绳(0.4.65):非会员 / 无闸门,拉新记忆点。放在 sync 前,顶栏装不下时
   // 自动进「⋯ 更多」;老用户经下方 MIGRATE_IDS 显式补进 enabled 保证可达。
-  { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '' },
+  { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '', requires: 'clothesline' },
   { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' },
 ]
 
@@ -134,12 +140,19 @@ export function topbarSlots(panelWidth: number): number {
   return Math.max(2, Math.min(6, Math.floor(usable / (btn + gap))))
 }
 
-/** 按当前偏好与面板宽度,拆出「顶栏显示」与「收进更多」两组。 */
+/** 按当前偏好、面板宽度与平台能力,拆出「顶栏显示」与「收进更多」两组。
+ *  受控工具(带 requires)仅在能力表就绪且平台支持时显示。 */
 export function splitTopbarTools(
   pref: TopbarToolsPref,
   panelWidth: number,
 ): { shown: TopbarTool[]; hidden: TopbarTool[]; slots: number } {
-  const list = pref.enabled.map((id) => BY_ID[id]).filter(Boolean)
+  const ready = capsReady()
+  const list = pref.enabled
+    .map((id) => BY_ID[id])
+    .filter(Boolean)
+    // 能力表就绪前先隐藏受控工具,避免 Mac 首帧闪出截图/晾衣绳;
+    // 就绪后按平台能力表判断。无 requires 的工具始终显示。
+    .filter((t) => !t.requires || (ready && allows(t.requires)))
   const slots = topbarSlots(panelWidth)
   return { shown: list.slice(0, slots), hidden: list.slice(slots), slots }
 }
@@ -155,13 +168,16 @@ export function topbarPosition(
   return index < topbarSlots(panelWidth) ? 'top' : 'more'
 }
 
-/** 把 Tauri 快捷键写法转成菜单里显示的短标签。 */
+/** 把 Tauri 快捷键写法转成菜单里显示的短标签。
+ *  Mac 下 CommandOrControl 实际是 ⌘,显示与按键一致(注册逻辑不改)。 */
 export function formatShortcut(raw: string): string {
   if (!raw) return ''
+  const mod = isMac() ? '⌘' : 'Ctrl'
   return raw
-    .replace(/CommandOrControl/gi, 'Ctrl')
-    .replace(/Command/gi, 'Ctrl')
+    .replace(/CommandOrControl/gi, mod)
+    .replace(/Command/gi, mod)
     .replace(/Control/gi, 'Ctrl')
+    .replace(/Option/gi, isMac() ? '⌥' : 'Alt')
     .replace(/\bKey([A-Z])\b/g, '$1')
     .replace(/\bDigit([0-9])\b/g, '$1')
 }

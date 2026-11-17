@@ -932,11 +932,11 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
       </details>
       <details class="faq-item">
         <summary>支持哪些系统？<span class="chev">▾</span></summary>
-        <p>目前正式支持 <b>Windows 10 / 11（64 位）</b>，安装包约 17 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。<b>macOS 版正在内测</b>，暂未开放下载。</p>
+        <p>正式支持 <b>Windows 10 / 11（64 位）</b>与 <b>macOS 12+（Apple 芯片 / Intel）</b>，安装包约 17–20 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。</p>
       </details>
       <details class="faq-item">
-        <summary>Mac 版什么时候能用？<span class="chev">▾</span></summary>
-        <p>macOS 版已完成基础适配，目前处于内测阶段（截图贴图、剪贴板历史等系统级能力仍在适配），<b>暂不开放下载</b>。内测完成后会在本页开放入口，并同步更新下载链接。现阶段建议先在 Windows 上体验完整功能。</p>
+        <summary>Mac 版支持哪些功能？<span class="chev">▾</span></summary>
+        <p><b>macOS 版已开放下载</b>，Apple 芯片与 Intel 均可用，涵盖待办、计算器、黄历、纪念日、剪贴板历史、便利签、录音等常用功能。截图贴图、晾衣绳等依赖 Windows 系统接口的能力暂不可用。Mac 版未做开发者签名与公证，首次打开需手动放行（安装步骤里有说明），且暂不支持应用内自动更新，新版本需手动下载覆盖。</p>
       </details>
       <details class="faq-item">
         <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
@@ -981,11 +981,10 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   const DMG_BASE = './';
 
   /* ============ Mac 开放开关 ============
-     当前阶段只验证 Windows 端付费意愿,macOS 版内测中、不对外提供下载。
-     内测完成要开放 Mac 时,把 MAC_OPEN 改成 true 即可:
-     下载配置(mac-arm / mac-intel)、安装步骤、放行提示、FAQ 都已就绪,
-     打开后会自动恢复「按设备匹配 macOS 安装包」与平台切换条。 */
-  const MAC_OPEN = false;
+     0.4.81 起 macOS 版正式开放下载(Apple 芯片 / Intel 双架构 dmg)。
+     dmg 自托管在 R2 下载站,文件名按 VER 动态拼接。
+     如需临时下架 Mac,把 MAC_OPEN 改回 false 即可恢复「内测中」文案。 */
+  const MAC_OPEN = true;
   const IS_MAC = /Macintosh|Mac OS X/i.test(navigator.userAgent || '');
 
   function dlMap() {
@@ -1009,8 +1008,8 @@ document.getElementById('themeToggle').addEventListener('click', () => {
       'mac-arm': {
         label: '下载 macOS 版（Apple 芯片）',
         btn: '下载 ' + dmgArm,
-        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 18 MB · Beta 测试中',
-        ver: 'macOS 12+ · Apple 芯片 · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 20 MB · 免费下载',
+        ver: 'macOS 12+ · Apple 芯片 · 约 20 MB · v' + VER + ' · 免费下载',
         /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgArm 并放好 dmg */
         href: DMG_BASE + dmgArm,
         steps: `
@@ -1018,13 +1017,13 @@ document.getElementById('themeToggle').addEventListener('click', () => {
         <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
         <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
         note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
-        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
+        <span><b>安装提示：</b>Mac 版暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
       },
       'mac-intel': {
         label: '下载 macOS 版（Intel）',
         btn: '下载 ' + dmgX64,
-        meta: 'macOS 12+ · Intel 处理器 · 约 18 MB · Beta 测试中',
-        ver: 'macOS 12+ · Intel · 约 18 MB · v' + VER + ' Beta · 免费下载',
+        meta: 'macOS 12+ · Intel 处理器 · 约 20 MB · 免费下载',
+        ver: 'macOS 12+ · Intel · 约 20 MB · v' + VER + ' · 免费下载',
         /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgX64 并放好 dmg */
         href: DMG_BASE + dmgX64,
         steps: `
@@ -1065,7 +1064,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
     const badge = document.getElementById('osBadge');
     if (badge) {
       badge.textContent =
-        'v' + VER + (MAC_OPEN ? ' · Windows 已发布 · macOS Beta' : ' · Windows 版');
+        'v' + VER + (MAC_OPEN ? ' · Windows / macOS 已发布' : ' · Windows 版');
     }
   }
 

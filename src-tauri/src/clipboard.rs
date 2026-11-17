@@ -282,6 +282,9 @@ fn foreground_app_name() -> Option<String> {
     }
 }
 
+/// macOS 来源应用名:取前台应用需 NSWorkspace + 辅助功能权限,阶段 0 不引入
+/// objc2-app-kit(避免新增本机无法编译验证的依赖)。来源仅是 best-effort 展示字段,
+/// 留空不影响剪贴板历史主流程;密码过滤由内容启发式 looks_like_password 兜底。
 #[cfg(not(windows))]
 fn foreground_app_name() -> Option<String> {
     None
@@ -328,7 +331,36 @@ fn read_clipboard_text() -> Option<(String, Option<String>)> {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS:所有 NSPasteboard 访问**必须在主线程**——AppKit 规定 NSPasteboard 只能在
+/// 主线程访问,工作线程直接调用会与 WKWebView 的 pasteboard 监控竞争,触发
+/// EXC_BAD_ACCESS(SIGSEGV),见 Tauri issue #3205。这里把读取派发到主线程,用
+/// mpsc 同步回监听线程,并设 1s 超时防止主线程繁忙时永久阻塞。
+#[cfg(target_os = "macos")]
+fn read_clipboard_text() -> Option<(String, Option<String>)> {
+    use std::sync::mpsc;
+    let app = APP_HANDLE.get()?;
+    let (tx, rx) = mpsc::channel();
+    if app
+        .run_on_main_thread(move || {
+            let result = (|| {
+                let mut cb = arboard::Clipboard::new().ok()?;
+                let text = cb.get_text().ok()?;
+                if text.is_empty() {
+                    return None;
+                }
+                Some((text, foreground_app_name()))
+            })();
+            let _ = tx.send(result);
+        })
+        .is_err()
+    {
+        return None;
+    }
+    rx.recv_timeout(Duration::from_millis(1000)).ok().flatten()
+}
+
+/// 其他非 Windows / 非 macOS 平台:不支持。
+#[cfg(not(any(windows, target_os = "macos")))]
 fn read_clipboard_text() -> Option<(String, Option<String>)> {
     None
 }
@@ -545,7 +577,11 @@ pub fn start_monitor(app: tauri::AppHandle) {
         crate::append_app_log("[clipboard] monitor started");
         #[cfg(windows)]
         let mut last_seq = unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() };
-        #[cfg(not(windows))]
+        // macOS 无系统级剪贴板序号 API;用「内容指纹」检测变化(读取已在主线程)。
+        // push_item 内部已有内容去抖,这里再比对一次避免无谓的写盘/emit。
+        #[cfg(target_os = "macos")]
+        let mut last_hash: u64 = 0;
+        #[cfg(not(any(windows, target_os = "macos")))]
         let mut last_seq: u32 = 0;
         while MONITOR_RUNNING.load(Ordering::SeqCst) {
             std::thread::sleep(Duration::from_millis(250));
@@ -560,16 +596,29 @@ pub fn start_monitor(app: tauri::AppHandle) {
                 }
                 continue;
             }
+            // Windows:序号变化才读剪贴板(不调用 OpenClipboard 时零竞争)。
             #[cfg(windows)]
-            let seq = unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() };
-            #[cfg(not(windows))]
-            let seq: u32 = 0;
-            if seq == last_seq {
-                continue;
+            {
+                let seq = unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() };
+                if seq == last_seq {
+                    continue;
+                }
+                last_seq = seq;
+                if let Some((text, source)) = read_clipboard_text() {
+                    push_item(text, source);
+                }
             }
-            last_seq = seq;
-            if let Some((text, source)) = read_clipboard_text() {
-                push_item(text, source);
+            // macOS:每轮读文本算指纹,变化才入历史。
+            #[cfg(target_os = "macos")]
+            {
+                if let Some((text, source)) = read_clipboard_text() {
+                    let h = hash_text(&text);
+                    if h == last_hash {
+                        continue;
+                    }
+                    last_hash = h;
+                    push_item(text, source);
+                }
             }
         }
         crate::append_app_log("[clipboard] monitor stopped");
@@ -840,7 +889,29 @@ fn set_clipboard_text(text: &str) {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS:写剪贴板同样派发主线程(NSPasteboard 线程约束,见 read_clipboard_text)。
+/// 注意:run_on_main_thread 是异步派发,这里不做阻塞等待——避免同步 Tauri 命令
+/// 若运行在主线程时自锁。实际写入在主线程完成;失败只记日志,前端 copyText 仍
+/// 会收到 Ok(与 Windows 既有语义一致,不引入回归)。
+#[cfg(target_os = "macos")]
+fn set_clipboard_text(text: &str) {
+    let Some(app) = APP_HANDLE.get() else {
+        crate::append_app_log("[clipboard] 写剪贴板失败: AppHandle 未就绪");
+        return;
+    };
+    let text = text.to_string();
+    if let Err(e) = app.run_on_main_thread(move || {
+        if let Ok(mut cb) = arboard::Clipboard::new() {
+            if let Err(e) = cb.set_text(text) {
+                crate::append_app_log(&format!("[clipboard] macOS 写剪贴板失败: {e}"));
+            }
+        }
+    }) {
+        crate::append_app_log(&format!("[clipboard] 派发主线程写剪贴板失败: {e}"));
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn set_clipboard_text(_text: &str) {}
 
 /// 把焦点还给上一个前台窗口并发送 Ctrl+V;失败(如提权窗口)返回 false。

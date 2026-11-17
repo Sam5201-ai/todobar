@@ -562,13 +562,20 @@ mod imp {
     }
 
     pub fn status() -> OcrStatus {
+        // OCR 依附「截图→框选→ocr_save_input」输入链路;Mac 首发不提供截图,
+        // 因此引擎虽在,整体能力仍报告不可用,避免设置页误报「引擎已就绪」。
+        let available = crate::capabilities::current().screenshot;
         OcrStatus {
-            available: true,
+            available,
             engine: "macos-vision".into(),
             zh_available: true, // 系统内置 zh-Hans 识别(10.15+)
             en_available: true,
             warmed: true,
-            message: String::new(),
+            message: if available {
+                String::new()
+            } else {
+                "当前平台暂未提供截图识别".into()
+            },
         }
     }
 

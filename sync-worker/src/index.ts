@@ -70,6 +70,7 @@ import {
   type EventInput,
   type UserStatus,
 } from './admin'
+import { cached, invalidate } from './admin-cache'
 
 export type WorkerEnv = {
   DB: D1Database
@@ -918,6 +919,26 @@ function c_json(data: unknown, status = 200): Response {
   })
 }
 
+/** 后台统计类响应:含邮箱/激活码等敏感数据,禁止浏览器与中间层缓存。 */
+function c_json_private(
+  data: unknown,
+  status = 200,
+  cacheStatus?: 'HIT' | 'MISS',
+): Response {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'private, no-store',
+  }
+  // 仅供后台统计接口观测缓存命中(HIT=未查 D1,MISS=本次查了 D1);不缓存此头。
+  if (cacheStatus) headers['X-Admin-Cache'] = cacheStatus
+  return new Response(JSON.stringify(data), { status, headers })
+}
+
+/** 是否强制刷新(前端点「刷新数据」时带 force=1 或 _t=时间戳)。 */
+function isForceRefresh(url: URL): boolean {
+  return url.searchParams.get('force') === '1' || url.searchParams.has('_t')
+}
+
 app.post('/api/admin/login', async (c) => {
   let body: { email?: unknown; password?: unknown }
   try {
@@ -953,12 +974,20 @@ app.use('/api/admin/*', async (c, next) => {
   return next()
 })
 
+/**
+ * 轻量会话探测:供后台 init / H5 切回前台校验 token 用。
+ * 位于鉴权中间件之后——中间件本身已查 admin_sessions 单行完成校验,
+ * 此路由直接返回 ok 即可,不再触发 overviewStats 的全表聚合(数据概览的主要放大器)。
+ */
+app.get('/api/admin/ping', (c) => c.json({ ok: true }))
+
 // ---- 数据概览 --------------------------------------------------------------
 
 app.get('/api/admin/overview', async (c) => {
   const days = int(c.req.query('days'), 7, 90, 30)
-  const data = await overviewStats(c.env.DB, days)
-  return c.json(data)
+  const force = isForceRefresh(new URL(c.req.url))
+  const { data, cached: hit } = await cached('overview', { days }, force, () => overviewStats(c.env.DB, days))
+  return c_json_private(data, 200, hit ? 'HIT' : 'MISS')
 })
 
 // ---- 服务监控 --------------------------------------------------------------
@@ -1022,6 +1051,7 @@ app.post('/api/admin/users/blacklist', async (c) => {
   if (!changed) return c.json({ error: '用户不存在' }, 404)
   // 拉黑后立即踢掉该用户全部会话,同步与兑换接口随之失效
   if (disabled) await deleteSessionsOfUser(c.env.DB, id)
+  await invalidate(['overview', 'stats'])
   return c.json({ ok: true })
 })
 
@@ -1037,6 +1067,7 @@ app.post('/api/admin/users/activate', async (c) => {
   if (!id) return c.json({ error: '缺少用户 id' }, 400)
   const changed = await setUserActivated(c.env.DB, id, activated, nowIso())
   if (!changed) return c.json({ error: '用户不存在' }, 404)
+  await invalidate(['overview', 'stats'])
   return c.json({ ok: true })
 })
 
@@ -1056,6 +1087,7 @@ app.post('/api/admin/users/trial', async (c) => {
     : new Date(Date.now() + TRIAL_DAYS * 86_400_000).toISOString() // 恢复完整试用窗口
   const changed = await setUserTrialEnds(c.env.DB, id, trialEndsIso)
   if (!changed) return c.json({ error: '用户不存在' }, 404)
+  await invalidate(['overview', 'stats'])
   return c.json({ ok: true })
 })
 
@@ -1066,13 +1098,19 @@ app.get('/api/admin/codes', async (c) => {
   const q = str(c.req.query('q')).slice(0, 60)
   const page = int(c.req.query('page'), 1, 100_000, 1)
   const pageSize = int(c.req.query('pageSize'), 5, 200, 20)
-  const data = await listActivationCodes(c.env.DB, {
-    status,
-    q,
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  })
-  return c.json({ ...data, page, pageSize })
+  const force = isForceRefresh(new URL(c.req.url))
+  const { data, cached: hit } = await cached(
+    'codes',
+    { status, q, page, pageSize },
+    force,
+    () => listActivationCodes(c.env.DB, {
+      status,
+      q,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }).then((d) => ({ ...d, page, pageSize })),
+  )
+  return c_json_private(data, 200, hit ? 'HIT' : 'MISS')
 })
 
 app.post('/api/admin/codes', async (c) => {
@@ -1112,6 +1150,7 @@ app.post('/api/admin/codes', async (c) => {
     codes.push({ code, batch, note, createdAt })
   }
   const created = await createActivationCodes(c.env.DB, codes)
+  await invalidate(['codes', 'overview'])
   return c.json({ ok: true, created, batch, codes: codes.map((x) => x.code) })
 })
 
@@ -1127,6 +1166,7 @@ app.post('/api/admin/codes/issue', async (c) => {
     : []
   if (codes.length === 0) return c.json({ error: '缺少激活码' }, 400)
   const n = await issueActivationCodes(c.env.DB, codes, nowIso())
+  await invalidate(['codes', 'overview'])
   return c.json({ ok: true, issued: n })
 })
 
@@ -1142,6 +1182,7 @@ app.post('/api/admin/codes/delete', async (c) => {
     : []
   if (codes.length === 0) return c.json({ error: '缺少激活码' }, 400)
   const n = await deleteActivationCodes(c.env.DB, codes)
+  await invalidate(['codes', 'overview'])
   return c.json({ ok: true, deleted: n })
 })
 
@@ -1149,11 +1190,15 @@ app.post('/api/admin/codes/delete', async (c) => {
 
 app.get('/api/admin/stats', async (c) => {
   const days = int(c.req.query('days'), 7, 90, 30)
-  const [app, site] = await Promise.all([
-    appPageStats(c.env.DB, days),
-    siteStats(c.env.DB, days),
-  ])
-  return c.json({ days, app, site })
+  const force = isForceRefresh(new URL(c.req.url))
+  const { data, cached: hit } = await cached('stats', { days }, force, async () => {
+    const [app, site] = await Promise.all([
+      appPageStats(c.env.DB, days),
+      siteStats(c.env.DB, days),
+    ])
+    return { days, app, site }
+  })
+  return c_json_private(data, 200, hit ? 'HIT' : 'MISS')
 })
 
 // ---- 版本记录管理 ----------------------------------------------------------
