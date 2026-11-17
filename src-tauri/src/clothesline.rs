@@ -432,9 +432,8 @@ fn probe_alive(win: &WebviewWindow) -> bool {
 }
 
 /// 建窗唯一实现。**必须在子线程调用**（同步命令内联 build 会死锁主线程）。
-/// ⚠️ 仅 Windows 建窗：macOS 端编译通过但**不创建**绳窗（与截图功能「仅支持 Windows」
-/// 的既有平台策略一致），从根上保证 mac 端零负面影响（PRD §14.5 双端铁律）。
-#[cfg(windows)]
+/// 0.4.81 起全平台建窗：透明浮窗用 Tauri 跨平台 API（与 notes.rs::build_note_window
+/// 同构，便利签在 mac 已验证可用），不再仅限 Windows。平台差异只在 builder 的可选方法。
 fn build_window(app: &tauri::AppHandle) -> bool {
     // 幂等 + ghost 清理：关闭是异步的，快速「关→开」时句柄可能仍残留。
     // 必须探活确认它是真窗口；ghost 则 close 并等它从注册表消失，再走新建。
@@ -453,7 +452,8 @@ fn build_window(app: &tauri::AppHandle) -> bool {
     }
     let builder = tauri::WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(PathBuf::new()))
         .title("Tacco 晾衣绳")
-        // ⚠️ 必须与主窗口 / 其余 8 个窗口逐字符一致，否则 0x8007139F。
+        // ⚠️ 必须与主窗口 / 其余 8 个窗口逐字符一致，否则 0x8007139F（Windows WebView2）。
+        // 便利签在 mac 同样无 cfg 传此参数，跨平台 builder 接受、mac 侧忽略。
         .additional_browser_args(crate::BROWSER_ARGS)
         .inner_size(1280.0, 120.0)
         .decorations(false)
@@ -463,12 +463,14 @@ fn build_window(app: &tauri::AppHandle) -> bool {
         .skip_taskbar(true)
         .focused(false) // 绝不抢焦点（与 capture-overlay 同款克制）。
         .resizable(false)
-        .shadow(false)
-        // 问题9：把文件拖放交还 WebView DOM。否则 Windows 上 wry 原生接管拖放，
-        // DOM 的 onDrop 拿不到 dataTransfer.files，图片无法直接拖入挂绳。
-        // 仅影响本动态窗（drag_and_drop 是 Windows-only 方法，绳窗本身也 Windows-only），
-        // 不改 tauri.conf.json 静态窗，主窗 / 截图 / 贴图的拖放行为零影响。
-        .drag_and_drop(false);
+        .shadow(false);
+
+    // 问题9：Windows 上把拖放交还 WebView DOM（wry 原生接管会让 onDrop 拿不到 files）。
+    // drag_and_drop 仅 Windows 需要；mac 分支不调用，避免平台 API 差异。
+    #[cfg(windows)]
+    let builder = builder.drag_and_drop(false);
+    #[cfg(not(windows))]
+    let builder = builder;
 
     match builder.build() {
         Ok(win) => {
@@ -490,13 +492,6 @@ fn build_window(app: &tauri::AppHandle) -> bool {
             false
         }
     }
-}
-
-/// 非 Windows：不建窗（配置仍可写，便于将来双端开启时零改动切换）。
-#[cfg(not(windows))]
-fn build_window(_app: &tauri::AppHandle) -> bool {
-    crate::append_app_log("[clothesline] 当前平台不建晾衣绳窗口（仅 Windows）");
-    false
 }
 
 /// 绳窗自有几何写入：物理像素 + alive 守卫 + 连写 3 次（混合 DPI 冷启动防 /1.5）。

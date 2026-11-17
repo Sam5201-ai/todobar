@@ -1852,6 +1852,7 @@ pub fn run() {
             clipboard::clipboard_copy_back,
             clipboard::clipboard_hide_window,
             clipboard::clipboard_open_window,
+            clipboard::clipboard_center_window,
             clipboard::register_clipboard_shortcut,
             clipboard::clipboard_set_active,
             app_log,

@@ -11,6 +11,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 import './ClipboardView.css'
 import {
+  clipboardCenterWindow,
   clipboardClear,
   clipboardCopyBack,
   clipboardDelete,
@@ -95,6 +96,13 @@ export function ClipboardView() {
   // 混合 DPI 双屏(主屏 1.5x / 副屏 1.0x)下,旧代码把「物理 ÷ 副屏 sf」当逻辑坐标,
   // 又被系统按主屏 1.5x 放大一次 → 窗口被放到所有屏幕之外,表现为「怎么都打不开」。
   const reposition = useCallback(async () => {
+    // macOS:前端 cursorPosition 与 tao 的 PhysicalPosition 坐标口径不一致,
+    // 会把浮窗算到主窗附近/屏幕外(表现为「显示在工具窗口里」)。改由 Rust 用
+    // 跨平台 API 居中到主显示器。此判断直接用 UA —— 本窗口未加载能力表。
+    if (/Macintosh|Mac OS X/i.test(navigator.userAgent || '')) {
+      await clipboardCenterWindow()
+      return
+    }
     try {
       const pos = await cursorPosition() // 物理坐标
       const mon = await monitorFromPoint(pos.x, pos.y)

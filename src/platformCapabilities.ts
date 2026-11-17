@@ -41,6 +41,25 @@ const ALL_ON: PlatformCapabilities = {
   recordingShell: true,
 }
 
+/** 与 Rust capabilities.rs 的 macOS 分支逐字段对齐。
+ *  仅在 Tauri 下 invoke 失败时兜底:绝不能回落 ALL_ON —— 那会让 Mac 误判成 Windows,
+ *  把已隐藏的截图/贴图入口全部放出来。os 由 UA 推断(本文件是唯一允许判 OS 的地方)。 */
+function fallbackForCurrentOs(): PlatformCapabilities {
+  const isMacOs = /Macintosh|Mac OS X/i.test(navigator.userAgent || '')
+  if (!isMacOs) return ALL_ON
+  return {
+    os: 'macos',
+    screenshot: false,
+    ocr: false,
+    clipboardHistory: true,
+    // 晾衣绳 0.4.81 起在 Mac 实装(与 Rust capabilities.rs 同步);改这里时两处都要改。
+    clothesline: true,
+    inAppUpdate: false,
+    clipboardWrite: true,
+    recordingShell: true,
+  }
+}
+
 let cached: PlatformCapabilities | null = null
 let pending: Promise<PlatformCapabilities> | null = null
 
@@ -62,7 +81,7 @@ export function loadCapabilities(): Promise<PlatformCapabilities> {
       return caps
     })
     .catch(() => {
-      cached = ALL_ON
+      cached = fallbackForCurrentOs()
       return cached
     })
     .finally(() => {

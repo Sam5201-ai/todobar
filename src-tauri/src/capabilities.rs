@@ -7,8 +7,8 @@
 //! 设计约束：
 //! 1. 这是**编译期**能力表，不落盘、不读偏好、不写 `prefs.json`。
 //! 2. 字段用 serde camelCase，与前端 `platformCapabilities.ts` 的 `CapabilityId` 一一对应。
-//! 3. Windows 全部为 true；macOS 首发隐藏截图/贴图/OCR/晾衣绳/应用内安装更新，
-//!    保留剪贴板历史（见 clipboard.rs）、复制写入、录音采集与文件操作。
+//! 3. Windows 全部为 true；macOS 隐藏截图/贴图/OCR/应用内安装更新，
+//!    保留剪贴板历史（见 clipboard.rs）、晾衣绳（0.4.81 起实装）、复制写入、录音采集与文件操作。
 //! 4. 不可用项在前端是「隐藏」，不是「报错」；本表不承载「暂不支持」文案。
 
 use serde::Serialize;
@@ -57,7 +57,8 @@ pub const fn current() -> PlatformCapabilities {
             screenshot: false,
             ocr: false,
             clipboard_history: true,
-            clothesline: false,
+            // 0.4.81 起晾衣绳在 Mac 实装(透明浮窗 + Tauri 跨平台 API,见 clothesline.rs)。
+            clothesline: true,
             in_app_update: false,
             clipboard_write: true,
             recording_shell: true,

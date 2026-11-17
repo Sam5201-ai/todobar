@@ -664,11 +664,18 @@ fn open_clipboard_window_inner(app: tauri::AppHandle, force_show: bool) {
                     crate::append_app_log("[clipboard] toggle hide");
                     let _ = existing.hide();
                 } else {
+                    // macOS:Rust 侧直接居中+显示,不依赖前端 cursorPosition 的坐标系。
+                    #[cfg(target_os = "macos")]
+                    center_and_show_on_main_monitor(&existing);
                     // 每次唤起都让浮窗前端重新定位:双屏 / 改分辨率 / 换主屏后,
                     // 旧坐标可能已跑到所有屏幕之外,只 show 会「怎么点都看不见」。
+                    // Mac 上前端 reposition 会被 platformCapabilities 的 isMac 跳过(见 ClipboardView)。
                     let _ = existing.emit("clipboard-reposition", ());
-                    let _ = existing.show();
-                    let _ = existing.set_focus();
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = existing.show();
+                        let _ = existing.set_focus();
+                    }
                     crate::append_app_log(&format!("[clipboard] show existing (force={force_show})"));
                 }
                 return;
@@ -701,6 +708,12 @@ fn open_clipboard_window_inner(app: tauri::AppHandle, force_show: bool) {
             Ok(win) => {
                 if probe_alive(&win) {
                     crate::append_app_log("[clipboard] window created");
+                    // macOS:前端 ClipboardView 首次 show 依赖 cursorPosition(物理坐标)
+                    // + monitorFromPoint,Mac 上这套坐标系与 tao 的 PhysicalPosition 口径
+                    // 不一致,浮窗会被算到主窗位置/屏幕外,表现为「显示在工具窗口里」。
+                    // 这里用 Rust 跨平台 API 直接居中到主显示器并 show,不依赖前端定位。
+                    #[cfg(target_os = "macos")]
+                    center_and_show_on_main_monitor(&win);
                 } else {
                     crate::append_app_log("[clipboard] build() Ok 但探活失败(ghost)");
                     let _ = win.close();
@@ -709,6 +722,29 @@ fn open_clipboard_window_inner(app: tauri::AppHandle, force_show: bool) {
             Err(e) => crate::append_app_log(&format!("[clipboard] window 创建失败: {e}")),
         }
     });
+}
+
+/// macOS 专用:把剪贴板浮窗居中到主显示器并主动显示。
+/// 全程用 Tauri 跨平台 API(PrimaryMonitor + PhysicalPosition),绕开前端 cursorPosition
+/// 在 Mac 上的坐标系差异。物理像素口径:inner_size 是逻辑尺寸,乘 scale_factor 得物理。
+#[cfg(target_os = "macos")]
+fn center_and_show_on_main_monitor(win: &WebviewWindow) {
+    use tauri::PhysicalPosition;
+    if let Ok(Some(monitor)) = win.primary_monitor() {
+        let pos = monitor.position(); // 物理像素
+        let size = monitor.size(); // 物理像素
+        let sf = monitor.scale_factor();
+        let w = (WIN_W * sf).round() as i32;
+        let h = (WIN_H * sf).round() as i32;
+        let x = pos.x + ((size.width as i32) - w) / 2;
+        let y = pos.y + ((size.height as i32) - h) / 2;
+        let _ = win.set_position(PhysicalPosition::new(x, y));
+        crate::append_app_log(&format!(
+            "[clipboard] mac 居中到主显示器 pos=({x},{y}) size={size:?} sf={sf}"
+        ));
+    }
+    let _ = win.show();
+    let _ = win.set_focus();
 }
 
 /// 收起浮窗(前端 Esc / 失焦调用)。
@@ -726,6 +762,18 @@ pub fn clipboard_hide_window(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn clipboard_open_window(app: tauri::AppHandle) -> Result<(), String> {
     open_clipboard_window_inner(app, true);
+    Ok(())
+}
+
+/// macOS:前端 ClipboardView 请求 Rust 侧居中到主显示器(替代不可靠的 cursorPosition 定位)。
+/// 非 macOS 是空操作,前端只会在此能力存在时调用。
+#[tauri::command]
+pub fn clipboard_center_window(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = &app; // 非 macOS 下仅此命令签名需要保留 app,显式消费避免 unused 警告
+    #[cfg(target_os = "macos")]
+    if let Some(win) = app.get_webview_window(WINDOW_LABEL) {
+        center_and_show_on_main_monitor(&win);
+    }
     Ok(())
 }
 

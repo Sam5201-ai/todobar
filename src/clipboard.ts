@@ -72,6 +72,12 @@ export async function clipboardHideWindow(): Promise<void> {
   await invoke('clipboard_hide_window').catch(() => {})
 }
 
+/** macOS:让 Rust 侧用跨平台 API 把浮窗居中到主显示器(替代 cursorPosition 坐标口径问题)。
+ *  非 macOS 命令是空操作,调用无害。 */
+export async function clipboardCenterWindow(): Promise<void> {
+  await invoke('clipboard_center_window').catch(() => {})
+}
+
 /** 顶栏入口:唤出剪贴板浮窗(与全局快捷键、托盘菜单共用 Rust 开窗逻辑,但不 toggle 收起)。 */
 export async function clipboardOpenWindow(): Promise<boolean> {
   try {

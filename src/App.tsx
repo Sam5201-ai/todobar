@@ -623,6 +623,9 @@ function App() {
   // 首次挂载也会执行,据此设置初始开关。
   useEffect(() => {
     void clipboardSetActive(fullAccess)
+    // Mac 端截图/贴图能力关闭:绝不注册其全局快捷键,否则用户按了没反应却找不到入口。
+    // applyShortcuts 内部只看会员态与 enabled,不会读能力表,必须在这里 gate。
+    if (!caps().screenshot) return
     void import('./screenshot/shortcuts').then((m) => m.applyShortcuts()).catch(() => {})
   }, [fullAccess])
 
@@ -4227,7 +4230,7 @@ function SidebarSettingsPanel({
           vip={showVip}
         />
         <p className="settings-hint">
-          双击编辑框即可修改；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合。
+          双击编辑框即可修改{caps().screenshot ? '；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合' : ''}。
         </p>
       </div>
 
