@@ -1690,7 +1690,8 @@ async function handleR2Download(
 ): Promise<Response> {
   const file = decodeURIComponent(pathname.slice('/download/'.length))
   // 仅放行命名规范的安装包,防目录穿越(与 server.js 同一规则)
-  if (!/^Tacco-[\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
+  // 同时放行 Tacco-setup.exe(连字符) 与 Tacco_0.4.81_aarch64.dmg(下划线) 两种命名
+  if (!/^Tacco[-_][\w.\-]+\.(exe|dmg)$/i.test(file) || file.includes('..') || file.includes('/')) {
     return new Response('Not Found', { status: 404 })
   }
   const url = new URL(request.url)
