@@ -212,6 +212,8 @@ export interface CardPatch {
   end_at?: number | null
   elapsed_before_pause_ms?: number
   timer_total_ms?: number | null
+  /** ★2026-11-18 重置语义：正计时重置重设计时锚点（Rust CardPatch 同步）。 */
+  created_at?: number
   timer_direction?: string
   fired_at?: number | null
   pinned?: boolean

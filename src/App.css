@@ -965,8 +965,10 @@ kbd {
 
 /* 自动同步间隔选项组 */
 .option-setting {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0;
 }
 
@@ -974,12 +976,14 @@ kbd {
   color: var(--ink);
   font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .option-setting-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
+  margin-left: auto;
 }
 
 .option-setting-list button {

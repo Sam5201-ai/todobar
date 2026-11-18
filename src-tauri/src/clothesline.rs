@@ -46,7 +46,8 @@
 //!      screenshot.rs），差异不在透明度，而在它们**从不随光标动态切换窗口样式**——
 //!      这就是 hover 透底只发生在绳窗、其他类似工具没有此问题的原因。
 //! 4. **双端编译 R65**：所有平台相关代码严格 `#[cfg(windows)]` / `#[cfg(not(windows))]`。
-//!    macOS 无抓屏实现（screenshot.rs 占位报错），本模块在 mac 上必须能编译且不建窗。
+//!    macOS 无抓屏实现（screenshot.rs 占位报错），但 0.4.81 起全平台建窗；层级分层
+//!    见 `apply_mac_level`（主窗 3 > 绳窗置顶 2 > 普通窗口 0），Windows 逻辑零改动。
 //! 5. **动态建窗**：子线程 build + `crate::BROWSER_ARGS` 逐字一致 + `probe_alive`
 //!    （同步命令内联 build 会死锁、build() Ok ≠ 成功）。总开关关闭 = 进程级零残留。
 //! 6. **零新依赖**：FFI 用 `windows` crate 已启用 feature 直接声明；不新增 cargo 依赖。
@@ -434,6 +435,49 @@ fn probe_alive(win: &WebviewWindow) -> bool {
 /// 建窗唯一实现。**必须在子线程调用**（同步命令内联 build 会死锁主线程）。
 /// 0.4.81 起全平台建窗：透明浮窗用 Tauri 跨平台 API（与 notes.rs::build_note_window
 /// 同构，便利签在 mac 已验证可用），不再仅限 Windows。平台差异只在 builder 的可选方法。
+// ————————————————————————— macOS 窗口层级分层 —————————————————————————
+// tao 在 mac 上把 `set_always_on_top(true)` 映射为 NSFloatingWindowLevel(3)，而主窗
+// 恒为该层（tauri.conf alwaysOnTop:true + setup / 焦点 / 托盘事件都会重设）。绳窗若
+// 同为 3，后建 / 后设的绳窗会盖住主窗；Mac 透明窗按**矩形**命中（无 Windows 的
+// 逐像素穿透），横带覆盖区就会把主窗顶部按钮点击全部吞掉。
+//
+// 修复不是关掉置顶（那会让用户勾选的「置顶」失效），而是分层：
+//   主窗 3(NSFloatingWindowLevel) > 绳窗置顶 2 > 普通窗口 0(NSNormalWindowLevel)
+// → ① 绳窗任何情况下都不遮主窗；② 用户主动置顶时仍浮于其他普通窗口之上，
+//    与 Windows 的置顶语义一致。
+//
+// 绳窗 build 时 `.always_on_top(false)` 让 tao 内部状态保持 normal，避免 tao 后续
+// apply_diff 把我们写入的 2 覆盖回 3；level 只由本函数写。NSWindow 的 setLevel:
+// 必须在主线程调用，故经 run_on_main_thread 派发。
+#[cfg(target_os = "macos")]
+const CL_LEVEL_TOP: isize = 2;
+#[cfg(target_os = "macos")]
+const CL_LEVEL_NORMAL: isize = 0;
+
+#[cfg(target_os = "macos")]
+fn apply_mac_level(app: &tauri::AppHandle, win: tauri::WebviewWindow, top: bool) {
+    let level = if top { CL_LEVEL_TOP } else { CL_LEVEL_NORMAL };
+    let _ = app.run_on_main_thread(move || {
+        use std::ffi::{c_char, c_void};
+        #[link(name = "objc")]
+        unsafe extern "C" {
+            fn objc_msgSend(receiver: *mut c_void, selector: *const c_char, level: isize);
+            fn sel_registerName(name: *const c_char) -> *const c_char;
+        }
+        let Ok(ptr) = win.ns_window() else {
+            return;
+        };
+        if ptr.is_null() {
+            return;
+        }
+        unsafe {
+            // NSWindow 的 setLevel: 返回 void，参数 NSInteger（64 位 = isize）。
+            let sel = sel_registerName(b"setLevel:\0".as_ptr() as *const c_char);
+            objc_msgSend(ptr, sel, level);
+        }
+    });
+}
+
 fn build_window(app: &tauri::AppHandle) -> bool {
     // 幂等 + ghost 清理：关闭是异步的，快速「关→开」时句柄可能仍残留。
     // 必须探活确认它是真窗口；ghost 则 close 并等它从注册表消失，再走新建。
@@ -459,7 +503,16 @@ fn build_window(app: &tauri::AppHandle) -> bool {
         .decorations(false)
         .transparent(true)
         .visible(false) // 由前端定位完成 + 首帧绘制后调用 clothesline_show 才显示。
-        .always_on_top(load_settings().always_on_top)
+        // ★Mac 层级：主窗恒为 NSFloatingWindowLevel(3)，绳窗置顶用自定义 level 2
+        //   （见上方 apply_mac_level 注释），既低于主窗、又高于普通窗口。这里给 false
+        //   是让 tao 内部状态保持 normal，避免它后续 apply_diff 覆盖我们写入的 2/0。
+        //   Windows 维持原置顶策略零改动，直接读用户偏好。
+        .always_on_top({
+            #[cfg(windows)]
+            { load_settings().always_on_top }
+            #[cfg(not(windows))]
+            { false }
+        })
         .skip_taskbar(true)
         .focused(false) // 绝不抢焦点（与 capture-overlay 同款克制）。
         .resizable(false)
@@ -480,6 +533,10 @@ fn build_window(app: &tauri::AppHandle) -> bool {
                 //   普通矩形窗口语义，窗口外点击天然直达桌面，无需任何穿透机制
                 //   （与便利签 / 贴图窗完全同构）。历史教训见文件头铁律演进。
                 crate::append_app_log("[clothesline] 窗口创建成功（绳带窄窗 · 零窗口样式写入）");
+                // Mac：建窗时 tao 给的 normal(0) 需按用户偏好升到分层值（置顶 2 / 普通 0）。
+                // Windows 的层级已由 builder 的 always_on_top 设置，无需后续写入。
+                #[cfg(target_os = "macos")]
+                apply_mac_level(app, win.clone(), load_settings().always_on_top);
                 true
             } else {
                 crate::append_app_log("[clothesline] build() Ok 但探活失败 (ghost)，关闭");
@@ -858,9 +915,13 @@ pub fn clothesline_set_always_on_top(app: tauri::AppHandle, on: bool) -> Result<
         save_settings_to(&base, &s)?;
     }
     if let Some(win) = app.get_webview_window(LABEL) {
-        // ★第十九轮：区域裁剪架构不再写 EXSTYLE，tao apply_diff 重建的样式与我们的
-        //    期望一致（从不设 LAYERED / TRANSPARENT），置顶切换零补写；窗口区域不受影响。
+        // ★Windows：tao 原生置顶（WS_EX_TOPMOST），行为不变。
+        #[cfg(windows)]
         win.set_always_on_top(on).map_err(|e| e.to_string())?;
+        // ★Mac：写入分层 level（置顶 2 / 普通 0）。绝不调用 tao 的 set_always_on_top，
+        //   那会升到 3 与主窗同层、重新遮住主窗顶部按钮（见 apply_mac_level 注释）。
+        #[cfg(target_os = "macos")]
+        apply_mac_level(&app, win, on);
     }
     let _ = app.emit("clothesline-topmost-changed", on);
     Ok(())
@@ -968,6 +1029,10 @@ pub fn clothesline_apply_bounds_and_show(
         // ★第二十一轮：裸 show（绳带窄窗 · 全进程零 EXSTYLE 写入，show / 置顶不需要
         //   任何样式补写；与便利签 / 贴图窗同构）。
         win.show().map_err(|e| e.to_string())?;
+        // Mac：真正显示时复核一次分层 level（setLevel 幂等），防止原生层状态
+        // 变化把绳窗抬回 3 与主窗同层。Windows 无需此步。
+        #[cfg(target_os = "macos")]
+        apply_mac_level(&app, win, load_settings().always_on_top);
     }
     Ok(())
 }
@@ -1556,6 +1621,9 @@ pub struct CardPatch {
     pub elapsed_before_pause_ms: Option<i64>,
     #[serde(default)]
     pub timer_total_ms: Option<i64>,
+    /// ★2026-11-18 重置语义：正计时重置必须重设 created_at 锚点（显示=now-created_at）。
+    #[serde(default)]
+    pub created_at: Option<i64>,
     #[serde(default)]
     pub timer_direction: Option<String>,
     #[serde(default, deserialize_with = "de_double_option")]
@@ -1719,6 +1787,7 @@ pub fn clothesline_update_card(
     if let Some(v) = patch.body_bold { c.body_bold = v; }
     if let Some(v) = patch.body_italic { c.body_italic = v; }
     if let Some(v) = patch.timer_total_ms { c.timer_total_ms = Some(v); }
+    if let Some(v) = patch.created_at { c.created_at = v; } // ★重置：正计时从 0 重计。
     c.updated_at = now_ms();
     let updated = c.clone();
     atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;

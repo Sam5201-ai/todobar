@@ -46,8 +46,9 @@ body, body:focus, body:focus-visible,
  *   - 不同来源的卡片有各自的纸色与内容版式（便利签 / 待办 / 番茄 / 图片 / 文字）。
  *   - 顶部有计数 / 清风 / 收起工具条，左上角是 ＋ 菜单（不是三张常驻大方块）。
  *
- * ⚠️ 保留全部既有功能类名（.cl-ghost / .cl-card-menu / .cl-composer / .cl-toast …），
- *    拖动排序、就地编辑、右键菜单、10s 撤销、计时、软删除占位等逻辑一行不动。
+ * ⚠️ 保留全部既有功能类名（.cl-ghost / .cl-composer / .cl-toast …），
+ *    拖动排序、就地编辑、10s 撤销、计时、软删除占位等逻辑一行不动
+ *    （★2026-11-17 需求3：右键菜单已整体移除，置顶/打开原内容改为悬停图标）。
  *    窗口几何保持 300px：卡片 186px + hover 1.22 后底部 ≈283px，不会溢出裁切。 */
 
 .cl-root {
@@ -831,7 +832,11 @@ body, body:focus, body:focus-visible,
   width: 15px;
   height: 32px;
   margin-left: -7.5px;
-  z-index: 4;
+  /* ★2026-11-17 修复：z-index 4 → 17。2026-11-15 批5/6 给 .cl-card 提到 z-index:16
+     （高于麻绳热区 15）后，夹子 z4 反被卡片压住——木夹因 19px 露在卡外未暴露；
+     换肤后铜铃/水滴夹只露 10~11px，下半截全被卡片盖住 → 看起来「没夹住卡片」。
+     17 > 卡片 16，夹子重新压住卡的上缘（真实夹住效果）；仍在悬浮菜单层之下。 */
+  z-index: 17;
   border-radius: 3px 3px 2px 2px;
   background: linear-gradient(90deg, var(--cl-wood-dark), var(--cl-wood) 28%, #efcf9c 52%, var(--cl-wood) 76%, var(--cl-wood-dark));
   box-shadow: 0 2px 4px rgba(60, 40, 20, 0.28);
@@ -1174,13 +1179,14 @@ body, body:focus, body:focus-visible,
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 1px 3px rgba(60, 45, 20, 0.22);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.14s ease;
+  /* ★2026-11-17 问题1「操作浮框常显」真根因：旧版 opacity 0↔1 + transition，
+     正是本文件「根因B」记载的透明窗合成层病灶 —— hover 瞬间重建合成层，
+     浮框层卡在可见态再也回不去（去掉 :focus-within 只治了焦点一半）。
+     改为与 .cl-card-actions 相同的 visibility 离散切换：零动画零 transition。 */
+  visibility: hidden;
   zoom: calc(1 / var(--cl-card-zoom, 1));
 }
-.cl-note-row:hover .cl-note-ops,
-.cl-note-ops:focus-within { opacity: 1; pointer-events: auto; }
+.cl-note-row:hover .cl-note-ops { visibility: visible; }
 .cl-note-op {
   flex: none;
   width: 17px;
@@ -1439,6 +1445,440 @@ body, body:focus, body:focus-visible,
 }
 .cl-card-timer[data-style='glass']::after { border-radius: 14px; border-color: transparent; }
 
+/* ═══★2026-11-17 需求1：番茄卡新增 6 款皮肤（与 preview/clothesline-timer-card-designs.html 一致）═══
+ * 怀表 watch / 车票 ticket / 掌机 lcd / 罐头 can / 小黑板 board / 灯牌 marquee。
+ * 排版结构各不相同（圆盘主体 / 票头横版 / 外壳嵌屏 / 罐顶横带 / 木框中框 / 灯泡边框），
+ * 不是换色。按钮文案统一 暂停/重置/+5 分（需求2），脚注无「右键更多」（需求3）。
+ * 铁律照旧：不透明背景、零 filter、零动画零 transition。
+ * 自定义卡色：card_color 写入 --cl-card-tint（仅新皮肤消费，见 TSX 3816 行），只染强调件；
+ * 卡身用固定 token 底色，保证任何卡色下可读性。卡高 186：内容纵向 space-evenly 分布。 */
+.cl-card-timer[data-style='watch'] .cl-face,
+.cl-card-timer[data-style='ticket'] .cl-face,
+.cl-card-timer[data-style='lcd'] .cl-face,
+.cl-card-timer[data-style='can'] .cl-face,
+.cl-card-timer[data-style='board'] .cl-face,
+.cl-card-timer[data-style='marquee'] .cl-face {
+  justify-content: space-evenly;
+  gap: 3px;
+}
+
+/* —— A 黄铜怀表：燕尾铜牌 + 双层表圈表盘 + 表冠钮 —— */
+.cl-card-timer[data-style='watch'] {
+  background-color: #f3e6c8;
+  background-image: radial-gradient(140% 100% at 30% 0%, #fbf3df 0%, #f3e6c8 58%, #e6d3a8 100%);
+  border-color: #c9a96a;
+}
+.cl-card-timer[data-style='watch']::after { box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.8); }
+.cl-tw-plaque {
+  max-width: 138px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 10.5px/1 var(--cl-font);
+  color: #fbf3df;
+  letter-spacing: 1px;
+  background: linear-gradient(180deg, var(--cl-card-tint, #d6b061), color-mix(in srgb, var(--cl-card-tint, #d6b061) 68%, #4a3a20));
+  border: 1px solid color-mix(in srgb, var(--cl-card-tint, #d6b061) 60%, #4a3a20);
+  padding: 5px 12px 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.8), 0 1px 2px rgba(90, 64, 39, 0.4);
+  clip-path: polygon(6% 0, 94% 0, 100% 50%, 94% 100%, 6% 100%, 0 50%);
+}
+.cl-tm-ring.is-watch { width: 88px; height: 88px; margin-top: 0; }
+.cl-tw-bezel { fill: #f7ecd7; stroke: color-mix(in srgb, var(--cl-card-tint, #b8893c) 82%, #4a3a20); stroke-width: 5; }
+.cl-tw-bezel2 { fill: none; stroke: var(--cl-card-tint, #d6b061); stroke-width: 1.4; }
+.cl-tw-ticks { fill: none; stroke: color-mix(in srgb, var(--cl-card-tint, #b8893c) 55%, #4a3a20); stroke-width: 5.5; stroke-dasharray: 1.6 9.34; }
+.cl-tw-prog { fill: none; stroke: #c2413c; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 207.3; }
+.cl-tw-time {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 800 19px/1 var(--cl-serif, Georgia, 'Times New Roman', serif);
+  color: #4a3a35;
+  font-variant-numeric: tabular-nums;
+}
+.cl-tw-time.is-fired { color: #c2413c; }
+/* ★问题3：带小时的 h:mm:ss 比设计稿 mm:ss 宽 40%，19px 会与进度弧/刻度环重叠。 */
+.cl-tw-time.is-long { font-size: 14.5px; letter-spacing: 0.5px; }
+.cl-tw-sub { font: 8px/1 var(--cl-font); color: #a5824d; letter-spacing: 1.5px; }
+.cl-card-timer[data-style='watch'] .cl-tm-btns button {
+  color: #6e5322;
+  background: linear-gradient(180deg, #f3dfae, color-mix(in srgb, var(--cl-card-tint, #dcb976) 85%, #8a6a2d));
+  border: 1px solid #a9823c;
+  border-radius: 999px;
+  padding: 4.5px 0;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, 0.9), 0 1px 0 #8a6a2d;
+}
+.cl-card-timer[data-style='watch'] .cl-tm-btns button:hover { background: linear-gradient(180deg, #f8e9bd, var(--cl-card-tint, #dcb976)); }
+.cl-tw-foot { font: 9px/1.3 var(--cl-serif, Georgia, serif); color: #9b8256; letter-spacing: 0.5px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='watch'] {
+  background-color: #332a22;
+  background-image: radial-gradient(140% 100% at 30% 0%, #3d332a 0%, #332a22 58%, #2a2119 100%);
+  border-color: #5b4a2c;
+}
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='watch']::after { box-shadow: inset 0 1px 0 rgba(224, 189, 114, 0.35); }
+.cl-root[data-theme='dark'] .cl-tw-plaque { color: #2e2416; }
+.cl-root[data-theme='dark'] .cl-tw-bezel { fill: #372e24; }
+.cl-root[data-theme='dark'] .cl-tw-time { color: #f0dfc0; }
+.cl-root[data-theme='dark'] .cl-tw-time.is-fired { color: #e06a55; }
+.cl-root[data-theme='dark'] .cl-tw-sub { color: #a9873f; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='watch'] .cl-tm-btns button {
+  color: #2e2416;
+  background: linear-gradient(180deg, var(--cl-card-tint, #dcb976), color-mix(in srgb, var(--cl-card-tint, #dcb976) 62%, #4a3a20));
+  border-color: color-mix(in srgb, var(--cl-card-tint, #dcb976) 50%, #2e2416);
+}
+.cl-root[data-theme='dark'] .cl-tw-foot { color: #8a7448; }
+
+/* —— B 站台车票：墨绿票头 + 等宽时间窗 + 检票剪线进度 —— */
+.cl-card-timer[data-style='ticket'] {
+  background-color: #f6eeda;
+  border-color: #c9ba97;
+  border-radius: 6px;
+}
+.cl-tk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  background: linear-gradient(180deg, var(--cl-card-tint, #3e6b52), color-mix(in srgb, var(--cl-card-tint, #3e6b52) 78%, #16261c));
+  padding: 6px 9px;
+  border-radius: 3px 3px 0 0;
+  margin: -2px -2px 0;
+}
+.cl-tk-title {
+  font: 700 11px/1.2 var(--cl-font);
+  color: #f7f3e6;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cl-tk-no { flex: none; font: 8px/1 'Consolas', 'Courier New', monospace; color: #bcd8c6; letter-spacing: 0.5px; }
+.cl-tk-time { font: 800 24px/1 'Consolas', 'Courier New', monospace; color: #2f3a2e; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.cl-tk-time.is-fired { color: #c2413c; }
+.cl-tk-sub { font: 8px/1 'Consolas', monospace; color: #8a9384; letter-spacing: 2px; }
+.cl-tk-perf {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  font: 9px/1 'Consolas', monospace;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cl-tk-perf .is-done { color: var(--cl-card-tint, #3e6b52); }
+.cl-tk-perf .is-cut { color: #a35c48; }
+.cl-card-timer[data-style='ticket'] .cl-tm-btns button {
+  color: #f7f3e6;
+  background: linear-gradient(180deg, var(--cl-card-tint, #4a7a5f), color-mix(in srgb, var(--cl-card-tint, #4a7a5f) 75%, #16261c));
+  border: none;
+  border-radius: 3px;
+  padding: 5px 0;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 0 #24402f;
+}
+.cl-card-timer[data-style='ticket'] .cl-tm-btns button:hover { filter: none; background: linear-gradient(180deg, var(--cl-card-tint, #5c8a6d), color-mix(in srgb, var(--cl-card-tint, #4a7a5f) 85%, #16261c)); }
+.cl-card-timer[data-style='ticket'] .cl-tm-btns button:nth-child(2) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cl-card-tint, #4a7a5f) 88%, #ffffff), color-mix(in srgb, var(--cl-card-tint, #4a7a5f) 72%, #24402f));
+}
+.cl-tk-foot { font: 8px/1.3 'Consolas', monospace; color: #9b937c; letter-spacing: 1px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='ticket'] { background-color: #38332a; border-color: #57503e; }
+.cl-root[data-theme='dark'] .cl-tk-head { background: linear-gradient(180deg, var(--cl-card-tint, #2c4a39), color-mix(in srgb, var(--cl-card-tint, #2c4a39) 70%, #101b13)); }
+.cl-root[data-theme='dark'] .cl-tk-time { color: #e8e2cf; }
+.cl-root[data-theme='dark'] .cl-tk-time.is-fired { color: #e06a55; }
+.cl-root[data-theme='dark'] .cl-tk-sub { color: #7f8a77; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='ticket'] .cl-tm-btns button { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 1px 0 #1a2c20; }
+.cl-root[data-theme='dark'] .cl-tk-foot { color: #847c66; }
+
+/* —— C 像素掌机：外壳标牌 + 内嵌 LCD 屏 + 分段电量条 —— */
+.cl-card-timer[data-style='lcd'] {
+  background-color: var(--cl-card-tint, #d34a3f);
+  background-image: linear-gradient(160deg,
+    color-mix(in srgb, var(--cl-card-tint, #d34a3f) 88%, #ffffff) 0%,
+    var(--cl-card-tint, #d34a3f) 55%,
+    color-mix(in srgb, var(--cl-card-tint, #d34a3f) 88%, #4a1815) 100%);
+  border-color: color-mix(in srgb, var(--cl-card-tint, #d34a3f) 60%, #3a1210);
+  border-radius: 10px;
+}
+.cl-card-timer[data-style='lcd']::after { border-radius: 10px; }
+.cl-lc-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 8.5px/1 var(--cl-font);
+  color: #ffe9d6;
+  letter-spacing: 1px;
+}
+.cl-lc-screen {
+  width: 100%;
+  background: #9fb863;
+  border: 2.5px solid #5c5148;
+  border-radius: 5px 5px 12px 5px;
+  padding: 6px 6px 6px;
+  box-shadow: inset 0 2px 0 rgba(60, 70, 30, 0.35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+.cl-lc-screen::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c2413c;
+  box-shadow: 0 0 0 1.5px #5c5148;
+}
+.cl-lc-time { font: 800 21px/1 'Consolas', 'Courier New', monospace; color: #2e3a22; letter-spacing: 1.5px; font-variant-numeric: tabular-nums; }
+.cl-lc-time.is-fired { color: #8f2f28; }
+.cl-lc-bar { width: 100%; height: 8px; border: 1.5px solid #46543a; background: #8aa15a; border-radius: 2px; overflow: hidden; }
+.cl-lc-bar i { display: block; height: 100%; background: repeating-linear-gradient(90deg, #3e6b52 0 5px, #4a7a5f 5px 7px); }
+.cl-card-timer[data-style='lcd'] .cl-tm-btns button {
+  color: #5c211d;
+  background: radial-gradient(circle at 36% 30%, #ffd9c2, #e8a184 62%, #c97a5d 100%);
+  border: none;
+  border-radius: 999px;
+  padding: 5px 0;
+  font: 800 9px/1.3 'Consolas', monospace;
+  font-weight: 800;
+  box-shadow: 0 2px 0 #8f4a34, inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.cl-card-timer[data-style='lcd'] .cl-tm-btns button:hover { background: radial-gradient(circle at 36% 30%, #ffe4d2, #efb096 62%, #d68a6d 100%); }
+.cl-lc-foot { font: 7.5px/1.3 'Consolas', monospace; color: color-mix(in srgb, var(--cl-card-tint, #d34a3f) 45%, #3a1210); letter-spacing: 1.5px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='lcd'] {
+  background-image: linear-gradient(160deg,
+    color-mix(in srgb, var(--cl-card-tint, #d34a3f) 66%, #1c0d0b) 0%,
+    color-mix(in srgb, var(--cl-card-tint, #d34a3f) 72%, #1c0d0b) 55%,
+    color-mix(in srgb, var(--cl-card-tint, #d34a3f) 60%, #1c0d0b) 100%);
+  border-color: color-mix(in srgb, var(--cl-card-tint, #d34a3f) 45%, #1c0d0b);
+}
+.cl-root[data-theme='dark'] .cl-lc-label { color: #f2cdb8; }
+.cl-root[data-theme='dark'] .cl-lc-screen { background: #7e9551; border-color: #3c352e; }
+.cl-root[data-theme='dark'] .cl-lc-bar { border-color: #333d29; background: #6f8449; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='lcd'] .cl-tm-btns button {
+  background: radial-gradient(circle at 36% 30%, #e8bba4, #c98c6e 62%, #a56548 100%);
+  box-shadow: 0 2px 0 #6e3722, inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.cl-root[data-theme='dark'] .cl-lc-foot { color: #d9897e; }
+
+/* —— D 番茄罐头：金属罐顶（伪元素）+ 通栏波普红条 + 容量条进度 —— */
+.cl-card-timer[data-style='can'] {
+  background-color: #f7e9d2;
+  background-image: linear-gradient(90deg, #e0cba4 0%, #f7e9d2 16%, #fbf2e2 42%, #f7e9d2 72%, #ddc69c 100%);
+  border-color: #b39a72;
+  padding-top: 20px;
+}
+.cl-card-timer[data-style='can']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 13px;
+  background: linear-gradient(180deg, #efede6 0%, #cfc9ba 55%, #aaa490 100%);
+  border-bottom: 1.5px solid #8f897a;
+  pointer-events: none;
+}
+.cl-card-timer[data-style='can']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 3px;
+  height: 7px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #fdfdfb, #bdb8a8);
+  pointer-events: none;
+  box-shadow: inset 0 1px 1px rgba(90, 84, 66, 0.45), 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.cl-cn-band {
+  width: 100%;
+  min-width: 0;
+  background: linear-gradient(180deg, var(--cl-card-tint, #cf4a3e), color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 78%, #5c1815));
+  text-align: center;
+  padding: 5px 4px 6px;
+}
+.cl-cn-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 11px/1.2 var(--cl-font);
+  color: #fff5e4;
+  letter-spacing: 1px;
+}
+.cl-cn-en { display: block; font: 700 7px/1 'Consolas', monospace; color: #f2c9be; letter-spacing: 3px; margin-top: 2px; }
+.cl-cn-time { font: 800 23px/1 var(--cl-serif, Georgia, serif); color: #4a3320; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.cl-cn-time.is-fired { color: #b0362f; }
+.cl-cn-cap { display: flex; align-items: center; gap: 5px; width: 100%; padding: 0 2px; font: 700 7.5px/1 'Consolas', monospace; letter-spacing: 1px; }
+.cl-cn-cap em { font-style: normal; color: color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 80%, #5c1815); }
+.cl-cn-bar { flex: 1; height: 6px; background: #e9d9b6; border: 1px solid #c7ab7d; border-radius: 99px; overflow: hidden; }
+.cl-cn-bar i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--cl-card-tint, #cf4a3e) 0 5px, #e8dcc0 5px 7px); }
+.cl-card-timer[data-style='can'] .cl-tm-btns button {
+  color: color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 82%, #3a1210);
+  background: #fdf3dd;
+  border: 1.5px solid color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 65%, #f7e9d2);
+  border-radius: 999px;
+  padding: 4.5px 0;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 #fffdf4, 0 1px 0 #c7ab7d;
+}
+.cl-card-timer[data-style='can'] .cl-tm-btns button:hover { background: #fff8e8; }
+.cl-cn-foot { font: 7.5px/1.3 'Consolas', monospace; color: #a5854f; letter-spacing: 1.5px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='can'] {
+  background-color: #5c4c34;
+  background-image: linear-gradient(90deg, #4a3d2c 0%, #5c4c34 16%, #6b5940 42%, #5c4c34 72%, #42361f 100%);
+  border-color: #6b5636;
+}
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='can']::before {
+  background: linear-gradient(180deg, #8d897c 0%, #6e6a5c 55%, #57534a 100%);
+  border-color: #454038;
+}
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='can']::after {
+  background: linear-gradient(180deg, #a8a496, #7d796b);
+  box-shadow: inset 0 1px 1px rgba(30, 28, 22, 0.5);
+}
+.cl-root[data-theme='dark'] .cl-cn-band { background: linear-gradient(180deg, color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 82%, #1c0d0b), color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 62%, #1c0d0b)); }
+.cl-root[data-theme='dark'] .cl-cn-time { color: #f2e2c4; }
+.cl-root[data-theme='dark'] .cl-cn-time.is-fired { color: #e06a55; }
+.cl-root[data-theme='dark'] .cl-cn-cap em { color: #e8a184; }
+.cl-root[data-theme='dark'] .cl-cn-bar { background: #453a2c; border-color: #6b5636; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='can'] .cl-tm-btns button {
+  color: #f2c9be;
+  background: #4a3a2c;
+  border-color: color-mix(in srgb, var(--cl-card-tint, #cf4a3e) 55%, #4a3a2c);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 214, 0.18), 0 1px 0 #33291c;
+}
+.cl-root[data-theme='dark'] .cl-cn-foot { color: #a9873f; }
+
+/* —— E 咖啡小黑板：木框卡身 + 墨绿板面（face 即板）+ 正字计数进度 —— */
+.cl-card-timer[data-style='board'] {
+  padding: 7px;
+  background-color: #b48a58;
+  background-image: linear-gradient(165deg, #cfa571 0%, #b48a58 55%, #9e744a 100%);
+  border-color: #8a6540;
+  border-radius: 9px;
+}
+.cl-card-timer[data-style='board']::after { border-radius: 9px; }
+.cl-card-timer[data-style='board'] .cl-face {
+  background: radial-gradient(120% 90% at 68% 22%, #37453b 0%, #2e3a32 55%, #27322b 100%);
+  border: 2px solid #243029;
+  border-radius: 5px;
+  padding: 8px 7px 7px;
+}
+.cl-eb-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 11.5px/1.3 var(--cl-serif, Georgia, serif);
+  color: #f0ead8;
+  letter-spacing: 0.5px;
+  border-bottom: 1.5px dashed rgba(240, 234, 216, 0.45);
+  padding-bottom: 4px;
+}
+.cl-eb-time { font: 800 23px/1 var(--cl-serif, Georgia, serif); color: #f0ead8; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.cl-eb-time.is-fired { color: #e8d48b; }
+.cl-eb-sub { font: 9px/1 var(--cl-font); color: #8fa08f; letter-spacing: 2px; }
+.cl-eb-tally {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font: 800 11px/1 'Consolas', monospace;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cl-eb-tally .is-done { color: #e8d48b; }
+.cl-eb-tally .is-rest { color: #556655; }
+.cl-card-timer[data-style='board'] .cl-tm-btns button {
+  color: #f0ead8;
+  background: #263028;
+  border: 1.5px dashed rgba(240, 234, 216, 0.55);
+  border-radius: 4px;
+  padding: 4.5px 0;
+}
+.cl-card-timer[data-style='board'] .cl-tm-btns button:hover { background: #2d3830; }
+.cl-eb-foot { font: 9px/1.3 var(--cl-serif, Georgia, serif); color: #8fa08f; letter-spacing: 1px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='board'] {
+  background-color: #59422c;
+  background-image: linear-gradient(165deg, #6b5138 0%, #59422c 55%, #4a3624 100%);
+  border-color: #3d2c1c;
+}
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='board'] .cl-face {
+  background: radial-gradient(120% 90% at 68% 22%, #28352c 0%, #212b25 55%, #1b241f 100%);
+  border-color: #161e19;
+}
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='board'] .cl-tm-btns button { background: #1b241f; }
+.cl-root[data-theme='dark'] .cl-eb-sub, .cl-root[data-theme='dark'] .cl-eb-foot { color: #74857a; }
+
+/* —— F 剧场灯牌：金色 dotted 灯泡边框（复用 ::after）+ 灯泡倒数进度 —— */
+.cl-card-timer[data-style='marquee'] {
+  background-color: #1f2740;
+  background-image: linear-gradient(170deg,
+    color-mix(in srgb, var(--cl-card-tint, #e8b34b) 16%, #27304a) 0%,
+    color-mix(in srgb, var(--cl-card-tint, #e8b34b) 10%, #1f2740) 55%,
+    #181f33 100%);
+  border-color: #10151f;
+  border-radius: 11px;
+}
+.cl-card-timer[data-style='marquee']::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 8px;
+  border: 3px dotted color-mix(in srgb, var(--cl-card-tint, #e8b34b) 88%, #7a5a18);
+  box-shadow: none;
+  pointer-events: none;
+}
+.cl-mq-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 8.5px/1 var(--cl-font);
+  color: #f2c14e;
+  letter-spacing: 3px;
+}
+.cl-mq-time { font: 800 26px/1 'Consolas', 'Courier New', monospace; color: #fff8e6; letter-spacing: 1px; font-variant-numeric: tabular-nums; text-shadow: 0 0 1px #fff8e6, 0 0 6px rgba(255, 216, 110, 0.55); }
+.cl-mq-time.is-fired { color: #ffd257; }
+.cl-mq-sub { font: 8px/1 var(--cl-font); color: #8f9cc4; letter-spacing: 3px; }
+.cl-mq-bulbs { display: flex; justify-content: center; gap: 6px; }
+.cl-mq-bulbs i { width: 7px; height: 7px; border-radius: 50%; background: #3a4360; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5); }
+.cl-mq-bulbs i.is-lit {
+  background: radial-gradient(circle at 38% 32%, #fff3b8, #ffd257 58%, #d8a12e 100%);
+  box-shadow: 0 0 5px rgba(255, 210, 87, 0.65);
+}
+.cl-card-timer[data-style='marquee'] .cl-tm-btns button {
+  color: #ffd257;
+  background: #2c3550;
+  border: 1px solid color-mix(in srgb, var(--cl-card-tint, #e8b34b) 88%, #7a5a18);
+  border-radius: 999px;
+  padding: 4.5px 0;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 214, 0.22), 0 1.5px 0 #10151f;
+}
+.cl-card-timer[data-style='marquee'] .cl-tm-btns button:hover { background: #333d5c; }
+.cl-mq-foot { font: 7.5px/1.3 'Consolas', monospace; color: #8f9cc4; letter-spacing: 2px; }
+.cl-root[data-theme='dark'] .cl-card-timer[data-style='marquee'] {
+  background-color: #161c2c;
+  background-image: linear-gradient(170deg,
+    color-mix(in srgb, var(--cl-card-tint, #e8b34b) 12%, #1c2233) 0%,
+    color-mix(in srgb, var(--cl-card-tint, #e8b34b) 7%, #161c2c) 55%,
+    #111624 100%);
+}
+.cl-root[data-theme='dark'] .cl-mq-time.is-fired { color: #ffdf8a; }
+
 /* —— 2026-11-15 需求5/6：随手记 / 番茄钟添加编辑弹窗（桌面居中、无遮罩）——
  * 弹窗打开时绳窗临时整屏（复用预览机制），本体 fixed 居中；周边完全透明
  * 且不做暗色遮罩，点击弹窗外由 Rust dismiss 通道回传取消。 */
@@ -1514,6 +1954,9 @@ body, body:focus, body:focus-visible,
   color: #4c3d22;
 }
 .cl-modal-seg { display: flex; gap: 6px; }
+/* ★2026-11-17 需求1：番茄卡样式 7 选 1，一行放不下 → 允许换行、按钮自适应收窄。 */
+.cl-modal-seg.is-7 { flex-wrap: wrap; }
+.cl-modal-seg.is-7 button { flex: 1 1 auto; padding: 5px 8px; white-space: nowrap; }
 .cl-modal-seg button {
   flex: 1;
   border: 1px solid var(--cl-line);
@@ -1906,31 +2349,6 @@ body, body:focus, body:focus-visible,
   font: 600 18px/1.2 var(--cl-font);
   outline: none;
 }
-.cl-card-menu {
-  position: fixed;
-  z-index: 40;
-  width: 156px;
-  display: flex;
-  flex-direction: column;
-  padding: 5px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--cl-paper) 96%, transparent);
-  border: 1px solid var(--cl-line);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
-  pointer-events: auto;
-}
-.cl-card-menu button {
-  border: 0;
-  background: transparent;
-  color: var(--cl-ink);
-  text-align: left;
-  padding: 7px 10px;
-  border-radius: 6px;
-  font: 12px/1.3 var(--cl-font);
-  cursor: pointer;
-}
-.cl-card-menu button:hover { background: color-mix(in srgb, var(--cl-rope) 20%, transparent); }
-.cl-card-menu button.is-danger { color: #c2413c; }
 /* ★2026-11-15 撤销按钮点击无响应真因：本规则（.cl-toast）定义在 .cl-toast-action 之后，
    同特异性 (0,1,0) 后者胜出 → pointer-events:none 覆盖了按钮的 auto，
    撤销按钮永远收不到点击。这里提高特异性（0,2,0），与书写顺序彻底解耦。 */
@@ -2366,6 +2784,239 @@ body, body:focus, body:focus-visible,
   height: 2px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), #ffffff 50%, rgba(255, 255, 255, 0.4));
   box-shadow: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ★2026-11-17 需求：绳身 / 固定钉 / 卡片夹 随「拉杆样式」同步换装。
+   设计稿：preview/clothesline-rope-designs.html（已确认版）。
+   - 素瓷 porcelain：亚麻双股绳（米灰亚麻 + 绞股短纹）· 陶土圆钉 · 保留原木夹
+   - 黄铜 brass：黄铜车刻杆（车削高光 + 等距环纹）· 带孔铜环钉 · 小铜铃夹
+   - 琉璃 glass：银蓝丝线（2.6px）· 缀 4 颗静露 · 水晶圆钉 · 双滴小水滴夹
+   红线：零 filter / 零动画 / 零几何变化 —— 全部纯色、渐变、dasharray、
+   border-radius 实现；装饰路径默认 visibility:hidden，皮肤段按需点亮。
+   深色主题沿用拉杆皮肤的 [data-theme='dark'] 双属性选择器写法。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 换肤装饰元素：默认全部隐藏（绳体几何与三路径结构与旧版完全一致） */
+.cl-rope-stitch,
+.cl-rope-shine,
+.cl-rope-rings,
+.cl-rope-dew {
+  visibility: hidden;
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+/* 琉璃皮肤的「第二枚水滴夹」：默认隐藏，glass 段点亮（复用主夹指针处理） */
+.cl-card-clip2 {
+  display: none;
+  position: absolute;
+  left: 75%;
+  z-index: 17;
+  cursor: grab;
+}
+.cl-card-clip2:active { cursor: grabbing; }
+
+/* ── A 素瓷·侘寂：亚麻双股绳 · 陶土圆钉 · 保留原木夹 ─────────────── */
+.cl-root[data-pulltab='porcelain'] .cl-rope-main { stroke: #c2a473; }
+.cl-root[data-pulltab='porcelain'] .cl-rope-fiber { stroke: rgba(255, 248, 232, 0.5); }
+.cl-root[data-pulltab='porcelain'] .cl-rope-under { stroke: #8a6a3e; }
+.cl-root[data-pulltab='porcelain'] .cl-rope-stitch {
+  visibility: visible;
+  stroke: rgba(138, 106, 62, 0.42);
+  stroke-width: 1;
+  stroke-dasharray: 3 9;
+  vector-effect: non-scaling-stroke;
+}
+.cl-root[data-pulltab='porcelain'] .cl-rope-nail {
+  background: radial-gradient(circle at 35% 30%, #e2c69c, #a98a5d 78%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* ── B 黄铜·铃坠：黄铜车刻杆 · 带孔铜环钉 · 小铜铃夹 ─────────────── */
+.cl-root[data-pulltab='brass'] .cl-rope-main { stroke: #b8893c; stroke-width: 4; }
+.cl-root[data-pulltab='brass'] .cl-rope-under { stroke: #5a4027; opacity: 0.6; }
+.cl-root[data-pulltab='brass'] .cl-rope-shine {
+  visibility: visible;
+  stroke: #f6e3ac;
+  stroke-width: 1.1;
+  opacity: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+.cl-root[data-pulltab='brass'] .cl-rope-rings {
+  visibility: visible;
+  stroke: rgba(122, 88, 36, 0.75);
+  stroke-width: 3.2;
+  stroke-dasharray: 2.4 26;
+  stroke-linecap: butt;
+  vector-effect: non-scaling-stroke;
+}
+/* 带孔铜环钉：麻绳圆钉换成窗帘绳穿过的那个铜环 */
+.cl-root[data-pulltab='brass'] .cl-rope-nail {
+  top: 17px;
+  width: 13px;
+  height: 13px;
+  background: radial-gradient(circle at 36% 30%, #f8e8b6, #c39a48 55%, #8a6a2d 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 246, 214, 0.9);
+}
+.cl-root[data-pulltab='brass'] .cl-rope-nail::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #6b5030, #4a3418);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+/* 小铜铃夹：钟罩圆顶 + 铜檐口 + 悬晃铃舌（尺寸变化为静态，悬挂测量自适应） */
+.cl-root[data-pulltab='brass'] .cl-card-clip,
+.cl-root[data-pulltab='brass'] .cl-ghost-clip {
+  width: 16px;
+  height: 24px;
+  top: -11px;
+  margin-left: -8px;
+  border-radius: 50% 50% 12% 12% / 74% 74% 12% 12%;
+  background: radial-gradient(130% 105% at 32% 12%, #f8e8b6 0%, #d6b061 42%, #8a6a2d 100%);
+  box-shadow: 0 2px 4px rgba(56, 38, 14, 0.42), inset 0 1px 0 rgba(255, 246, 214, 0.9);
+}
+.cl-root[data-pulltab='brass'] .cl-card-clip::before,
+.cl-root[data-pulltab='brass'] .cl-ghost-clip::before {
+  left: -1.5px;
+  right: -1.5px;
+  top: auto;
+  bottom: 3.5px;
+  height: 3.5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #8a6a2d, #f8e8b6 50%, #8a6a2d);
+  box-shadow: 0 1px 2px rgba(56, 38, 14, 0.5);
+}
+.cl-root[data-pulltab='brass'] .cl-card-clip::after,
+.cl-root[data-pulltab='brass'] .cl-ghost-clip::after {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: -4.5px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #f8e8b6, #8a6a2d 82%);
+  box-shadow: 0 1px 2px rgba(56, 38, 14, 0.5);
+}
+
+/* ── C 琉璃·露珠：银蓝丝线 · 缀露 · 水晶圆钉 · 双滴小水滴夹 ──────── */
+.cl-root[data-pulltab='glass'] .cl-rope-main { stroke: #a9c6ec; stroke-width: 2.6; }
+.cl-root[data-pulltab='glass'] .cl-rope-fiber {
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 0.9;
+  stroke-dasharray: 4 10;
+}
+.cl-root[data-pulltab='glass'] .cl-rope-under { stroke: #6f9fdd; opacity: 0.55; }
+.cl-root[data-pulltab='glass'] .cl-rope-dew { visibility: visible; fill: url(#cl-dew-l); }
+.cl-root[data-pulltab='glass'] .cl-rope-nail {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #c7dcf8 40%, #7fa8e0 100%);
+  box-shadow: 0 1px 3px rgba(40, 80, 150, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+/* 双滴小水滴夹：两枚等大（14×20）、±8° 镜像相向微倾，圆肚 + 上尖嘴勾线。
+   ★2026-11-17 反馈：主夹基样式是 left:50%（居中），必须在此覆盖为 25%，
+   与右夹 75% 镜像——两夹与卡片左右边缘间距一致（各 42px），间距更大更好看。 */
+.cl-root[data-pulltab='glass'] .cl-card-clip,
+.cl-root[data-pulltab='glass'] .cl-card-clip2,
+.cl-root[data-pulltab='glass'] .cl-ghost-clip {
+  width: 14px;
+  height: 20px;
+  top: -10px;
+  margin-left: -7px;
+  border-radius: 50% 50% 50% 50% / 56% 56% 44% 44%;
+  background: radial-gradient(135% 115% at 34% 24%, #ffffff 0%, #eaf4ff 32%, #bcd7f6 64%, #7fa8e0 100%);
+  box-shadow: 0 2px 4px rgba(40, 80, 150, 0.35), inset 0 1px 0 #ffffff;
+}
+.cl-root[data-pulltab='glass'] .cl-card-clip { left: 25%; transform: rotate(-8deg); }
+.cl-root[data-pulltab='glass'] .cl-card-clip2 { display: block; pointer-events: auto; transform: rotate(8deg); }
+.cl-root[data-pulltab='glass'] .cl-card-clip::before,
+.cl-root[data-pulltab='glass'] .cl-card-clip2::before,
+.cl-root[data-pulltab='glass'] .cl-ghost-clip::before {
+  left: 50%;
+  right: auto;
+  top: -3.5px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 0 0 3px 0;
+  background: linear-gradient(135deg, #cfe2fa, #8fb4e6);
+  transform: rotate(45deg);
+  box-shadow: none;
+}
+.cl-root[data-pulltab='glass'] .cl-card-clip::after,
+.cl-root[data-pulltab='glass'] .cl-card-clip2::after,
+.cl-root[data-pulltab='glass'] .cl-ghost-clip::after {
+  left: 3px;
+  right: auto;
+  top: 5px;
+  bottom: auto;
+  width: 3.4px;
+  height: 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.92);
+  transform: rotate(-14deg);
+  box-shadow: none;
+}
+
+/* ── 深色主题（沿用拉杆皮肤的 [data-theme='dark'] 写法）────────────── */
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-rope-main { stroke: #a3875c; }
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-rope-fiber { stroke: rgba(255, 244, 220, 0.28); }
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-rope-under { stroke: #5e4a2a; }
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-rope-stitch { stroke: rgba(226, 198, 156, 0.3); }
+.cl-root[data-pulltab='porcelain'][data-theme='dark'] .cl-rope-nail {
+  background: radial-gradient(circle at 35% 30%, #c8a878, #7d6440 78%);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-main { stroke: #9c7836; }
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-under { stroke: #3e2d15; }
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-shine { stroke: #e8cd88; opacity: 0.55; }
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-rings { stroke: rgba(60, 42, 16, 0.8); }
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-nail {
+  background: radial-gradient(circle at 36% 30%, #d8bb76, #9c7836 55%, #5b4420 100%);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-rope-nail::after {
+  background: radial-gradient(circle at 40% 35%, #4a3418, #2e2010);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-card-clip,
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-ghost-clip {
+  background: radial-gradient(130% 105% at 32% 12%, #e8cd88 0%, #9c7836 45%, #5b4420 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 240, 200, 0.5);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-card-clip::before,
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-ghost-clip::before {
+  background: linear-gradient(90deg, #4a3418, #e8cd88 50%, #4a3418);
+}
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-card-clip::after,
+.cl-root[data-pulltab='brass'][data-theme='dark'] .cl-ghost-clip::after {
+  background: radial-gradient(circle at 36% 30%, #e8cd88, #5b4420 82%);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-rope-main { stroke: #7fa3cf; }
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-rope-fiber { stroke: rgba(255, 255, 255, 0.4); }
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-rope-under { stroke: #4f7bbb; }
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-rope-dew { fill: url(#cl-dew-d); }
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-rope-nail {
+  background: radial-gradient(circle at 35% 30%, #dceafc, #7fa3cf 45%, #4f7bbb 100%);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip2,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-ghost-clip {
+  background: radial-gradient(135% 115% at 34% 24%, #dceafc 0%, #8fb4e6 38%, #4f7bbb 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip::before,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip2::before,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-ghost-clip::before {
+  background: linear-gradient(135deg, #7fa3cf, #4f7bbb);
+}
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip::after,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-card-clip2::after,
+.cl-root[data-pulltab='glass'][data-theme='dark'] .cl-ghost-clip::after {
+  background: rgba(255, 255, 255, 0.45);
 }
 .cl-root[data-pulltab='glass'] .cl-pull-foot { display: none; }
 .cl-root[data-pulltab='glass'] .cl-pull-badge {

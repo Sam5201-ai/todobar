@@ -124,6 +124,13 @@ function hashPose(id: string): { tilt: number; windPhase: number } {
   return { tilt: +(u * 4 - 2).toFixed(2), windPhase: +(u * Math.PI * 2).toFixed(3) }
 }
 
+/** ★2026-11-17 需求1：番茄卡样式 7 选 1 的可选键。
+ *  paper=经典（旧 minimal/glass 继续按经典视觉渲染，弹窗编辑时归入经典）；
+ *  watch=黄铜怀表 / ticket=站台车票 / lcd=像素掌机 / can=番茄罐头 /
+ *  board=咖啡小黑板 / marquee=剧场灯牌 —— 与 preview/clothesline-timer-card-designs.html 对应。 */
+const TIMER_STYLE_KEYS = ['paper', 'watch', 'ticket', 'lcd', 'can', 'board', 'marquee'] as const
+type TimerStyleKey = (typeof TIMER_STYLE_KEYS)[number]
+
 /** 引用源是否已失效（原便利签/贴图/剪贴板/待办/本地图被删或路径丢失）。
  *  ★失效只降级占位，绝不把卡片从数组移除（PRD R79「没删就一定在」）。 */
 function refBroken(card: ClotheslineCard): boolean {
@@ -475,38 +482,180 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
     const frozen = card.end_at == null
     // 结束判定：由 ratio 推出（不读 Date.now()）。倒计时 ratio≤0 / 正计时 ratio≥1。
     const ended = !frozen && (card.timer_direction === 'countup' ? ratio >= 1 : ratio <= 0)
-    return (
-      <div className="cl-face">
-        <span className="cl-tm-head">{copy.title}{pinMark}</span>
-        <div className="cl-tm-ring">
-          <svg className="cl-tm-svg" viewBox="0 0 96 96" aria-hidden="true">
-            <circle className="cl-tm-bg" cx="48" cy="48" r="42" />
-            <circle
-              className="cl-tm-fg"
-              cx="48"
-              cy="48"
-              r="42"
-              style={{ strokeDashoffset: 263.9 * (1 - ratio) }}
-            />
-          </svg>
-          {/* ★2026-11-15 需求6：圆环中心永远有内容 —— timerText 已改为纯时间正文
-              （暂停=冻结剩余、正计时=已计、结束=00:00），不再被状态词 strip 成空串。 */}
-          <span className={`cl-tm-time ${ended || card.fired_at ? 'is-fired' : ''}`}>
-            {timer ?? '--:--'}
+    // ★2026-11-17 需求1：番茄卡 7 款样式（经典 paper/minimal/glass + 怀表/车票/掌机/罐头/小黑板/灯牌）。
+    // 新 6 款与设计稿 preview/clothesline-timer-card-designs.html 一一对应；
+    // 按钮文案统一为 暂停/重置/+5 分（需求2：小重置→重置）；脚注不再提「右键更多」（需求3）。
+    const tstyle = card.card_style ?? 'paper'
+    const isClassic = tstyle === 'paper' || tstyle === 'minimal' || tstyle === 'glass'
+    // 计时进度 p∈[0,1]：正计时=已计比例，倒计时=已耗比例（ratio 是剩余比例）。
+    const progress = Math.min(1, Math.max(0, card.timer_direction === 'countup' ? ratio : 1 - ratio))
+    const remain = 1 - progress
+    const statusText = frozen ? '已暂停' : ended ? '已完成' : '计时中'
+    const dirText = card.timer_direction === 'countup' ? '正计时' : '倒计时'
+    const timeCls = ended || card.fired_at ? 'is-fired' : ''
+    const pinMark = card.pinned ? ' · 置顶' : ''
+    const timerBtns = (
+      <div className="cl-tm-btns" onPointerDown={(e) => e.stopPropagation()}>
+        <button type="button" onClick={() => onTimerAction(frozen ? 'resume' : 'pause')}>
+          {frozen ? '继续' : '暂停'}
+        </button>
+        <button type="button" onClick={() => onTimerAction('reset')}>重置</button>
+        <button type="button" onClick={() => onTimerAction('plus5')}>+5 分</button>
+      </div>
+    )
+    if (isClassic) {
+      return (
+        <div className="cl-face">
+          <span className="cl-tm-head">{copy.title}{pinMark}</span>
+          <div className="cl-tm-ring">
+            <svg className="cl-tm-svg" viewBox="0 0 96 96" aria-hidden="true">
+              <circle className="cl-tm-bg" cx="48" cy="48" r="42" />
+              <circle
+                className="cl-tm-fg"
+                cx="48"
+                cy="48"
+                r="42"
+                style={{ strokeDashoffset: 263.9 * (1 - ratio) }}
+              />
+            </svg>
+            {/* ★2026-11-15 需求6：圆环中心永远有内容 —— timerText 已改为纯时间正文
+                （暂停=冻结剩余、正计时=已计、结束=00:00），不再被状态词 strip 成空串。 */}
+            <span className={`cl-tm-time ${timeCls}`}>
+              {timer ?? '--:--'}
+            </span>
+          </div>
+          {timerBtns}
+          <span className="cl-tm-foot">
+            {frozen ? '已暂停 · ' : ended ? '已完成 · ' : ''}
+            {dirText}
+            {pinMark}
           </span>
         </div>
-        <div className="cl-tm-btns" onPointerDown={(e) => e.stopPropagation()}>
-          <button type="button" onClick={() => onTimerAction(frozen ? 'resume' : 'pause')}>
-            {frozen ? '继续' : '暂停'}
-          </button>
-          <button type="button" onClick={() => onTimerAction('reset')}>小重置</button>
-          <button type="button" onClick={() => onTimerAction('plus5')}>+5 分</button>
+      )
+    }
+    if (tstyle === 'watch') {
+      // A 黄铜怀表：燕尾铜牌 + 双层表圈表盘（刻度环 dasharray）+ 表冠钮
+      return (
+        <div className="cl-face">
+          <span className="cl-tw-plaque">{copy.title}{pinMark}</span>
+          <div className="cl-tm-ring is-watch">
+            <svg className="cl-tm-svg" viewBox="0 0 96 96" aria-hidden="true">
+              <circle className="cl-tw-bezel" cx="48" cy="48" r="44" />
+              <circle className="cl-tw-bezel2" cx="48" cy="48" r="39.5" />
+              <circle className="cl-tw-ticks" cx="48" cy="48" r="42.5" />
+              <circle
+                className="cl-tw-prog"
+                cx="48"
+                cy="48"
+                r="33"
+                style={{ strokeDashoffset: 207.3 * (1 - ratio) }}
+              />
+            </svg>
+            {/* ★问题3：h:mm:ss（7 字符）比设计稿的 mm:ss 宽 40%，21/19px 会压到
+                进度弧 —— 带小时时切小字号（真实怀表的紧凑表盘数字样式）。 */}
+            <span className={`cl-tw-time ${timeCls}${timer && timer.split(':').length > 2 ? ' is-long' : ''}`}>
+              {timer ?? '--:--'}
+            </span>
+          </div>
+          <span className="cl-tw-sub">
+            {frozen ? 'POMODORO · 已暂停' : ended ? 'POMODORO · 已完成' : 'POMODORO · 剩余'}
+          </span>
+          {timerBtns}
+          <span className="cl-tw-foot">{statusText} · {dirText}</span>
         </div>
-        <span className="cl-tm-foot">
-          {frozen ? '已暂停 · ' : ended ? '已完成 · ' : ''}
-          {card.timer_direction === 'countup' ? '正计时' : '倒计时'} · 右键更多
-          {pinMark}
+      )
+    }
+    if (tstyle === 'ticket') {
+      // B 站台车票：墨绿票头（标题+票号尾号）+ 等宽时间窗 + 检票剪线进度
+      const done = Math.round(progress * 10)
+      return (
+        <div className="cl-face">
+          <span className="cl-tk-head">
+            <span className="cl-tk-title">{copy.title}{pinMark}</span>
+            <span className="cl-tk-no">NO.{card.id.slice(-4)}</span>
+          </span>
+          <span className={`cl-tk-time ${timeCls}`}>{timer ?? '--:--'}</span>
+          <span className="cl-tk-sub">
+            {ended ? 'CHECKED · 已完成' : frozen ? 'HELD · 已暂停' : 'MIN : SEC 剩余'}
+          </span>
+          <span className="cl-tk-perf" aria-hidden="true">
+            <span className="is-done">{'●'.repeat(done)}</span>
+            <span className="is-cut">✂</span>
+            <span>{'○'.repeat(Math.max(0, 10 - done))}</span>
+          </span>
+          {timerBtns}
+          <span className="cl-tk-foot">TACCO STATION · {statusText}</span>
+        </div>
+      )
+    }
+    if (tstyle === 'lcd') {
+      // C 像素掌机：外壳标牌 + 内嵌 LCD 屏（液晶时间 + 分段电量条）
+      return (
+        <div className="cl-face">
+          <span className="cl-lc-label">◉ TOMATO · {copy.title}{pinMark}</span>
+          <div className="cl-lc-screen">
+            <span className={`cl-lc-time ${timeCls}`}>{timer ?? '--:--'}</span>
+            <span className="cl-lc-bar"><i style={{ width: `${Math.round(progress * 100)}%` }} /></span>
+          </div>
+          {timerBtns}
+          <span className="cl-lc-foot">{statusText} · ©TACCO</span>
+        </div>
+      )
+    }
+    if (tstyle === 'can') {
+      // D 番茄罐头：金属罐顶（CSS 伪元素）+ 波普红条 + 容量条进度
+      return (
+        <div className="cl-face">
+          <span className="cl-cn-band">
+            <span className="cl-cn-title">{copy.title}{pinMark}</span>
+            <span className="cl-cn-en">TOMATO · TACCO FOODS</span>
+          </span>
+          <span className={`cl-cn-time ${timeCls}`}>{timer ?? '--:--'}</span>
+          <span className="cl-cn-cap">
+            <em>{Math.round(remain * 100)}% LEFT</em>
+            <span className="cl-cn-bar"><i style={{ width: `${Math.round(remain * 100)}%` }} /></span>
+          </span>
+          {timerBtns}
+          <span className="cl-cn-foot">NET WT · {statusText}</span>
+        </div>
+      )
+    }
+    if (tstyle === 'board') {
+      // E 咖啡小黑板：木框（卡身）+ 粉笔标题 + 「正」字计数进度
+      const strokes = Math.round(progress * 10)
+      const groups = Math.floor(strokes / 5)
+      return (
+        <div className="cl-face">
+          <span className="cl-eb-title">今日 · {copy.title}{pinMark}</span>
+          <span className={`cl-eb-time ${timeCls}`}>{timer ?? '--:--'}</span>
+          <span className="cl-eb-sub">
+            {ended ? '写满一个正字' : frozen ? '已暂停' : `还剩 ${timer ?? ''}`}
+          </span>
+          <span className="cl-eb-tally" aria-hidden="true">
+            <span className="is-done">{'正'.repeat(groups)}{'｜'.repeat(strokes % 5)}</span>
+            <span className="is-rest">{'｜'.repeat(Math.max(0, 10 - strokes))}</span>
+          </span>
+          {timerBtns}
+          <span className="cl-eb-foot">{statusText} · {dirText}</span>
+        </div>
+      )
+    }
+    // F 剧场灯牌：金色 dotted 灯泡边框（伪元素）+ 灯泡倒数进度
+    const lit = Math.ceil(remain * 10)
+    return (
+      <div className="cl-face">
+        <span className="cl-mq-title">{copy.title}{pinMark}</span>
+        <span className={`cl-mq-time ${timeCls}`}>{timer ?? '--:--'}</span>
+        <span className="cl-mq-sub">
+          {ended ? '全部熄灯' : frozen ? '已暂停' : '距离开演'}
         </span>
+        <span className="cl-mq-bulbs" aria-hidden="true">
+          {Array.from({ length: 10 }, (_, i) => (
+            <i key={i} className={i < lit ? 'is-lit' : ''} />
+          ))}
+        </span>
+        {timerBtns}
+        <span className="cl-mq-foot">TACCO THEATER · {statusText}</span>
       </div>
     )
   }
@@ -1124,7 +1273,7 @@ export function ClotheslineView() {
     // 甲板横向平移，避免滚轮落在正文上变成「死区」。
     const txt = t.closest('.cl-txt') as HTMLElement | null
     if (txt && txt.scrollHeight > txt.clientHeight + 1) return
-    if (t.closest('.cl-add-sheet, .cl-card-menu, .cl-note-list, .cl-preview, input, textarea, select')) return
+    if (t.closest('.cl-add-sheet, .cl-note-list, .cl-preview, input, textarea, select')) return
     const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
     scrollXRef.current = Math.min(maxScrollX(), Math.max(0, scrollXRef.current + delta))
     setScrollX(scrollXRef.current)
@@ -1150,10 +1299,12 @@ export function ClotheslineView() {
     const rootRect = root.getBoundingClientRect()
     const panelW = rootRect.width
     if (panelW <= 0) return
-    // 直接量绳子：SVG 的屏上 top（ropeTop=面板顶） + viewBox 公式 26+40·t(1−t)。
-    // 不再假设卡片几何（deck top / clip top 的静态值），杜绝基准偏差。
-    const rope = root.querySelector<HTMLElement>('.cl-rope-svg')
-    const ropeTop = rope ? rope.getBoundingClientRect().top : rootRect.top
+    // ★2026-11-17 问题1：ropeTop 改用面板顶（rootRect.top）这一**静态基准**。
+    // 旧版量 .cl-rope-svg 的 rect —— 清风开启时绳身带 cl-rope-breath（±2px 呼吸），
+    // 每次渲染（时钟 / 计时每秒）都把呼吸相位差写进 --cl-hang → 卡片逐帧上下
+    // 阶梯跳动，正是「左右摆之外还有上上下下卡顿感」的来源。面板顶不参与
+    // 任何动画，天然稳定；0.25px 变更守卫从此恒不触发，动画零打断。
+    const ropeTop = rootRect.top
     const sways = deck.querySelectorAll<HTMLElement>(':scope > .cl-card-sway')
     // zoom 会等比缩放子树内的 transform 位移：--cl-hang 存 CSS px，
     // 视觉位移 = hang × zoom → 写入值 = 视觉需求 ÷ zoom（旧版漏了这一步）。
@@ -1263,10 +1414,16 @@ export function ClotheslineView() {
     //   也只有 1180 逻辑px。现在 panelW = availW × ropeRatio 直映可用区，
     //   ratio=1.0 时铺满可用区（无贴边主窗时 = 整个屏宽）；travel 随之自然
     //   收窄，ratio=1.0 时窗口铺满不可横移（用户主动选满宽，符合预期）。
-    const fullW = Math.max(
-      Math.min(availW, Math.round(300 * sf)),
-      Math.round(availW * ropeRatio),
-    )
+    // ★2026-11-17 问题5：绳长 100% 必须 = 整屏宽。availW 永远保守避让贴边主窗
+    // （主窗收起也按展开满宽预留），导致拉满 100% 屏幕两侧仍是大片空白。
+    // ratio=1 时无视避让直接铺满整屏 —— 用户主动选满宽，覆盖主窗区域属预期；
+    // ratio<1 时保持原避让公式不变。
+    const fullW = ropeRatio >= 0.999
+      ? mon.width
+      : Math.max(
+          Math.min(availW, Math.round(300 * sf)),
+          Math.round(availW * ropeRatio),
+        )
     // ★第二十一轮：展开态面板宽仍按可用区 86%；收起态面板 = .cl-pulltab 盒子的
     //   480 逻辑px（窄窗架构下不再需要「宽窗口给拉杆容错」——窗口本身只有 56sf 宽，
     //   面板盒只是 DOM 坐标系，拉手绘制在其中心）。
@@ -1287,7 +1444,8 @@ export function ClotheslineView() {
     let minX: number
     let maxX: number
     if (isExpanded) {
-      minX = availX
+      // ★问题5：ratio=1 面板=整屏宽，起点也回到屏幕左缘（否则右侧被裁）。
+      minX = ropeRatio >= 0.999 ? mon.x : availX
       maxX = mon.x + mon.width - panelW
     } else {
       const half = Math.round(panelW / 2)
@@ -1636,7 +1794,7 @@ export function ClotheslineView() {
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const [notesTick, setNotesTick] = useState(0)
   const [nowTick, setNowTick] = useState(() => Date.now())
-  const [cardMenu, setCardMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // ★2026-11-17 需求3：卡片右键菜单已整体移除（cardMenu state 一并删除）。
   // ★2026-11-15 需求1c：便利签卡顶部的颜色图标弹出色板（与右键菜单同一交互族）。
   const [colorMenu, setColorMenu] = useState<{ cardId: string; noteId: string; x: number; y: number } | null>(null)
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
@@ -1776,6 +1934,12 @@ export function ClotheslineView() {
       reg<ClotheslineSettings>(CL_SETTINGS_CHANGED, (next) => {
         const prev = lastSettingsRef.current
         lastSettingsRef.current = next
+        // ★问题2：settingsRef 本体在 useEffect [settings]（渲染后才）更新，而下方
+        //   bandChanged 会**立刻**调 placeAndArm 读 settingsRef.rope_width_ratio /
+        //   card_size —— 不同步刷新就拿到旧值：滑杆拉满后绳子「弹回旧长度」，
+        //   收起再展开（placeAndArm 晚于渲染）才恢复满宽。事件回调里写 ref 合法
+        //   （render 期不写 ref 的铁律不冲突）。
+        settingsRef.current = next
         setSettings(next) // 清风 wind_effect / pulltab 比例：class、样式立即响应。
         const geom = geomRef.current
         if (!geom) return // 恢复未完成，忽略；启动恢复本身已按磁盘摆位。
@@ -1825,7 +1989,6 @@ export function ClotheslineView() {
       //   本 effect 只挂载一次，直接引用 closePreview 会闭包捕获首次渲染的陈旧函数，
       //   故统一走 closePreviewRef.current（每次渲染后由 effect 同步为最新实现）。
       reg<unknown>(CL_DISMISS_OVERLAY, () => {
-        setCardMenu(null)
         setAddSheetOpen(false)
         // ★2026-11-15 需求5/6：随手记 / 番茄钟编辑弹窗无遮罩，点击弹窗外 = 取消；
         //   窗口矩形 / 命中矩形 / dismiss 开关由 composing 的 effect 清理函数还原。
@@ -2077,7 +2240,6 @@ export function ClotheslineView() {
 
   const takeDown = useCallback(
     async (card: ClotheslineCard) => {
-      setCardMenu(null)
       setEditing(null)
       // ★一键录音卡取下时若引擎还在录，先通知主窗丢弃（否则麦克风一直被占且无 UI 可停）。
       if (card.kind === 'audio') {
@@ -2100,7 +2262,7 @@ export function ClotheslineView() {
         flash(e instanceof Error ? e.message : String(e))
       }
     },
-    [flash, setCardMenu, setCards, setEditing, setUndoCard],
+    [flash, setCards, setEditing, setUndoCard],
   )
 
   const undoTakeDown = useCallback(async () => {
@@ -2115,19 +2277,6 @@ export function ClotheslineView() {
       flash(e instanceof Error ? e.message : String(e))
     }
   }, [undoCard, flash, setCards, setUndoCard])
-
-  const togglePin = useCallback(
-    async (card: ClotheslineCard) => {
-      setCardMenu(null)
-      try {
-        const next = await clUpdateCard(card.id, { pinned: !card.pinned })
-        setCards((prev) => prev.map((c) => (c.id === next.id ? next : c)))
-      } catch (e) {
-        flash(e instanceof Error ? e.message : String(e))
-      }
-    },
-    [flash, setCardMenu, setCards],
-  )
 
   /** ★2026-11-15 反馈4：便利签 / 随手记卡字号循环调节（100% → 85% → 72% → 115% → 100%）。
    *  真源是 card.font_scale（Rust 落盘，重启保留）；CSS 侧 --cl-card-fs 消费。 */
@@ -2187,7 +2336,7 @@ export function ClotheslineView() {
     }
   }, [editModal, flash, setCards])
 
-  /** 番茄卡上的暂停 / 继续 / 小重置 / +5 分（原型 .tm-btns）。
+  /** 番茄卡上的暂停 / 继续 / 重置 / +5 分（原型 .tm-btns）。
    *  ⚠️ 全部走 clUpdateCard 增量写盘，Rust 单一写锁不变；fired_at 清空避免重复通知。 */
   const timerAction = useCallback(
     async (card: ClotheslineCard, action: TimerAction) => {
@@ -2209,8 +2358,12 @@ export function ClotheslineView() {
         patch = { end_at: now + remaining, elapsed_before_pause_ms: 0, timer_total_ms: total, fired_at: null }
       } else if (action === 'reset') {
         // 旧版对暂停中的卡算出 total=0 → 被钳成 1 分钟；优先用 timer_total_ms。
+        // ★2026-11-18 重置语义按方向区分：倒计时恢复到初始设定时长（剩余=total）；
+        //   正计时从 0 重新计 —— 显示=now-created_at，必须重设 created_at 锚点
+        //   （旧版只推 end_at，正计时的显示与圆环根本不变，重置等于无效）。
+        //   两种方向统一重设锚点 + end_at=now+total。
         const total = card.timer_total_ms ?? Math.max(60_000, (card.end_at ?? now) - card.created_at)
-        patch = { end_at: now + total, elapsed_before_pause_ms: 0, timer_total_ms: total, fired_at: null }
+        patch = { created_at: now, end_at: now + total, elapsed_before_pause_ms: 0, timer_total_ms: total, fired_at: null }
       } else {
         if (card.end_at != null) {
           patch = { end_at: card.end_at + 5 * 60_000, timer_total_ms: Math.max(60_000, (card.timer_total_ms ?? card.end_at - card.created_at) + 5 * 60_000), fired_at: null }
@@ -2552,7 +2705,6 @@ export function ClotheslineView() {
 
   const openSource = useCallback(
     async (card: ClotheslineCard) => {
-      setCardMenu(null)
       try {
         if (card.kind === 'note' && card.note_id) await emit(CL_OPEN_NOTE, { id: card.note_id })
         else if (card.kind === 'task' && card.task_id) await emit(CL_OPEN_TASK, { id: card.task_id })
@@ -2561,7 +2713,7 @@ export function ClotheslineView() {
         flash(e instanceof Error ? e.message : String(e))
       }
     },
-    [flash, setCardMenu],
+    [flash],
   )
 
   /** ★2026-11-15 需求5/6：新增/编辑弹窗的表单态（标题 / 正文 / 颜色 / 计时专属字段）。
@@ -2570,7 +2722,9 @@ export function ClotheslineView() {
   const [composeTitle, setComposeTitle] = useState('')
   const [composeDirection, setComposeDirection] = useState<'countdown' | 'countup'>('countdown')
   const [composeColor, setComposeColor] = useState('')
-  const [composeStyle, setComposeStyle] = useState<'paper' | 'minimal' | 'glass'>('paper')
+  /** ★2026-11-17 需求1：番茄卡样式 7 选 1 —— 经典(paper，旧 minimal/glass 也归经典视觉) +
+      怀表 watch / 车票 ticket / 掌机 lcd / 罐头 can / 小黑板 board / 灯牌 marquee。 */
+  const [composeStyle, setComposeStyle] = useState<TimerStyleKey>('paper')
   /** ★2026-11-15 反馈批9：随手记卡样式（创建时可选）——晨雾渐变 / 和纸胶带 / 墨夜磁贴。 */
   const [composeTextStyle, setComposeTextStyle] = useState<'mist' | 'tape' | 'night'>('mist')
   /** ★批12：随手记字体格式（标题/内容独立字号 + 字体族 + 加粗/倾斜）。 */
@@ -2601,7 +2755,9 @@ export function ClotheslineView() {
             elapsed_before_pause_ms: 0,
             timer_total_ms: min * 60_000,
             fired_at: null,
-            card_color: composeColor || null,
+            // ★2026-11-17 问题3：番茄卡配色严格按设计图，不再落自定义卡色
+            //（编辑保存顺带清掉旧数据里残留的 card_color）。
+            card_color: null,
             card_style: composeStyle,
             remind: composeRemind,
           })
@@ -2620,7 +2776,7 @@ export function ClotheslineView() {
         end_at: Date.now() + min * 60_000,
         timer_direction: composeDirection,
         timer_elapsed_mode: 'wallclock',
-        card_color: composeColor || null,
+        card_color: null, // ★2026-11-17 问题3：番茄卡配色严格按设计图。
         card_style: composeStyle,
         remind: composeRemind,
       })
@@ -2669,7 +2825,12 @@ export function ClotheslineView() {
         const totalMs = init.timer_total_ms ?? Math.max(60_000, (init.end_at ?? Date.now()) - init.created_at)
         setComposeMinutes(String(Math.min(720, Math.max(1, Math.round(totalMs / 60_000)))))
         setComposeDirection(init.timer_direction === 'countup' ? 'countup' : 'countdown')
-        setComposeStyle(init.card_style === 'minimal' || init.card_style === 'glass' ? init.card_style : 'paper')
+        // 旧值 minimal/glass 仍按经典视觉渲染，编辑时归入「经典」选择。
+        setComposeStyle(
+          init.card_style && TIMER_STYLE_KEYS.includes(init.card_style as TimerStyleKey)
+            ? (init.card_style as TimerStyleKey)
+            : 'paper',
+        )
         setComposeRemind(init.remind ?? true)
       } else {
         let saved = ''
@@ -2688,7 +2849,8 @@ export function ClotheslineView() {
       setComposeFormat(init ? cardTextFormat(init) : { ...TEXT_FMT_DEFAULT })
     }
     setComposeTitle(init?.title ?? '')
-    setComposeColor(init?.card_color ?? '')
+    // ★2026-11-17 问题3：番茄卡不再支持自定义卡色（弹窗已隐藏色板），预填恒空。
+    setComposeColor(kind === 'timer' ? '' : (init?.card_color ?? ''))
     setComposeText(init?.text ?? '')
     setAddSheetOpen(false)
     setComposing(kind)
@@ -2911,7 +3073,6 @@ export function ClotheslineView() {
     if (!previews[card.id]) return
     const geom = geomRef.current
     if (!geom) return
-    setCardMenu(null)
     setAddSheetOpen(false)
     previewCardIdRef.current = card.id // 同步 ref：state 异步更新窗口内 Rust 回发 dismiss 也能读到。
     setPreviewCardId(card.id)
@@ -3178,10 +3339,11 @@ export function ClotheslineView() {
     return () => window.removeEventListener('keydown', onKey)
   }, [finishDrag, previewCardId, closePreview, colorMenu, composing, editModal])
 
-  // 问题13：任一浮层（右键菜单 / ＋菜单 / 大图预览）打开 → 通知 Rust 命中循环检测
+  // 问题13：任一浮层（＋菜单 / 大图预览）打开 → 通知 Rust 命中循环检测
   // 「点在可点区外」并回发 CL_DISMISS_OVERLAY；全部关闭则停止检测。透明穿透窗收不到
   // 窗外 click，这是唯一可靠的「点外面关菜单」通道。
-  const overlayOpen = Boolean(cardMenu || addSheetOpen || previewCardId)
+  // ★2026-11-17 需求3：右键菜单移除后 overlay 不再包含 cardMenu。
+  const overlayOpen = Boolean(addSheetOpen || previewCardId)
   useEffect(() => {
     void clSetDismissOnOutside(overlayOpen).catch(() => undefined)
     // 命中矩形恒为面板矩形，浮层开合不改变它；但预览期间要维持 openPreview 写入的
@@ -3275,7 +3437,7 @@ export function ClotheslineView() {
     return () => window.clearTimeout(id)
   // viewportW（根因C）：窗口尺寸 / 卡片组居中状态变化后，卡片 DOM 位置整体改变，
   // 必须重算命中矩形，否则「看得见点不到」。centeredDeck 由其派生，无需重复列入。
-  }, [ready, expanded, cards, posedCards.length, scrollX, addSheetOpen, cardMenu, composing, dragRatio, previewCardId, viewportW, refreshHitRects])
+  }, [ready, expanded, cards, posedCards.length, scrollX, addSheetOpen, composing, dragRatio, previewCardId, viewportW, refreshHitRects])
 
   if (!settings || !monitor) {
     return <div className="cl-root" ref={rootRef} data-cl-state="booting" data-theme={theme} />
@@ -3318,7 +3480,6 @@ export function ClotheslineView() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
       }}
       onClick={() => {
-        if (cardMenu) setCardMenu(null)
         if (addSheetOpen) setAddSheetOpen(false)
         if (colorMenu) setColorMenu(null)
       }}
@@ -3329,12 +3490,37 @@ export function ClotheslineView() {
       /* 根因C：滚轮监听放在整层 root，卡片之间的透明空隙也能滚（不再只挂 deck）。 */
       onWheel={onDeckWheel}
     >
-      {/* 麻绳：SVG 下垂曲线 + 麻纤维虚线 + 两端固定钉（原型 .rope-svg） */}
+      {/* 麻绳：SVG 下垂曲线 + 麻纤维虚线 + 两端固定钉（原型 .rope-svg）。
+          ★2026-11-17 绳身换肤：跟随 data-pulltab（设置页拉杆样式）切换绳+钉材质。
+          新增装饰路径均由同一条曲线坐标公式派生（26+40·t(1−t)），几何零变化：
+          stitch=素瓷绞股纹 / shine+rings=黄铜车刻高光与环纹 / dew=琉璃静露。
+          默认全部 visibility:hidden，由 clothesline.css 各皮肤段按需点亮。 */}
       <div className="cl-rope" aria-hidden="true">
         <svg className="cl-rope-svg" viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <defs>
+            {/* 琉璃露珠渐变：浅色 / 深色两套，CSS fill:url(#…) 按主题切换 */}
+            <radialGradient id="cl-dew-l" cx="38%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="45%" stopColor="#c7dcf8" />
+              <stop offset="100%" stopColor="#6f9fdd" />
+            </radialGradient>
+            <radialGradient id="cl-dew-d" cx="38%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#dceafc" />
+              <stop offset="45%" stopColor="#8fb4e6" />
+              <stop offset="100%" stopColor="#4f7bbb" />
+            </radialGradient>
+          </defs>
           <path className="cl-rope-under" d="M4 28 Q500 48 996 28" />
           <path className="cl-rope-main" d="M4 26 Q500 46 996 26" />
           <path className="cl-rope-fiber" d="M4 25 Q500 45 996 25" />
+          <path className="cl-rope-stitch" d="M4 26.8 Q500 46.8 996 26.8" />
+          <path className="cl-rope-shine" d="M4 24.4 Q500 44.4 996 24.4" />
+          <path className="cl-rope-rings" d="M4 26 Q500 46 996 26" />
+          {/* 静露 x 均布，y = 26+40·t(1−t) + 3（露珠上缘贴线悬挂感） */}
+          <circle className="cl-rope-dew" cx="180" cy="34.9" r="4.5" />
+          <circle className="cl-rope-dew" cx="390" cy="39" r="5.2" />
+          <circle className="cl-rope-dew" cx="610" cy="39" r="4.2" />
+          <circle className="cl-rope-dew" cx="830" cy="34.6" r="4.8" />
         </svg>
         <span className="cl-rope-nail cl-rope-nail-l" />
         <span className="cl-rope-nail cl-rope-nail-r" />
@@ -3571,8 +3757,10 @@ export function ClotheslineView() {
                   // ★0.4.80 方案A：倾角变量必须设在外壳层 —— 全部 transform / 摆动动画
                   // 已移到 .cl-card-sway，CSS 变量只向下继承，父层读不到子元素上的 --cl-rot。
                   // card 层保留同名变量仅作兼容，不再驱动任何 transform。
+                  // ★2026-11-17 需求4：清风关（wind_effect=false）时倾角归零 —— 卡片
+                  // 垂直摆正，不再东晃西倒；清风开时保留 ±2° 随机静置倾角。
                   '--cl-wind-delay': `-${pose.windPhase.toFixed(2)}s`,
-                  '--cl-rot': `${pose.tilt}deg`,
+                  '--cl-rot': settings.wind_effect ? `${pose.tilt}deg` : '0deg',
                 } as CSSProperties}
             >
               {/* ★批10-3 根因修复：木夹必须放在 .cl-card **外层**（sway 直接子元素）。
@@ -3584,6 +3772,24 @@ export function ClotheslineView() {
                   z-index:4 高于纸面（position:relative z-auto），夹子压住卡的上缘。 */}
               <span
                 className="cl-card-clip"
+                role="button"
+                aria-label="拖动排序 · Alt+拖可立即开始"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onCardPointerDown(e, card, 'clip')
+                }}
+                onPointerMove={onCardPointerMove}
+                onPointerUp={(e) => onCardPointerUp(e, true)}
+                onPointerCancel={(e) => onCardPointerUp(e, false)}
+              />
+              {/* ★2026-11-17 绳身换肤：琉璃皮肤的「第二枚水滴夹」（右 75% 处，
+                  与主夹 25% / ±8° 镜像相向微倾，两夹与卡片左右边缘等距）。
+                  默认 display:none，仅 glass 皮肤显示；复用主夹同一套指针处理，
+                  右侧液滴同样可拖拽排序。悬挂测量 syncCardHang 只量主夹
+                  （.cl-card-clip），双夹等大等高，绳曲线在两夹位间的 y 差
+                  最大约 3px（面板边缘处），视觉上可忽略。 */}
+              <span
+                className="cl-card-clip2"
                 role="button"
                 aria-label="拖动排序 · Alt+拖可立即开始"
                 onPointerDown={(e) => {
@@ -3609,7 +3815,8 @@ export function ClotheslineView() {
                   dragVisual && dragVisual.insertAt === index ? 'is-drop-target' : ''
                 }`}
                 style={{
-                  '--cl-rot': `${pose.tilt}deg`,
+                  // ★2026-11-17 需求4：与 sway 层同规则 —— 清风关时 0deg（垂直摆正）。
+                  '--cl-rot': settings.wind_effect ? `${pose.tilt}deg` : '0deg',
                   ...(noteColor
                     ? {
                         '--cl-note': noteColor.bg,
@@ -3617,10 +3824,17 @@ export function ClotheslineView() {
                         '--cl-note-ink': noteColor.fg,
                       }
                     : {}),
-                  // ★2026-11-15 需求5/6：自定义卡色。--cl-card-bg 是各类型底色变量的
+                  // ★2026-11-17 问题3：番茄卡（kind='timer'）忽略 card_color ——
+                  // 配色严格按设计图；旧数据残留的自定义色不再染新皮肤。
+                  // 其余卡型 --cl-card-bg 是各类型底色变量的
                   //   统一兜底值（clothesline.css 各 kind 的 background-color / 纹理渐变
                   //   都引用它），覆盖一处即整卡换色，不透明、无 alpha，命中安全。
-                  ...(card.card_color ? { '--cl-card-bg': card.card_color } : {}),
+                  // ★2026-11-17 需求1：--cl-card-tint 仅在选了自定义卡色时存在，
+                  //   新 6 款番茄皮肤用它染强调件（表圈/票头/外壳/红条/木框/灯金），
+                  //   卡身保持各款固定底色 —— var(--cl-card-tint, 默认 token) 双态。
+                  ...(card.kind !== 'timer' && card.card_color
+                    ? { '--cl-card-bg': card.card_color, '--cl-card-tint': card.card_color }
+                    : {}),
                   // ★2026-11-15 反馈批9：墨夜样式的左侧竖条取自定义卡色（未选色用默认粉）。
                   ...(card.kind === 'text' && card.card_color
                     ? { '--cl-night-bar': card.card_color }
@@ -3642,7 +3856,7 @@ export function ClotheslineView() {
                       }
                     : {}),
                 } as CSSProperties}
-                aria-label="长按 / Alt+拖排序 · 单击编辑 · 右键更多"
+                aria-label="长按 / Alt+拖排序 · 单击编辑"
                 onPointerDown={(e) => onCardPointerDown(e, card, 'longpress')}
                 onPointerMove={onCardPointerMove}
                 onPointerUp={(e) => onCardPointerUp(e, true)}
@@ -3671,18 +3885,25 @@ export function ClotheslineView() {
                   }
                   setEditing({ id: card.id, value: card.text })
                 }}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setCardMenu({ id: card.id, x: e.clientX, y: e.clientY })
-                }}
+                /* ★2026-11-17 需求3：去掉卡片右键下拉菜单 —— 「打开原内容」菜单独有
+                   入口改为悬停图标 ⧉；★问题2：置顶功能（📌）整体移除。 */
               >
                 {/* ★批10-3：木夹已移到 sway 层（.cl-card overflow:hidden 会裁掉
                     露在卡外的上半段，导致夹子永远连不上麻绳）。 */}
-                {/* 悬停浮出的操作按钮：与右键菜单同源，绝不另起一套写入路径。
-                    ★2026-11-15 反馈5：去掉右上角置顶图标（置顶入口收敛到右键菜单）。
-                    ★2026-11-15 反馈4：便利签 / 随手记卡新增字号调节图标（循环档位）。 */}
+                {/* 悬停浮出的操作按钮：写操作全部走 clUpdateCard / clRemoveCard 单一写锁。
+                    ★2026-11-17 需求3：右键菜单移除后，原菜单独有的「打开原内容」
+                    收敛为悬停图标 ⧉（仅便利签 / 待办卡渲染）；★问题2：置顶已移除。 */}
                 <div className="cl-card-actions" onPointerDown={(e) => e.stopPropagation()}>
+                  {(card.kind === 'note' || card.kind === 'task') && !broken ? (
+                    <button
+                      type="button"
+                      aria-label="打开原内容"
+                      title="打开原内容"
+                      onClick={(e) => { e.stopPropagation(); void openSource(card) }}
+                    >
+                      ⧉
+                    </button>
+                  ) : null}
                   {(card.kind === 'note' || card.kind === 'text') && !broken ? (
                     <button
                       type="button"
@@ -3896,27 +4117,55 @@ export function ClotheslineView() {
               </div>
               <div className="cl-modal-row">
                 <span className="cl-modal-label">卡片样式</span>
-                <div className="cl-modal-seg">
+                <div className="cl-modal-seg is-7">
                   <button
                     type="button"
                     className={composeStyle === 'paper' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('paper')}
                   >
-                    纸感
+                    经典
                   </button>
                   <button
                     type="button"
-                    className={composeStyle === 'minimal' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('minimal')}
+                    className={composeStyle === 'watch' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('watch')}
                   >
-                    极简
+                    怀表
                   </button>
                   <button
                     type="button"
-                    className={composeStyle === 'glass' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('glass')}
+                    className={composeStyle === 'ticket' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('ticket')}
                   >
-                    玻璃
+                    车票
+                  </button>
+                  <button
+                    type="button"
+                    className={composeStyle === 'lcd' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('lcd')}
+                  >
+                    掌机
+                  </button>
+                  <button
+                    type="button"
+                    className={composeStyle === 'can' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('can')}
+                  >
+                    罐头
+                  </button>
+                  <button
+                    type="button"
+                    className={composeStyle === 'board' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('board')}
+                  >
+                    黑板
+                  </button>
+                  <button
+                    type="button"
+                    className={composeStyle === 'marquee' ? 'is-active' : ''}
+                    onClick={() => setComposeStyle('marquee')}
+                  >
+                    灯牌
                   </button>
                 </div>
               </div>
@@ -3979,6 +4228,9 @@ export function ClotheslineView() {
             </div>
           </div>
           ) : null}
+          {/* ★2026-11-17 问题3：番茄钟弹窗不再提供卡片颜色 —— 卡片配色严格按
+              设计图（7 款样式各有固定配色），自定义色会把新皮肤染丑。 */}
+          {composing !== 'timer' ? (
           <div className="cl-modal-row">
             <span className="cl-modal-label">卡片颜色</span>
             <div className="cl-modal-swatches">
@@ -3995,6 +4247,7 @@ export function ClotheslineView() {
               ))}
             </div>
           </div>
+          ) : null}
           {/* ★批12：随手记创建弹窗的字体格式段（标题/内容独立字号 + 字体 + 加粗/倾斜）。 */}
           {composing === 'text' ? (
             <FmtSection fmt={composeFormat} onChange={setComposeFormat} />
@@ -4075,41 +4328,8 @@ export function ClotheslineView() {
         onChange={(e) => void onPickImage(e)}
       />
 
-      {/* 卡片右键菜单：固定定位，点空白即关；所有写操作走 Rust 单一写锁 */}
-      {cardMenu ? (
-        <div
-          className="cl-card-menu"
-          data-cl-hit="1"
-          style={{ left: Math.min(cardMenu.x, window.innerWidth - 168), top: Math.min(cardMenu.y, window.innerHeight - 190) }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {(() => {
-            const c = cards.find((x) => x.id === cardMenu.id)
-            if (!c) return null
-            return (
-              <>
-                <button type="button" onClick={() => void togglePin(c)}>
-                  {c.pinned ? '取消置顶' : '置顶这张'}
-                </button>
-                <button type="button" onClick={() => void openSource(c)}>打开原内容</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCardMenu(null)
-                    if (refBroken(c) || cardCopy(c).missing) flash('原内容已删除，可直接取下这张卡')
-                    else if (c.kind === 'shot' || c.kind === 'pin' || c.kind === 'image' || c.kind === 'text') openCardEditor(c)
-                    else if (c.kind === 'timer') openComposer('timer', c)
-                    else setEditing({ id: c.id, value: c.text })
-                  }}
-                >
-                  编辑文字
-                </button>
-                <button type="button" className="is-danger" onClick={() => void takeDown(c)}>取下</button>
-              </>
-            )
-          })()}
-        </div>
-      ) : null}
+      {/* ★2026-11-17 需求3：卡片右键下拉菜单整体移除 —— 「打开原内容」收敛为
+          卡片悬停图标 ⧉，「编辑 / 取下」本就有悬停按钮；★问题2：置顶已移除。 */}
 
       {/* ★2026-11-15 需求1c：便利签卡顶部 🎨 图标弹出的色板（与桌面便利签同族色板）。 */}
       {colorMenu ? (

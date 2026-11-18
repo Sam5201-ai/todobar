@@ -210,7 +210,7 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
-        <Row title="拉杆样式" sub="收起态拉绳把手的材质与配色，默认素瓷">
+        <Row title="拉杆样式" sub="拉杆、绳身与夹子同步换装：素瓷麻绳 / 黄铜铜铃 / 琉璃露珠，默认素瓷">
           <select
             className="cl-set-select"
             value={settings.pulltab_style ?? 'porcelain'}

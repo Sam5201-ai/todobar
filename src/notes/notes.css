@@ -270,8 +270,9 @@
   transition: opacity 0.12s ease;
 }
 
-.ns-item:hover .ns-item-ops,
-.ns-item:focus-within .ns-item-ops {
+/* ★2026-11-17 问题：去掉 :focus-within —— 点「完成勾选」后焦点留在该行，
+   操作浮框会永远显示不消失（绳窗同款问题已同步修）；只保留悬停浮现。 */
+.ns-item:hover .ns-item-ops {
   opacity: 1;
   pointer-events: auto;
 }
