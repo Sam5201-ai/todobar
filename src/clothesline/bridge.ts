@@ -45,6 +45,18 @@ export type ClNoteHung = { noteId: string }
 export const CL_NOTE_COLOR_ACTION = 'clothesline-note-color-action'
 export type ClNoteColorAction = { noteId: string; colorKey: string }
 
+/** 绳窗/便签窗 → 主窗：归档绳上卡（主窗编排「一体归档」：便利签卡同时 archiveNote）。
+ *  archive：noteId/cardId 至少一个；主窗 archiveNote + clArchiveCard（cardId 缺省时反查）。
+ *  delete-note：永久删除——removeNote(noteId) + 删除活跃绳卡(cardId) + 清理归档残留。 */
+export const CL_ARCHIVE_CARD = 'clothesline-archive-card'
+export type ClArchiveCard = {
+  action: 'archive' | 'delete-note'
+  cardId?: string
+  noteId?: string
+}
+/** 绳窗 ＋ 菜单「归档」→ 主窗唤起并打开归档页。 */
+export const CL_OPEN_ARCHIVE = 'clothesline-open-archive'
+
 /** ★批14 主窗 → 绳窗：操作结果 toast（绳上便利签「加入待办」等）。
  *  写方在主窗（单一写方红线），但用户不会一直开着工具窗——结果提示必须弹回
  *  绳窗并锚到 noteId 对应卡片的水平位置；卡不在/未带 noteId 时回落面板居中。 */
@@ -179,6 +191,8 @@ export interface ClotheslineCard {
   created_at: number
   updated_at: number
   deleted_at: number | null
+  /** 归档时间戳（ms）。有值 = 已归档：不在绳上，但保留供归档页查看/恢复。 */
+  archived_at?: number | null
 }
 
 /** 与 clothesline.rs::SessionState 对应。 */
@@ -267,6 +281,7 @@ export function clMakeCard(kind: CardKind, patch: Partial<ClotheslineCard> = {})
     created_at: now,
     updated_at: now,
     deleted_at: null,
+    archived_at: null,
   }
 }
 
@@ -350,6 +365,22 @@ export const clRemoveCard = (id: string) =>
 /** 撤销取下：保留原 order，回到原槽位。 */
 export const clRestoreCard = (id: string) =>
   invoke<ClotheslineCard>('clothesline_restore_card', { id })
+
+/** 归档卡片：绳上消失但持久保留；Timer 顺带清 end_at/fired_at（停止计时与提醒）。 */
+export const clArchiveCard = (id: string) =>
+  invoke<ClotheslineCard>('clothesline_archive_card', { id })
+
+/** 归档清单（归档页数据源）：按归档时间倒序。 */
+export const clListArchived = () =>
+  invoke<ClotheslineCard[]>('clothesline_list_archived')
+
+/** 取消归档：清 archived_at，order 不动 → 恢复回原槽位。 */
+export const clUnarchiveCard = (id: string) =>
+  invoke<ClotheslineCard>('clothesline_unarchive_card', { id })
+
+/** 永久删除归档卡（物理移除，无撤销；调用方自行承担确认语义）。 */
+export const clDeleteArchived = (id: string) =>
+  invoke<void>('clothesline_delete_archived', { id })
 
 /** 缩略图落盘（前端先压到 ≤480px PNG）→ 返回绝对路径，只写 src_path，绝不进 localStorage。 */
 export const clSavePreview = (id: string, pngDataUrl: string) =>

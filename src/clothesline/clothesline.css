@@ -2338,6 +2338,57 @@ body, body:focus, body:focus-visible,
   cursor: pointer;
 }
 .cl-edit-actions button:hover { background: color-mix(in srgb, var(--cl-rope) 38%, transparent); }
+/* ★2026-11-18 归档：取下确认弹窗（归档 / 删除 两选）。 */
+.cl-modal-confirm {
+  width: 330px;
+  gap: 10px;
+  will-change: transform, opacity;
+  animation: cl-modal-pop 160ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+/* 退场：缩退 + 下沉淡出（is-closing 由 JS 挂 140ms 后卸载）。 */
+.cl-modal-confirm.is-closing {
+  animation: cl-modal-drop 140ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes cl-modal-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) translateY(0);
+  }
+}
+@keyframes cl-modal-drop {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95) translateY(10px);
+  }
+}
+.cl-modal-confirm .cl-modal-label {
+  font: 500 11.5px/1.7 var(--cl-font);
+  color: var(--cl-paper-muted);
+  margin: -2px 0 2px;
+}
+.cl-modal-confirm .cl-edit-actions button.is-primary {
+  background: var(--cl-ink, #3d3a33);
+  border-color: var(--cl-ink, #3d3a33);
+  color: var(--cl-paper);
+}
+.cl-modal-confirm .cl-edit-actions button.is-primary:hover { background: color-mix(in srgb, var(--cl-ink, #3d3a33) 84%, #fff 16%); }
+.cl-modal-confirm .cl-edit-actions button.is-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, #dc2626 45%, transparent);
+  color: #dc2626;
+}
+.cl-modal-confirm .cl-edit-actions button.is-danger:hover { background: rgba(220, 38, 38, 0.08); }
+/* ★2026-11-18 归档：＋菜单「归档」直达项 */
+.cl-sheet-archive { border-top: 1px solid rgba(0, 0, 0, 0.075); }
 .cl-minutes { display: flex; align-items: center; gap: 6px; color: var(--cl-ink); font: 12px/1.4 var(--cl-font); }
 .cl-minutes input {
   width: 100%;

@@ -1224,6 +1224,11 @@ pub struct ClotheslineCard {
     /// 软删除时间戳（ms）。有值 = 10s 撤销窗口内；正常退出提交为已删。
     #[serde(default)]
     pub deleted_at: Option<i64>,
+    /// 归档时间戳（ms）。有值 = 已归档：不出现在绳上（parse_cards / active_snapshot
+    /// 均过滤），但数据持久保留在 cards.json，供归档页查看 / 恢复 / 永久删除。
+    /// 零迁移：旧 cards.json 反序列化时自动为 None。
+    #[serde(default)]
+    pub archived_at: Option<i64>,
 }
 
 fn default_timer_direction() -> String { "countdown".into() }
@@ -1318,7 +1323,11 @@ fn atomic_write_json<T: Serialize>(final_path: &Path, bak_path: Option<&Path>, v
 fn parse_cards(raw: &str) -> Result<Vec<ClotheslineCard>, String> {
     let mut cards: Vec<ClotheslineCard> =
         serde_json::from_str(raw).map_err(|e| format!("cards.json 解析失败: {e}"))?;
-    cards.retain(|c| c.deleted_at.is_none() && c.kind != CardKind::Audio); // 「没删就一定在」；软删除的卡不恢复。
+    cards.retain(|c| {
+        c.deleted_at.is_none()
+            && c.archived_at.is_none() // 归档卡不回绳，但保留在 cards.json 供归档页。
+            && c.kind != CardKind::Audio
+    }); // 「没删就一定在」；软删除 / 已归档的卡不恢复。
     cards.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
     Ok(cards)
 }
@@ -1520,7 +1529,7 @@ pub fn clothesline_reorder_cards(
 
     let active_ids: std::collections::HashSet<&str> = all
         .iter()
-        .filter(|c| c.deleted_at.is_none())
+        .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none())
         .map(|c| c.id.as_str())
         .collect();
     // 集合一致性：长度相等（挡重复）+ 每个 id 都是活跃卡（挡陌生 / 已删）。
@@ -1542,7 +1551,7 @@ pub fn clothesline_reorder_cards(
         .collect();
     let ts = now_ms();
     for card in all.iter_mut() {
-        if card.deleted_at.is_some() {
+        if card.deleted_at.is_some() || card.archived_at.is_some() {
             continue;
         }
         if let Some(o) = new_order.get(card.id.as_str()) {
@@ -1583,7 +1592,11 @@ fn read_all_cards(base: &Path) -> Result<Vec<ClotheslineCard>, String> {
 }
 
 fn active_snapshot(all: &[ClotheslineCard]) -> Vec<ClotheslineCard> {
-    let mut v: Vec<ClotheslineCard> = all.iter().filter(|c| c.deleted_at.is_none()).cloned().collect();
+    let mut v: Vec<ClotheslineCard> = all
+        .iter()
+        .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none())
+        .cloned()
+        .collect();
     v.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
     v
 }
@@ -1672,7 +1685,11 @@ pub fn clothesline_add_card(
     let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
     let mut all = read_all_cards(&base)?;
     let limit = card_limit(member);
-    let active_count = all.iter().filter(|c| c.deleted_at.is_none()).count();
+    // 归档卡不占绳上配额（与软删除同口径：不在绳上就不算挂着的）。
+    let active_count = all
+        .iter()
+        .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none())
+        .count();
 
     // 计时卡额外约束：同时运行（有未来结束时间且未触发）最多 3 张，
     // 与总额度独立；超出的计时仍可创建为「已结束」草稿，避免误吞用户操作。
@@ -1681,6 +1698,7 @@ pub fn clothesline_add_card(
             .iter()
             .filter(|c| {
                 c.deleted_at.is_none()
+                    && c.archived_at.is_none()
                     && c.kind == CardKind::Timer
                     && c.end_at.map(|t| t > now_ms()).unwrap_or(false)
                     && c.fired_at.is_none()
@@ -1698,7 +1716,7 @@ pub fn clothesline_add_card(
         }
         let victim = all
             .iter()
-            .filter(|c| c.deleted_at.is_none() && !c.pinned)
+            .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none() && !c.pinned)
             .min_by(|a, b| {
                 a.created_at
                     .cmp(&b.created_at)
@@ -1842,6 +1860,104 @@ pub fn clothesline_restore_card(app: tauri::AppHandle, id: String) -> Result<Clo
     Ok(restored)
 }
 
+/// ————————————————————————— 归档（2026-11-18）—————————————————————————
+/// 归档 ≠ 软删除：archived_at 有值 = 不在绳上但持久保留，归档页可查看/恢复/永久删除。
+/// 恢复语义同 clRestoreCard：「位置不可改变」——order 不动，回原槽位。
+
+/// 归档卡片。Timer 顺带清 end_at / fired_at 并把 remind 恢复默认：
+/// 停止计时并杜绝「恢复后触发历史闹钟」（end_at 已清，恢复后从静止态重新起算）。
+#[tauri::command]
+pub fn clothesline_archive_card(app: tauri::AppHandle, id: String) -> Result<ClotheslineCard, String> {
+    let Some(state) = app.try_state::<ClotheslineState>() else {
+        return Err("晾衣绳状态未初始化".into());
+    };
+    let _guard = state.cards_write_lock.lock().unwrap();
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let mut all = read_all_cards(&base)?;
+    let archived = {
+        let c = all
+            .iter_mut()
+            .find(|c| c.id == id && c.deleted_at.is_none() && c.archived_at.is_none())
+            .ok_or_else(|| "卡片不存在或已归档".to_string())?;
+        let ts = now_ms();
+        c.archived_at = Some(ts);
+        c.updated_at = ts;
+        if c.kind == CardKind::Timer {
+            c.end_at = None;
+            c.fired_at = None;
+            c.remind = true; // 恢复默认：归档即停止计时语义，重挂后不残留旧提醒配置。
+        }
+        c.clone()
+    };
+    atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;
+    let _ = app.emit("clothesline-cards-changed", &active_snapshot(&all));
+    crate::append_app_log(&format!("[clothesline] 归档卡片 {}", archived.kind_to_log()));
+    Ok(archived)
+}
+
+/// 归档清单（归档页数据源）：deleted_at 无值 && archived_at 有值，按归档时间倒序。
+#[tauri::command]
+pub fn clothesline_list_archived(app: tauri::AppHandle) -> Result<Vec<ClotheslineCard>, String> {
+    let _ = &app;
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let all = read_all_cards(&base)?;
+    let mut v: Vec<ClotheslineCard> = all
+        .into_iter()
+        .filter(|c| c.deleted_at.is_none() && c.archived_at.is_some())
+        .collect();
+    v.sort_by(|a, b| b.archived_at.cmp(&a.archived_at).then_with(|| b.id.cmp(&a.id)));
+    Ok(v)
+}
+
+/// 取消归档：清 archived_at，**order 不动 → 恢复回原槽位**（PRD「位置不可以改变」）。
+#[tauri::command]
+pub fn clothesline_unarchive_card(app: tauri::AppHandle, id: String) -> Result<ClotheslineCard, String> {
+    let Some(state) = app.try_state::<ClotheslineState>() else {
+        return Err("晾衣绳状态未初始化".into());
+    };
+    let _guard = state.cards_write_lock.lock().unwrap();
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let mut all = read_all_cards(&base)?;
+    let restored = {
+        let c = all
+            .iter_mut()
+            .find(|c| c.id == id && c.deleted_at.is_none() && c.archived_at.is_some())
+            .ok_or_else(|| "没有可恢复的归档卡片".to_string())?;
+        c.archived_at = None;
+        c.updated_at = now_ms();
+        c.clone()
+    };
+    atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;
+    let _ = app.emit("clothesline-cards-changed", &active_snapshot(&all));
+    crate::append_app_log(&format!("[clothesline] 取消归档 {}", restored.kind_to_log()));
+    Ok(restored)
+}
+
+/// 永久删除：从 cards.json 物理移除，无撤销。弹窗/按钮本身即一次确认。
+/// 覆盖两类目标：已归档（archived_at 有值）与刚软删除（deleted_at 有值，10s 撤销
+/// 窗口内用户直接选了删除）——绳上「删除」走 clRemoveCard + 本命令两连击。
+/// 活跃卡（两者皆空）不允许经此删除，必须走软删除通道。
+#[tauri::command]
+pub fn clothesline_delete_archived(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let Some(state) = app.try_state::<ClotheslineState>() else {
+        return Err("晾衣绳状态未初始化".into());
+    };
+    let _guard = state.cards_write_lock.lock().unwrap();
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let mut all = read_all_cards(&base)?;
+    let before = all.len();
+    all.retain(|c| {
+        !(c.id == id && (c.archived_at.is_some() || c.deleted_at.is_some()))
+    });
+    if all.len() == before {
+        return Err("归档卡片不存在".into());
+    }
+    atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;
+    let _ = app.emit("clothesline-cards-changed", &active_snapshot(&all));
+    crate::append_app_log(&format!("[clothesline] 永久删除归档卡 {id}"));
+    Ok(())
+}
+
 /// 图片预览落盘：`previews/{id}.png`（无新依赖，不转 webp；stash 进程内数据失效后仍可预览）。
 /// ⚠️ 绝不写主窗 `shot-last`，也不进 localStorage。单图上限 8MB。
 #[tauri::command]
@@ -1909,7 +2025,10 @@ pub fn clothesline_get_card_usage(app: tauri::AppHandle) -> Result<usize, String
     // 整体 reject（Promise.all → catch 静默 → 永远停在「正在读取晾衣绳设置…」）。
     // 配额只是状态条读数，读失败按 0 处理；数据本身由 restore 路径负责兜底。
     let all = read_all_cards(&base).unwrap_or_default();
-    Ok(all.iter().filter(|c| c.deleted_at.is_none()).count())
+    Ok(all
+        .iter()
+        .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none())
+        .count())
 }
 
 /// 启动期调用：仅当配置 enabled 时延迟建窗（默认 false → 老用户零残留）。

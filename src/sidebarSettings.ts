@@ -70,6 +70,8 @@ export type SidebarSettings = {
   noteShortcut: string
   /** 唤出剪贴板历史浮窗的全局快捷键,默认 CommandOrControl+Shift+V。 */
   clipboardShortcut: string
+  /** 打开归档页的全局快捷键,默认 Alt+A(2026-11-18 归档)。 */
+  archiveShortcut: string
   /** 首页顶栏快捷入口:完整顺序 + 勾选启用的工具(设置按钮固定,不参与配置)。 */
   topbarTools: TopbarToolsPref
   /** 主窗停靠在哪一侧桌缘。 */
@@ -97,6 +99,7 @@ export const defaultSidebarSettings: SidebarSettings = {
   toggleWindowShortcut: 'CommandOrControl+Shift+T',
   noteShortcut: 'Alt+N',
   clipboardShortcut: 'CommandOrControl+Shift+V',
+  archiveShortcut: 'Alt+A',
   topbarTools: { ...DEFAULT_TOPBAR_TOOLS },
   dockSide: 'right',
   targetMonitor: 'primary',
@@ -175,6 +178,10 @@ function sanitizeSettings(value: Partial<SidebarSettings>): SidebarSettings {
       typeof value.clipboardShortcut === 'string' && value.clipboardShortcut.trim().length > 0
         ? value.clipboardShortcut
         : defaultSidebarSettings.clipboardShortcut,
+    archiveShortcut:
+      typeof value.archiveShortcut === 'string' && value.archiveShortcut.trim().length > 0
+        ? value.archiveShortcut
+        : defaultSidebarSettings.archiveShortcut,
     topbarTools: sanitizeTopbarTools(value.topbarTools ?? defaultSidebarSettings.topbarTools),
     dockSide: value.dockSide === 'left' ? 'left' : 'right',
     targetMonitor: normalizeMonitorPref(value.targetMonitor),

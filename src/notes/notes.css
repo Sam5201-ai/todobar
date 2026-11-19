@@ -277,12 +277,6 @@
   pointer-events: auto;
 }
 
-.ns-to-todo {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 0 2px;
-}
-
 .ns-check.is-on {
   opacity: 1;
   background: rgba(255, 255, 255, 0.5);
@@ -369,4 +363,99 @@
 .ns-empty-text {
   font-size: 12px;
   opacity: 0.7;
+}
+
+/* ——— × 关闭确认条(归档 / 删除 两选,2026-11-18 归档功能) ——— */
+.ns-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 10px;
+}
+
+.ns-confirm-card {
+  width: 100%;
+  padding: 12px 12px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #3a3325;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.26),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+  animation: ns-confirm-in 140ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@keyframes ns-confirm-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ns-confirm-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.ns-confirm-text {
+  font-size: 10.5px;
+  line-height: 1.6;
+  text-align: center;
+  opacity: 0.72;
+  margin-bottom: 10px;
+}
+
+.ns-confirm-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+/* 三按钮等宽一行:窄窗(180-220px)下也不挤、不错位 */
+.ns-confirm-btn {
+  flex: 1;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  color: #3a3325;
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.ns-confirm-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ns-confirm-btn.is-primary {
+  background: #3a3325;
+  border-color: #3a3325;
+  color: #fff;
+}
+
+.ns-confirm-btn.is-primary:hover {
+  background: #54483a;
+  border-color: #54483a;
+}
+
+.ns-confirm-btn.is-danger {
+  background: #fff;
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #dc2626;
+}
+
+.ns-confirm-btn.is-danger:hover {
+  background: rgba(220, 38, 38, 0.08);
 }

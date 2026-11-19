@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Archive,
   BookOpen,
   Cake,
   Calculator,
@@ -58,7 +59,7 @@ import {
 import { AccountSetting, AccountModal } from './AccountSetting'
 import ScreenshotSettingsPanel from './screenshot/ScreenshotSettingsPanel'
 import { ShortcutField } from './ShortcutField'
-import { applyNoteShortcut } from './notes/shortcuts'
+import { applyArchiveShortcut, applyNoteShortcut, initArchiveShortcutTrigger } from './notes/shortcuts'
 import { useNotesBridge } from './notes/useNotesBridge'
 import { applyClipboardShortcut, clipboardOpenWindow, clipboardSetActive } from './clipboard'
 import { getSettings as getScreenshotSettings } from './screenshot/store'
@@ -143,12 +144,14 @@ import {
   clSetAlwaysOnTop,
   CL_OPEN_TASK,
   CL_OPEN_SETTINGS,
+  CL_OPEN_ARCHIVE,
   CL_RECORDER_CMD,
   CL_RECORDER_STATE,
   type ClRecorderCmd,
   type ClRecorderState,
 } from './clothesline/bridge'
 import { emit, listen } from '@tauri-apps/api/event'
+import ArchiveView from './archive/ArchiveView'
 import {
   useRecorderActive,
   startRecording,
@@ -765,6 +768,35 @@ function App() {
       return !c
     })
   }
+  // ★2026-11-18 归档：归档页（便利签/随手记/番茄）。同 PageShell 独立页互斥模式,
+  // 非会员可用,无闸门。入口:顶栏「更多」(默认) / 晾衣绳 ＋ 菜单 / 全局快捷键 Alt+A。
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  /** 归档条目总数（ArchiveView 上报），渲染在顶栏 actions 插槽。 */
+  const [archiveCount, setArchiveCount] = useState(0)
+  const openArchivePage = () => {
+    // 与其余独立页面互斥,避免多个绝对定位 PageShell 叠加。
+    setIsSettingsOpen(false)
+    setHuangliOpen(false)
+    setCalculatorOpen(false)
+    setSalaryOpen(false)
+    setRecorderOpen(false)
+    setClotheslineOpen(false)
+    setArchiveOpen(true)
+    setIsOpen(true) // 主窗若收起则展开
+    trackPage('archive')
+  }
+  // ★2026-11-18 归档：全局快捷键（默认 Alt+A）→ 唤起主窗并打开归档页。
+  // 非会员功能不设闸门；注册失败静默记录（与便利签快捷键同策略，不反复打扰）。
+  useEffect(() => {
+    void applyArchiveShortcut(settings.archiveShortcut).then((r) => {
+      if (!r.ok) console.warn('[archive] 归档快捷键注册失败:', r.error)
+    })
+  }, [settings.archiveShortcut])
+  useEffect(() => {
+    // 触发监听只挂一次；openArchivePage 闭包里全是稳定 setState,首次快照即可用。
+    void initArchiveShortcutTrigger(() => openArchivePage())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // ＋ 菜单第 7 行常驻置顶开关的真源镜像(写入只走 clothesline_set_always_on_top)。
   // 挂载即读磁盘真源(不硬编码 true)，并监听绳窗右键 / 其它入口的置顶变更，
   // 保证 ＋ 菜单显示与窗口实际置顶态始终一致。
@@ -812,6 +844,16 @@ function App() {
       setRecorderOpen(false)
       setClotheslineOpen(true)
       setIsOpen(true)
+    })
+      .then((fn) => {
+        if (cancelled) fn()
+        else un = fn
+      })
+      .catch(() => undefined)
+    // ★2026-11-18 归档：绳窗 ＋ 菜单「归档」→ 唤起主窗并打开归档页（不改绳身展开态）。
+    void listen<unknown>(CL_OPEN_ARCHIVE, () => {
+      if (cancelled) return
+      openArchivePage()
     })
       .then((fn) => {
         if (cancelled) fn()
@@ -959,8 +1001,9 @@ function App() {
     screenshot: formatShortcut(getScreenshotSettings().shotShortcut || ''),
     note: formatShortcut(settings.noteShortcut),
     clipboard: formatShortcut(settings.clipboardShortcut),
+    archive: formatShortcut(settings.archiveShortcut),
     sync: lastSyncLabel ? `同步于 ${lastSyncLabel}` : '',
-  }), [settings.noteShortcut, settings.clipboardShortcut, lastSyncLabel])
+  }), [settings.noteShortcut, settings.clipboardShortcut, settings.archiveShortcut, lastSyncLabel])
 
   // 侧栏收起时菜单不该残留;点击菜单外 / Esc 关闭(带 StrictMode 卸载守卫)。
   useEffect(() => {
@@ -1026,6 +1069,10 @@ function App() {
       case 'clothesline':
         if (!caps().clothesline) return
         toggleClothesline()
+        break
+      case 'archive':
+        // ★2026-11-18 归档：独立页互斥 + 展开主窗 + 打开归档页。
+        openArchivePage()
         break
       case 'sync':
         onHeaderSync()
@@ -2362,8 +2409,19 @@ function App() {
             </ErrorBoundary>
           </PageShell>
         )}
+        {/* ★2026-11-18 归档：统一归档页（便利签 / 随手记 / 番茄），总数胶囊挂顶栏右侧 */}
+        <PageShell
+          open={archiveOpen}
+          title="归档"
+          onClose={() => setArchiveOpen(false)}
+          actions={<span className="arch-total">{archiveCount} 条</span>}
+        >
+          <ErrorBoundary label="归档">
+            <ArchiveView onCountChange={setArchiveCount} />
+          </ErrorBoundary>
+        </PageShell>
         {/* 待办主视图:页面打开时被覆盖层遮在下方,关闭动画过程中可透视 */}
-        <div className="sidebar-main" aria-hidden={isSettingsOpen || huangliOpen || calculatorOpen || salaryOpen || recorderOpen || clotheslineOpen}>
+        <div className="sidebar-main" aria-hidden={isSettingsOpen || huangliOpen || calculatorOpen || salaryOpen || recorderOpen || clotheslineOpen || archiveOpen}>
           <header className="sidebar-header">
               <div className="app-lockup">
                 <span className="app-icon">
@@ -3022,6 +3080,8 @@ function TopbarToolIcon({ id, size = 16 }: { id: TopbarToolId; size?: number }) 
       return <Mic size={size} />
     case 'clothesline':
       return <Shirt size={size} />
+    case 'archive':
+      return <Archive size={size} />
     case 'sync':
       return <RefreshCw size={size} />
     default:
@@ -3891,6 +3951,58 @@ async function commitClipboardShortcut(
   onToast?.('ok', '剪贴板快捷键已更新')
 }
 
+/** 归档快捷键冲突校验（与打开窗口 / 新建便利签 / 剪贴板 / 截图贴图 / 系统保留冲突则拦截）。 */
+function archiveShortcutConflict(
+  draft: string,
+  toggleShortcut: string,
+  noteShortcut: string,
+  clipboardShortcut: string,
+): string | null {
+  if (!draft.trim()) return '快捷键不能为空'
+  const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+  if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
+    return '该快捷键被系统 / 托盘占用,请换一个'
+  }
+  if (norm(draft) === norm(toggleShortcut)) return '与「打开 / 关闭窗口」快捷键重复'
+  if (norm(draft) === norm(noteShortcut)) return '与「新建便利签」快捷键重复'
+  if (norm(draft) === norm(clipboardShortcut)) return '与「打开剪贴板」快捷键重复'
+  try {
+    const shot = getScreenshotSettings()
+    for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
+      if (norm(s) === norm(draft)) return '与截图 / 贴图快捷键重复'
+    }
+  } catch {
+    /* 读取失败忽略 */
+  }
+  const main = draft.split('+').pop()?.trim() ?? ''
+  if (
+    !main ||
+    ['control', 'ctrl', 'commandorcontrol', 'command', 'cmd', 'alt', 'shift', 'super', 'meta'].includes(
+      main.toLowerCase(),
+    )
+  ) {
+    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键'
+  }
+  return null
+}
+
+/**
+ * 保存归档快捷键:**先注册成功、再写进设置**(与便利签/剪贴板同顺序)。
+ */
+async function commitArchiveShortcut(
+  v: string,
+  onChange: (patch: Partial<SidebarSettings>) => void,
+  onToast?: (kind: 'ok' | 'err', text: string) => void,
+) {
+  const r = await applyArchiveShortcut(v)
+  if (!r.ok) {
+    onToast?.('err', r.error || '归档快捷键注册失败')
+    return
+  }
+  onChange({ archiveShortcut: v })
+  onToast?.('ok', '归档快捷键已更新')
+}
+
 function SidebarSettingsPanel({
   settings,
   onChange,
@@ -4228,6 +4340,15 @@ function SidebarSettingsPanel({
           locked={!fullAccess}
           onLocked={() => onLocked?.('剪贴板')}
           vip={showVip}
+        />
+        {/* ★2026-11-18 归档：归档页全局快捷键（非会员功能,无闸门）。 */}
+        <ShortcutField
+          label="打开归档"
+          value={settings.archiveShortcut}
+          conflictFor={(draft) =>
+            archiveShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut, settings.clipboardShortcut)
+          }
+          onCommit={(v) => void commitArchiveShortcut(v, onChange, onToast)}
         />
         <p className="settings-hint">
           双击编辑框即可修改{caps().screenshot ? '；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合' : ''}。

@@ -12,23 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "main",
-        "title": "Tacco",
-        "width": 382,
-        "height": 84,
-        "resizable": false,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "focus": false,
-        "visible": false,
-        "transparent": true,
-        "shadow": false,
-        "fullscreen": false,
-        "zoomHotkeysEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
-      },
-      {
         "label": "capture-overlay",
         "title": "Tacco 截图",
         "width": 800,

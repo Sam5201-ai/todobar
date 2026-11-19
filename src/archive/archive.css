@@ -1,0 +1,334 @@
+/**
+ * 归档页样式（2026-11-18）——「方案三 · 档案时间线」。
+ *
+ * 主窗主题通过祖先类切换：`.workspace.theme-dark` 已重定义 --ink/--muted/--line/
+ * --surface 等变量（App.css），本文件全部引用这些变量即可自动适配暗色；
+ * 类型色（便利签/随手记/番茄）为定稿色值，明暗主题共用。
+ */
+
+.arch-root {
+  /* ⚠️ PageShell 的 children 已在 .page-panel-scroll（flex:1 + overflow-y:auto +
+     自带 17px/15px 留白）内：这里必须是普通流式布局填满滚动容器，
+     禁止 absolute inset:0（会盖住 page-panel-header 顶栏并横向溢出出滚动条）。 */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  /* 显式字体栈（与原型 mockup 一致）：中文确定走微软雅黑，
+     不依赖 var(--font) 的解析结果，避免 WebView2 下 fallback 到衬线。 */
+  font-family: Inter, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: var(--ink);
+}
+
+/* ——— 筛选胶囊行 ——— */
+.arch-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.arch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.arch-chip em {
+  font-style: normal;
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
+.arch-chip:hover {
+  color: var(--ink);
+}
+
+.arch-chip.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+/* ——— 总数胶囊（brand 色底，右对齐） ——— */
+.arch-total {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: rgba(37, 158, 103, 0.12);
+  color: #219e67;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ——— 时间线主体：左竖轴 + 垂挂节点条目。
+   ⚠️ 轴与节点必须全部位于容器盒内（overflow 裁剪不掉）：轴在 padding 区 x=8..10，
+   节点 2..16px，两者中心均对齐 x=9。正文从 padding-left:26px 起。 ——— */
+.arch-timeline {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-left: 26px;
+  padding-right: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.arch-timeline::-webkit-scrollbar {
+  display: none;
+}
+
+/* 2px 竖轴（padding 区内） */
+.arch-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+.arch-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 2px;
+  border-radius: 8px;
+}
+
+.arch-item:hover {
+  background: var(--surface-muted);
+}
+
+.arch-item + .arch-item {
+  border-top: 1px dashed var(--line);
+}
+
+/* 14px 类型色节点，压在竖轴上（surface 描边圈 + 外描边）。
+   几何：item 起点 = timeline 盒 x=26（padding-left:26px），轴中心 = 盒坐标 x=9，
+   节点 14px 中心对轴 → left = 9 - 7 - 26 = -24px（落在 padding 区 x=2..16，不被裁剪）。 */
+.arch-node {
+  position: absolute;
+  left: -24px;
+  top: 16px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 4px var(--line);
+}
+
+.arch-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 单行元信息：类型徽标 + 「时间 · 位置」，窄栏也不折行（超长省略） */
+.arch-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.arch-badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.arch-time {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arch-item-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-item-summary {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+/* 可点击条目（便利签/随手记）：点击展开完整内容详情 */
+.arch-item-body.is-clickable {
+  cursor: pointer;
+}
+
+.arch-item-detail {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: pointer;
+}
+
+/* 便利签详情：事项逐行（序号 + 勾选状态 + 文本），完成划线（与便签视觉一致） */
+.arch-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 1.5px 0;
+}
+
+.arch-line-idx {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.arch-line-check {
+  flex: none;
+  line-height: inherit;
+}
+
+.arch-line-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.arch-line.is-done .arch-line-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.arch-item-detail-tip {
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* ——— 悬停操作：恢复 / 删除（绝对定位浮层，不占位挤压内容；
+      ⚠️ 透明时必须 pointer-events:none，否则会挡住条目点击与文本选择） ——— */
+.arch-item-actions {
+  position: absolute;
+  right: 2px;
+  top: 13px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.arch-item:hover .arch-item-actions {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.arch-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.arch-act:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.arch-act-danger:hover {
+  color: #e5484d;
+  border-color: #e5484d;
+}
+
+/* ——— 空态 / 底部提示 ——— */
+.arch-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.7;
+}
+
+.arch-foot {
+  padding-top: 8px;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.7;
+  text-align: center;
+}
+
+/* ——— 暗色主题：类型色提亮一档 + 总数胶囊换色 ——— */
+.workspace.theme-dark .arch-total {
+  background: rgba(46, 180, 120, 0.16);
+  color: #4ec98f;
+}
+
+.workspace.theme-dark .arch-badge {
+  color: #101010;
+}
+
+.workspace.theme-dark .arch-node {
+  box-shadow:
+    0 0 0 3px #0d0d0e,
+    0 0 0 4px var(--line);
+}

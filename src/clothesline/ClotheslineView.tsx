@@ -28,6 +28,8 @@ import {
   clUpdateCard,
   clRemoveCard,
   clRestoreCard,
+  clArchiveCard,
+  clDeleteArchived,
   clReadPreview,
   clSavePreview,
   clMakeCard,
@@ -37,6 +39,8 @@ import {
   CL_OPEN_NOTE,
   CL_OPEN_TASK,
   CL_OPEN_SETTINGS,
+  CL_OPEN_ARCHIVE,
+  CL_ARCHIVE_CARD,
   CL_CREATE_NOTE,
   CL_EDIT_NOTE_ITEM,
   CL_SETTINGS_CHANGED,
@@ -50,6 +54,7 @@ import {
   CL_RECORDER_STATE,
   type ClNoteItemAction,
   type ClDropNoteWindow,
+  type ClArchiveCard,
   type ClRecorderState,
   type ClToastPayload,
   type ClotheslineSettings,
@@ -1811,6 +1816,10 @@ export function ClotheslineView() {
   const [composeText, setComposeText] = useState('')
   const [composeMinutes, setComposeMinutes] = useState('25')
   const [undoCard, setUndoCard] = useState<{ id: string; label: string } | null>(null)
+  /** ★2026-11-18 归档：便利签/随手记/番茄卡 × → 「归档 / 删除」两选弹窗的目标卡。 */
+  const [takedownConfirm, setTakedownConfirm] = useState<ClotheslineCard | null>(null)
+  /** 退场动画标记:关闭确认弹窗先播 140ms 缩退动画再卸载,避免「瞬间消失」的卡顿感。 */
+  const [takedownClosing, setTakedownClosing] = useState(false)
   // ★批15：撤销条 3 秒自动关闭（原 10 秒，用户反馈显示时间过长）。
   const UNDO_TOAST_MS = 3_000
   const [hint, setHint] = useState('')
@@ -1994,6 +2003,7 @@ export function ClotheslineView() {
         //   窗口矩形 / 命中矩形 / dismiss 开关由 composing 的 effect 清理函数还原。
         setComposing(null)
         setEditModal(null)
+        setTakedownConfirm(null) // ★2026-11-18 归档：取下确认弹窗点外 = 取消
         if (previewCardIdRef.current !== null) closePreviewRef.current()
         void clSetDismissOnOutside(false)
       })
@@ -2241,6 +2251,12 @@ export function ClotheslineView() {
   const takeDown = useCallback(
     async (card: ClotheslineCard) => {
       setEditing(null)
+      // ★2026-11-18 归档：便利签/随手记/番茄卡 × → 两选弹窗（归档 / 删除）。
+      //   其余类型（截图/贴图/图片/待办/录音/剪贴板）保持软删 + 10s 撤销不变。
+      if (card.kind === 'note' || card.kind === 'text' || card.kind === 'timer') {
+        setTakedownConfirm(card)
+        return
+      }
       // ★一键录音卡取下时若引擎还在录，先通知主窗丢弃（否则麦克风一直被占且无 UI 可停）。
       if (card.kind === 'audio') {
         audioStateRef.current = null
@@ -2263,6 +2279,62 @@ export function ClotheslineView() {
       }
     },
     [flash, setCards, setEditing, setUndoCard],
+  )
+
+  /** 关闭确认弹窗（带 140ms 退场动画）：先播缩退动画再卸载，随后执行回调操作。 */
+  const closeTakedownAnimated = useCallback((after?: () => void) => {
+    if (takedownClosing) return
+    setTakedownClosing(true)
+    window.setTimeout(() => {
+      setTakedownClosing(false)
+      setTakedownConfirm(null)
+      after?.()
+    }, 140)
+  }, [takedownClosing])
+
+  /** ★2026-11-18 归档：两选弹窗的执行（归档 / 永久删除）。 */
+  const confirmTakedown = useCallback(
+    (card: ClotheslineCard, mode: 'archive' | 'delete') => {
+      closeTakedownAnimated(() => {
+        void (async () => {
+          try {
+            if (mode === 'archive') {
+              if (card.kind === 'note') {
+                // 绳上便利签卡 = 桌面便利签的引用 → 主窗编排「一体归档」（note + card）。
+                void emit(CL_ARCHIVE_CARD, {
+                  action: 'archive',
+                  cardId: card.id,
+                  noteId: card.note_id ?? undefined,
+                } satisfies ClArchiveCard).catch(() => undefined)
+                setCards((prev) => prev.filter((c) => c.id !== card.id))
+              } else {
+                await clArchiveCard(card.id)
+                setCards((prev) => prev.filter((c) => c.id !== card.id))
+              }
+              flash('已归档 · 可在归档页查看')
+            } else {
+              // 删除 = 永久删除（弹窗本身即确认，无撤销）：软删 + 立即物理清除两连击。
+              if (card.kind === 'note') {
+                void emit(CL_ARCHIVE_CARD, {
+                  action: 'delete-note',
+                  cardId: card.id,
+                  noteId: card.note_id ?? undefined,
+                } satisfies ClArchiveCard).catch(() => undefined)
+                setCards((prev) => prev.filter((c) => c.id !== card.id))
+              } else {
+                await clRemoveCard(card.id)
+                await clDeleteArchived(card.id)
+                setCards((prev) => prev.filter((c) => c.id !== card.id))
+              }
+              flash('已删除')
+            }
+          } catch (e) {
+            flash(e instanceof Error ? e.message : String(e))
+          }
+        })()
+      })
+    },
+    [closeTakedownAnimated, flash, setCards],
   )
 
   const undoTakeDown = useCallback(async () => {
@@ -2862,7 +2934,8 @@ export function ClotheslineView() {
   const composerKeepAliveRef = useRef<number | null>(null)
   const modalRef = useRef<HTMLDivElement | null>(null)
   // 添加弹窗（随手记 / 番茄钟）与编辑弹窗共用同一套「临时整屏 + 点外关闭」机制。
-  const fullscreenModal = composing ?? (editModal ? 'edit' : null)
+  // ★2026-11-18 归档：取下确认弹窗（归档 / 删除）同样复用这套机制。
+  const fullscreenModal = composing ?? (editModal ? 'edit' : null) ?? (takedownConfirm ? 'takedown' : null)
   useEffect(() => {
     fullscreenModalRef.current = fullscreenModal !== null
   }, [fullscreenModal])
@@ -2899,7 +2972,7 @@ export function ClotheslineView() {
       window.clearTimeout(t2)
       window.removeEventListener('resize', armModalHit)
     }
-  }, [fullscreenModal, composing, editModal])
+  }, [fullscreenModal, composing, editModal, takedownConfirm])
   useEffect(() => {
     if (!fullscreenModal) return
     const geom = geomRef.current
@@ -3329,6 +3402,10 @@ export function ClotheslineView() {
         // ★2026-11-15 反馈3：编辑弹窗 Esc = 取消。
         e.preventDefault()
         setEditModal(null)
+      } else if (takedownConfirm) {
+        // ★2026-11-18 归档：取下确认弹窗 Esc = 取消。
+        e.preventDefault()
+        setTakedownConfirm(null)
       } else if (composing) {
         // ★2026-11-15 需求5/6：编辑弹窗 Esc = 取消（还原窗口矩形走 composing effect 清理）。
         e.preventDefault()
@@ -3337,7 +3414,7 @@ export function ClotheslineView() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [finishDrag, previewCardId, closePreview, colorMenu, composing, editModal])
+  }, [finishDrag, previewCardId, closePreview, colorMenu, composing, editModal, takedownConfirm])
 
   // 问题13：任一浮层（＋菜单 / 大图预览）打开 → 通知 Rust 命中循环检测
   // 「点在可点区外」并回发 CL_DISMISS_OVERLAY；全部关闭则停止检测。透明穿透窗收不到
@@ -3635,6 +3712,17 @@ export function ClotheslineView() {
         </button>
         <button type="button" onClick={() => { void toggleTopmost(); setAddSheetOpen(false) }}>
           ☝ 晾衣绳置顶 <em>{settings.always_on_top ? '开' : '关'}</em>
+        </button>
+        {/* ★2026-11-18 归档：＋菜单直达主窗归档页（不改绳身展开态）。 */}
+        <button
+          type="button"
+          className="cl-sheet-archive"
+          onClick={() => {
+            setAddSheetOpen(false)
+            void emit(CL_OPEN_ARCHIVE, {}).catch(() => undefined)
+          }}
+        >
+          ▦ 归档 <em>便利签 · 随手记 · 番茄</em>
         </button>
         {/* 2026-11-15 反馈2：菜单直达晾衣绳设置页。收起态先展开绳身，再通知主窗
             （主窗若折叠会自动展开并打开「晾衣绳」页，见 App.tsx 的监听）。 */}
@@ -4317,6 +4405,45 @@ export function ClotheslineView() {
           <div className="cl-edit-actions">
             <button type="button" onClick={() => void commitEditModal()}>保存</button>
             <button type="button" onClick={() => setEditModal(null)}>取消</button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ★2026-11-18 归档：便利签/随手记/番茄卡 × → 「归档 / 删除」两选弹窗。
+          复用 fullscreenModal 机制（命中矩形上报 + 点外取消 + Esc 取消）；
+          进场 pop / 退场 drop 动画（140ms 合成器属性，无布局抖动）。 */}
+      {takedownConfirm ? (
+        <div
+          ref={modalRef}
+          className={`cl-modal cl-modal-confirm ${takedownClosing ? 'is-closing' : ''}`}
+          data-cl-hit="1"
+          onPointerDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <div className="cl-modal-head">
+            <span className="cl-modal-title">取下「{takedownConfirm.title || kindLabel(takedownConfirm)}」</span>
+          </div>
+          <div className="cl-modal-label">
+            归档保留内容，可在归档页查看与恢复；删除将永久移除，无法撤销。
+          </div>
+          <div className="cl-edit-actions">
+            <button type="button" className="cl-btn" onClick={() => closeTakedownAnimated()}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="cl-btn is-danger"
+              onClick={() => confirmTakedown(takedownConfirm, 'delete')}
+            >
+              删除
+            </button>
+            <button
+              type="button"
+              className="cl-btn is-primary"
+              onClick={() => confirmTakedown(takedownConfirm, 'archive')}
+            >
+              归档
+            </button>
           </div>
         </div>
       ) : null}

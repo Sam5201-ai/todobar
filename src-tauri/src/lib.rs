@@ -860,12 +860,63 @@ const TRAY_SETTINGS_EVENT: &str = "todobar-tray-settings";
 // 首帧未就绪时 DWM 合成出「黑条 + 残影」。此标志供看门狗兜底判断。
 static MAIN_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+// [0.4.83] 主窗页面是否完成加载(与 MAIN_SHOWN 独立):15s 看门狗强显只是兜底,
+// 不代表页面真的加载成功;导航自愈重试以 MAIN_LOADED 为准,避免强显置位后
+// 自愈循环被误判为「已恢复」而提前退出。
+static MAIN_LOADED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 显示主窗口(不带焦点,供启动显示与看门狗兜底共用)。
 fn show_main_window_no_focus(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         MAIN_SHOWN.store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = window.show();
     }
+}
+
+/// [0.4.83] 主窗卡死自愈:销毁挂死的 WebView2 Controller 并按 setup 同款配置重建。
+/// destroy() 是异步的——立即重建会撞「label 'main' already exists」,所以这里
+/// 轮询等旧窗口真正消失后再 build(最多等 5 秒)。page load 监听走 Builder 全局
+/// on_page_load,重建后的窗口同样会被置位 MAIN_LOADED。
+fn rebuild_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        append_app_log("main window rebuild: destroying stale main window");
+        let _ = w.destroy();
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        for _ in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if MAIN_LOADED.load(std::sync::atomic::Ordering::SeqCst) {
+                return;
+            }
+            if handle.get_webview_window("main").is_some() {
+                continue;
+            }
+            append_app_log("main window rebuild: creating new main window");
+            let builder = tauri::WebviewWindowBuilder::new(
+                &handle,
+                "main",
+                tauri::WebviewUrl::App(std::path::PathBuf::new()),
+            )
+            .title("Tacco")
+            .inner_size(382.0, 84.0)
+            .resizable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .visible(false)
+            .transparent(true)
+            .shadow(false)
+            .additional_browser_args(
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling",
+            );
+            if let Err(e) = builder.build() {
+                append_app_log(&format!("main window rebuild failed: {e}"));
+            }
+            return;
+        }
+        append_app_log("main window rebuild aborted: old window still alive after 5s");
+    });
 }
 
 fn focus_main_window(app: &tauri::AppHandle) {
@@ -1747,6 +1798,7 @@ pub fn run() {
         .manage(ToggleWindowShortcutState::default())
         .manage(WidgetState::default())
         .manage(notes::NoteShortcutState::default())
+        .manage(notes::ArchiveShortcutState::default())
         .manage(notes::NotePoolState::default())
         .manage(clipboard::ClipboardState::default())
         .manage(clothesline::ClotheslineState::default())
@@ -1785,6 +1837,7 @@ pub fn run() {
         // 此处仅留日志,配合 setup 中的 15s 看门狗兜底(页面加载异常时强制显示)。
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Finished {
+                MAIN_LOADED.store(true, std::sync::atomic::Ordering::SeqCst);
                 append_app_log("main page load finished (waiting for frontend layout before show)");
             }
         })
@@ -1842,6 +1895,7 @@ pub fn run() {
             notes::notes_window_exists,
             notes::notes_set_pinned,
             notes::register_note_shortcut,
+            notes::register_archive_shortcut,
             clipboard::clipboard_list,
             clipboard::clipboard_delete,
             clipboard::clipboard_clear,
@@ -1889,6 +1943,10 @@ pub fn run() {
             clothesline::clothesline_update_card,
             clothesline::clothesline_remove_card,
             clothesline::clothesline_restore_card,
+            clothesline::clothesline_archive_card,
+            clothesline::clothesline_list_archived,
+            clothesline::clothesline_unarchive_card,
+            clothesline::clothesline_delete_archived,
             clothesline::clothesline_save_preview,
             clothesline::clothesline_read_preview,
             clothesline::clothesline_get_card_usage
@@ -1910,6 +1968,36 @@ pub fn run() {
             // [0.4.10] 提权自检必须最先执行:安装器完成页以提权上下文启动应用时,
             // 提权实例会锁死 WebView2 数据目录,导致后续所有普通实例假死。
             handle_elevation(app.handle());
+            // [0.4.83] 主窗改为 setup 内手动创建(不再走 tauri.conf.json 窗口表):
+            // conf 表定义的 main 窗在应用窗口批次最早创建,实测其 WebView2 首次
+            // 导航会挂死在 about:blank 且永不重试(2026-11-18 反复复现,而同批次
+            // 的 capture-overlay/pin-1..6 与 setup 后手动创建的绳窗全部正常)。
+            // 移到 setup 创建后与绳窗同路径,环境就绪再建,绕开挂死窗口。
+            // 不设 focused(false):builder 默认值,与绳窗路径保持一致。
+            {
+                let main_builder = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::App(std::path::PathBuf::new()),
+                )
+                .title("Tacco")
+                .inner_size(382.0, 84.0)
+                .resizable(false)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .visible(false)
+                .transparent(true)
+                .shadow(false)
+                .additional_browser_args(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --use-fake-ui-for-media-stream --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling",
+                );
+                // page load 监听走下方 Builder 全局 on_page_load(对所有窗口生效,
+                // 含看门狗重建的主窗),这里不重复挂。
+                if let Err(e) = main_builder.build() {
+                    append_app_log(&format!("main window create failed: {e}"));
+                }
+            }
             setup_tray(app)?;
             setup_global_shortcuts(app);
             // OCR 引擎预热:Win 端 WinRT 引擎激活提前到启动期后台完成,首次识别免等。
@@ -1926,12 +2014,46 @@ pub fn run() {
 
             // [0.4.44] 主窗口显示看门狗:页面加载事件若 15 秒内未触发(页面加载
             // 异常 / 事件丢失),强制显示主窗口,避免「窗口永远不出现」。
+            // [0.4.83] 导航自愈增强:实测用户数据目录被残留进程锁住 / WebView2
+            // 首次导航挂起时,page load 可能数小时不触发,且挂起的导航**不会
+            // 自行重试**(2026-11-18 三次复现:page load 卡 12 分钟~4 小时)。
+            // 30s/60s/120s 三轮:探针记录当前 URL(区分「导航从未开始」与
+            // 「导航开始但挂起」) + 强制重新导航。锁释放或挂起解除后,重载
+            // 导航即可正常触发 page load 并显示主窗,无需用户手动重启。
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(15));
                 if !MAIN_SHOWN.load(std::sync::atomic::Ordering::SeqCst) {
                     append_app_log("main window force-shown by watchdog (page load event missing)");
                     show_main_window_no_focus(&handle);
+                }
+                for wait_secs in [30u64, 60u64, 120u64] {
+                    std::thread::sleep(std::time::Duration::from_secs(wait_secs));
+                    if MAIN_LOADED.load(std::sync::atomic::Ordering::SeqCst) {
+                        return;
+                    }
+                    if let Some(w) = handle.get_webview_window("main") {
+                        let cur = w.url().ok();
+                        let cur_str = cur.as_ref().map(|u| u.to_string()).unwrap_or_default();
+                        append_app_log(&format!(
+                            "main window nav-retry +{wait_secs}s (page load still missing, current url={cur_str})"
+                        ));
+                        // 两种卡死形态分开处理:
+                        // ① 当前已是 http(s) 入口 → 导航已开始但挂起,navigate 重试即可;
+                        // ② 当前非 http(s)(导航从未开始,卡在 about:blank)→ 销毁重建主窗。
+                        if let Some(u) = cur.filter(|u| u.scheme().starts_with("http")) {
+                            if w.navigate(u).is_ok() {
+                                let _ = show_main_window_no_focus(&handle);
+                                continue;
+                            }
+                        }
+                        append_app_log("main window nav-retry: scheduling rebuild (navigation never started or navigate failed)");
+                        rebuild_main_window(&handle);
+                    } else {
+                        // 上一轮已 destroy 但重建尚未完成/失败:再次尝试重建。
+                        append_app_log("main window nav-retry: main window missing, scheduling rebuild");
+                        rebuild_main_window(&handle);
+                    }
                 }
             });
 

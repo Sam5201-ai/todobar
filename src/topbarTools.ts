@@ -24,6 +24,7 @@ export type TopbarToolId =
   | 'recorder'
   | 'sync'
   | 'clothesline'
+  | 'archive'
 
 export type TopbarTool = {
   id: TopbarToolId
@@ -56,6 +57,9 @@ export const TOPBAR_TOOLS: TopbarTool[] = [
   // 晾衣绳(0.4.65):非会员 / 无闸门,拉新记忆点。放在 sync 前,顶栏装不下时
   // 自动进「⋯ 更多」;老用户经下方 MIGRATE_IDS 显式补进 enabled 保证可达。
   { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '', requires: 'clothesline' },
+  // 归档(2026-11-18):便利签/随手记/番茄的统一归档页。非会员无闸门;
+  // 10 个工具 > 槽位上限(≤6),默认排序天然落进「⋯ 更多」,新旧用户默认均不占顶栏槽。
+  { id: 'archive', name: '归档', tip: '归档 · 便利签/随手记/番茄', vip: false, gated: false, keyHint: '' },
   { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' },
 ]
 
@@ -85,7 +89,7 @@ const BY_ID = Object.fromEntries(TOPBAR_TOOLS.map((t) => [t.id, t])) as Record<
  * ⚠️ 不升 SIDEBAR_SETTINGS_KEY(升 key 会让磁盘并发回灌覆盖主题/宽度/快捷键)。
  * 只在 rawEnabled 非空数组(老用户确实配置过)时追加;新用户 rawEnabled=null 走全启用。
  */
-const MIGRATE_IDS: TopbarToolId[] = ['clothesline']
+const MIGRATE_IDS: TopbarToolId[] = ['clothesline', 'archive']
 
 /**
  * 归一化:过滤未知 id / 去重 / 补齐后加的工具 / 保证至少启用 1 个。

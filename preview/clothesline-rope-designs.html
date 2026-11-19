@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tacco 晾衣绳 · 绳身皮肤 3 款设计提案（与拉杆一一对应）</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   晾衣绳 · 绳身皮肤设计提案
+   与拉杆三款皮肤（素瓷/黄铜/琉璃）一一对应，绳身+固定钉随 data-pulltab 换肤。
+   绳体几何 1:1 复用产品实现：viewBox 0 0 1000 64，主线 M4 26 Q500 46 996 26。
+   实现红线：绳窗禁 filter / backdrop-filter / 动画 —— 全部方案仅用
+   渐变 + 虚线 dasharray + 实色圆点，可直接落 CSS/SVG。
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --sheet-bg:#f2f0ea; --panel:#fffefa; --ink:#24221d; --ink-2:#6b675e;
+  --line:#ddd8cc; --line-soft:#ece8de; --chip:#f6f3ec;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --serif:"Songti SC","Noto Serif CJK SC",Georgia,serif;
+  --radius:14px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--sheet-bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:44px 28px 72px}
+
+/* ── header ────────────────────────────────────────────── */
+.head{margin-bottom:30px}
+.kicker{font-size:11px;letter-spacing:.22em;color:var(--ink-2);text-transform:uppercase;margin:0 0 12px}
+h1{font-family:var(--serif);font-size:29px;font-weight:600;letter-spacing:.02em;margin:0 0 12px}
+.lede{font-size:14px;line-height:1.85;color:var(--ink-2);max-width:800px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font-size:11px;color:var(--ink-2);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.chip b{color:var(--ink);font-weight:600}
+
+/* 主题切换 */
+.themebar{display:flex;align-items:center;gap:10px;margin:22px 0 4px}
+.themebar button{font:600 12px/1 var(--font);color:var(--ink-2);background:var(--chip);
+  border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer}
+.themebar button.on{color:#fff;background:#4a4438;border-color:#4a4438}
+
+/* ── option card ───────────────────────────────────────── */
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:26px;overflow:hidden}
+.opt-head{display:grid;grid-template-columns:64px 1fr 1fr;gap:24px;padding:26px 30px 20px;align-items:start;border-bottom:1px solid var(--line-soft)}
+.opt-no{font-family:var(--serif);font-size:38px;line-height:1;color:var(--accent);opacity:.75}
+.opt-name{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
+.opt-mood{font-size:12px;color:var(--ink-2);margin:0 0 12px;letter-spacing:.04em}
+.opt-why{font-size:13px;line-height:1.8;margin:0}
+.sec-label{font-size:10px;letter-spacing:.16em;color:var(--ink-2);text-transform:uppercase;margin:0 0 8px}
+.pair-tag{display:inline-block;font-size:11px;color:var(--accent);border:1px solid var(--accent);
+  border-radius:999px;padding:4px 12px;letter-spacing:.08em;margin-bottom:10px;opacity:.85}
+
+/* ── 演示墙：整条绳 + 样例卡片 + 配套拉杆 ──────────────── */
+.wall-wrap{padding:0 30px 26px}
+.wall-cap{font-size:11px;color:var(--ink-2);letter-spacing:.06em;margin:16px 0 10px;display:flex;justify-content:space-between}
+.wall-cap em{font-style:normal;color:var(--accent)}
+.wall{height:240px;position:relative;border-radius:10px;overflow:hidden;
+  background:linear-gradient(155deg,#e9e5dc 0%,#f4f1e9 45%,#dcd7cc 100%)}
+.wall.dark{background:linear-gradient(155deg,#2e2b26 0%,#3a362f 50%,#262420 100%)}
+.wall::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(115deg,rgba(255,255,255,.14) 0 2px,rgba(255,255,255,0) 2px 7px)}
+.wall.dark::after{background:repeating-linear-gradient(115deg,rgba(255,255,255,.03) 0 2px,rgba(255,255,255,0) 2px 7px)}
+
+/* 绳体容器：与产品 .cl-rope 同构（高 64px，顶部） */
+.ropeband{position:absolute;left:0;right:0;top:0;height:64px;pointer-events:none}
+.ropeband svg{position:absolute;inset:0;width:100%;height:64px;overflow:visible}
+
+/* ── 样例卡片（与产品 .cl-card / .cl-clip 同款质感） ───── */
+.card{position:absolute;top:44px;width:168px;background:#fffdf7;border-radius:14px;
+  box-shadow:0 8px 18px rgba(40,32,20,.18),0 2px 5px rgba(40,32,20,.1);
+  padding:26px 14px 14px;transform:rotate(-1.2deg)}
+.card.c2{transform:rotate(1.4deg);background:#fff8e6}
+.card.dark-card{background:#2b2e37;box-shadow:0 10px 24px rgba(0,0,0,.5)}
+.card .t{font:800 14px/1.4 var(--font);color:#3a352c;margin:0 0 6px}
+.card .d{font:400 11px/1.7 var(--font);color:#9a9284;margin:0}
+.card.dark-card .t{color:#eceef3}
+.card.dark-card .d{color:#a6adbb}
+/* 木夹：与产品 .cl-clip 同款（所有皮肤共用，保持木质） */
+.clip{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:15px;height:32px;
+  border-radius:3px 3px 2px 2px;
+  background:linear-gradient(90deg,#8a5a28,#c89356 28%,#efcf9c 52%,#c89356 76%,#8a5a28);
+  box-shadow:0 2px 4px rgba(60,40,20,.28)}
+.clip::before{content:"";position:absolute;left:3px;right:3px;top:14px;height:1.6px;border-radius:2px;
+  background:rgba(80,52,20,.5)}
+
+/* ── 皮肤 B：小铜铃夹（一颗铃铛：钟罩圆顶 + 铜檐口 + 悬晃铃舌）── */
+.clip-b{width:16px;height:24px;top:-11px;border-radius:50% 50% 12% 12%/74% 74% 12% 12%;
+  background:radial-gradient(130% 105% at 32% 12%,#f8e8b6 0%,#d6b061 42%,#8a6a2d 100%);
+  box-shadow:0 2px 4px rgba(56,38,14,.42),inset 0 1px 0 rgba(255,246,214,.9)}
+.clip-b::before{content:"";position:absolute;left:-1.5px;right:-1.5px;bottom:3.5px;height:3.5px;border-radius:3px;
+  background:linear-gradient(90deg,#8a6a2d,#f8e8b6 50%,#8a6a2d);
+  box-shadow:0 1px 2px rgba(56,38,14,.5)}
+.clip-b::after{content:"";position:absolute;left:50%;bottom:-4.5px;width:5px;height:5px;margin-left:-2.5px;
+  border-radius:50%;background:radial-gradient(circle at 36% 30%,#f8e8b6,#8a6a2d 82%);
+  box-shadow:0 1px 2px rgba(56,38,14,.5)}
+/* ── 皮肤 C：小水滴夹（两枚等大果冻露珠，左右对称、相向微倾）── */
+.clip-c{width:14px;height:20px;top:-10px;border-radius:50% 50% 50% 50%/56% 56% 44% 44%;
+  background:radial-gradient(135% 115% at 34% 24%,#ffffff 0%,#eaf4ff 32%,#bcd7f6 64%,#7fa8e0 100%);
+  box-shadow:0 2px 4px rgba(40,80,150,.35),inset 0 1px 0 #ffffff}
+.clip-c::before{content:"";position:absolute;left:50%;top:-3.5px;width:6px;height:6px;margin-left:-3px;
+  border-radius:0 0 3px 0;background:linear-gradient(135deg,#cfe2fa,#8fb4e6);
+  transform:rotate(45deg)}
+.clip-c::after{content:"";position:absolute;left:3px;top:5px;width:3.4px;height:7px;border-radius:3px;
+  background:rgba(255,255,255,.92);transform:rotate(-14deg)}
+
+/* ── 收起态拉杆（与产品 1:1 缩样，3 倍放大展示） ───────── */
+.stage-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft);border-top:1px solid var(--line-soft)}
+.stage{background:#fff;padding:16px 16px 14px;position:relative}
+.stage.dark{background:#22211d}
+.stage-cap{font-size:11px;color:var(--ink-2);letter-spacing:.06em;margin-bottom:10px;display:flex;justify-content:space-between}
+.stage-cap em{font-style:normal;color:var(--accent)}
+.mini-wall{height:180px;position:relative;border-radius:8px;overflow:hidden;
+  background:linear-gradient(155deg,#e9e5dc 0%,#f4f1e9 45%,#dcd7cc 100%)}
+.stage.dark .mini-wall{background:linear-gradient(155deg,#2e2b26 0%,#3a362f 50%,#262420 100%)}
+.pt{position:absolute;left:50%;top:0;width:0;height:96px;transform:translateX(-50%);pointer-events:none}
+.pt-cord,.pt-bead,.pt-tab{position:absolute;display:block}
+.pt-cord{left:50%;top:0;width:6px;height:78px;margin-left:-3px;border-radius:6px;
+  background:linear-gradient(180deg,transparent 0%,var(--cord-1) 32%,var(--cord-2) 100%)}
+.pt-bead{left:50%;top:66px;width:27px;height:27px;margin-left:-13.5px;border-radius:50%;
+  background:radial-gradient(circle at 32% 26%,var(--bead-hi) 0 20%,var(--bead) 52%,var(--bead-edge) 100%);
+  box-shadow:0 3px 9px var(--shadow)}
+.pt-tab{left:50%;top:84px;width:90px;height:108px;margin-left:-45px;
+  background:linear-gradient(180deg,var(--tab-1) 0%,var(--tab-2) 52%,var(--tab-3) 100%);
+  border:1px solid var(--tab-line);
+  box-shadow:0 15px 36px var(--shadow),0 3px 6px var(--shadow),inset 0 3px 0 var(--rim)}
+/* 拉杆皮肤 token：逐字对齐产品三皮肤 */
+.pt.porcelain{--cord-1:#e3d7bf;--cord-2:#b9a17c;--bead:#cbb493;--bead-hi:#f2e9d6;--bead-edge:#a58b64;
+  --tab-1:#fffdf8;--tab-2:#f5efe2;--tab-3:#e8dec9;--tab-line:#d8ccb2;--rim:#ffffff;--shadow:rgba(74,58,36,.20)}
+.pt.porcelain .pt-tab{border-radius:46% 46% 44% 44%/26% 26% 34% 34%}
+.pt.porcelain .pt-tab::before{content:"";position:absolute;left:50%;top:12px;width:30px;height:7px;
+  transform:translateX(-50%);border-radius:99px;background:linear-gradient(180deg,#c9b99b,#fffdf8)}
+.pt.brass{--cord-1:#a07b4a;--cord-2:#5a4027;--bead:#f0d692;--bead-hi:#fff5d6;--bead-edge:#8a6a2f;
+  --tab-1:#f7e4af;--tab-2:#c9a24f;--tab-3:#8d6a2d;--tab-line:#7a5824;--rim:#fff2c9;--shadow:rgba(56,38,14,.36)}
+.pt.brass .pt-cord{width:8px;margin-left:-4px;
+  background:repeating-linear-gradient(112deg,#6b5030 0 4px,#b18b55 4px 8px)}
+.pt.brass .pt-tab{border-radius:40% 40% 26% 26%/20% 20% 13% 13%;
+  background:linear-gradient(96deg,#8a6a2d 0%,#d6b061 18%,#f8e8b6 38%,#c39a48 62%,#8c682c 100%)}
+.pt.brass .pt-tab::before{content:"";position:absolute;left:50%;top:10px;width:48px;height:12px;
+  transform:translateX(-50%);border-radius:99px;background:linear-gradient(180deg,#f8e6b4,#9b7736)}
+.pt.glass{--cord-1:#cfdff5;--cord-2:#8fb4e8;--bead:#c7dcf8;--bead-hi:#ffffff;--bead-edge:#7fa8e0;
+  --tab-1:#ffffff;--tab-2:#bcd7f6;--tab-3:#8fb4e6;--tab-line:#9dc0ea;--rim:#ffffff;--shadow:rgba(40,80,150,.26)}
+.pt.glass .pt-tab{border-radius:50% 50% 50% 50%/68% 68% 34% 34%;
+  background:radial-gradient(120% 90% at 32% 18%,#ffffff 0%,#eaf4ff 26%,#bcd7f6 60%,#8fb4e6 100%)}
+.pt.glass .pt-tab::before{content:"";position:absolute;left:50%;top:27px;width:33px;height:33px;
+  transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(circle at 42% 36%,#ffffff 0 18%,#a9ccf5 46%,#6f9fdd 100%)}
+
+/* ── token 表 ──────────────────────────────────────────── */
+.tokens{display:flex;flex-wrap:wrap;gap:8px;padding:0 30px 8px}
+.tk{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);
+  background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 6px}
+.tk i{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.08);flex:0 0 auto}
+.tk.dark-tk{border-style:dashed}
+
+/* ── 实现说明 ──────────────────────────────────────────── */
+.notes{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px 30px;margin-top:8px}
+.notes h2{font-family:var(--serif);font-size:18px;font-weight:600;margin:0 0 12px}
+.notes ul{margin:0;padding-left:20px;font-size:13px;line-height:2;color:var(--ink)}
+.notes li b{font-weight:700}
+.notes .r{color:#b04a3a}
+
+/* ═══════════════ 皮肤 A：素瓷·侘寂 × 亚麻双股绳 ═══════════════ */
+/* 绳：未漂亚麻色双股绞绳 —— 主线暖麻色（比现状更贴瓷扣的米白系），
+   麻纤维高光虚线保留，陶土色底线；两端「陶土圆钉」呼应瓷扣的陶土结。 */
+.rope-a .rp-main{stroke:#c2a473}
+.rope-a .rp-fiber{stroke:rgba(255,248,232,.5)}
+.rope-a .rp-under{stroke:#8a6a3e}
+.rope-a .rp-stitch{stroke:rgba(138,106,62,.42);stroke-width:1;stroke-dasharray:3 9;fill:none;
+  vector-effect:non-scaling-stroke}
+.nail-a{position:absolute;top:19px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#e2c69c,#a98a5d 78%);
+  box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.45)}
+.rope-a.dark .rp-main{stroke:#a3875c}
+.rope-a.dark .rp-fiber{stroke:rgba(255,244,220,.28)}
+.rope-a.dark .rp-under{stroke:#5e4a2a}
+.rope-a.dark .rp-stitch{stroke:rgba(226,198,156,.3)}
+.rope-a.dark .nail-a{background:radial-gradient(circle at 35% 30%,#c8a878,#7d6440 78%)}
+
+/* ═══════════════ 皮肤 B：黄铜·铃坠 × 黄铜车刻杆 ═══════════════ */
+/* 绳：老窗帘盒的黄铜横杆 —— 金属渐变主线（明-暗-明模拟车削高光）+
+   车刻环纹（短划虚线等距排布）+ 铜色底线；两端「铜环钉」带孔铜圈。 */
+.rope-b .rp-main{stroke:#b8893c}
+.rope-b .rp-shine{stroke:#f6e3ac;stroke-width:1.1;fill:none;vector-effect:non-scaling-stroke;
+  stroke-dasharray:none;opacity:.9}
+.rope-b .rp-rings{stroke:rgba(122,88,36,.75);stroke-width:3.2;fill:none;stroke-linecap:butt;
+  stroke-dasharray:2.4 26;vector-effect:non-scaling-stroke}
+.rope-b .rp-under{stroke:#5a4027}
+.nail-b{position:absolute;top:17px;width:13px;height:13px;border-radius:50%;
+  background:radial-gradient(circle at 36% 30%,#f8e8b6,#c39a48 55%,#8a6a2d 100%);
+  box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,246,214,.9)}
+.nail-b::after{content:"";position:absolute;left:4px;top:4px;width:5px;height:5px;border-radius:50%;
+  background:inherit;background:radial-gradient(circle at 40% 35%,#6b5030,#4a3418);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.5)}
+.rope-b.dark .rp-main{stroke:#9c7836}
+.rope-b.dark .rp-shine{stroke:#e8cd88;opacity:.55}
+.rope-b.dark .rp-rings{stroke:rgba(60,42,16,.8)}
+.rope-b.dark .rp-under{stroke:#3e2d15}
+.rope-b.dark .nail-b{background:radial-gradient(circle at 36% 30%,#d8bb76,#9c7836 55%,#5b4420 100%)}
+
+/* ═══════════════ 皮肤 C：琉璃·露珠 × 银蓝丝线缀露 ═══════════════ */
+/* 绳：一根更纤细的银蓝丝线（2.6px）+ 顶部白色高光，沿线缀 4 颗
+   「露珠」——上亮下蓝的玻璃小圆，恰好呼应拉杆的水滴形琉璃扣；
+   两端「水晶钉」银蓝釉面。露珠用 SVG 实色圆+径向渐变，无 filter。 */
+.rope-c .rp-main{stroke:#a9c6ec;stroke-width:2.6}
+.rope-c .rp-fiber{stroke:rgba(255,255,255,.75);stroke-width:.9;stroke-dasharray:4 10}
+.rope-c .rp-under{stroke:#6f9fdd}
+.nail-c{position:absolute;top:19px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ffffff,#c7dcf8 40%,#7fa8e0 100%);
+  box-shadow:0 1px 3px rgba(40,80,150,.35),inset 0 1px 0 rgba(255,255,255,.9)}
+.rope-c.dark .rp-main{stroke:#7fa3cf}
+.rope-c.dark .rp-fiber{stroke:rgba(255,255,255,.4)}
+.rope-c.dark .rp-under{stroke:#4f7bbb}
+.rope-c.dark .nail-c{background:radial-gradient(circle at 35% 30%,#dceafc,#7fa3cf 45%,#4f7bbb 100%)}
+/* 露珠（SVG circle 直接用渐变填充由 <radialGradient> 提供） */
+
+/* 卡片/夹子暗色微调 */
+.wall.dark .clip{background:linear-gradient(90deg,#5e3d1c,#8a5f2f 28%,#b58f55 52%,#8a5f2f 76%,#5e3d1c)}
+.wall.dark .clip-b{background:radial-gradient(130% 105% at 32% 12%,#e8cd88 0%,#9c7836 45%,#5b4420 100%);
+  box-shadow:0 2px 4px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,240,200,.5)}
+.wall.dark .clip-b::before{background:linear-gradient(90deg,#4a3418,#e8cd88 50%,#4a3418)}
+.wall.dark .clip-c{background:radial-gradient(135% 115% at 34% 24%,#dceafc 0%,#8fb4e6 38%,#4f7bbb 100%);
+  box-shadow:0 2px 4px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.4)}
+.wall.dark .clip-c::before{background:linear-gradient(135deg,#7fa3cf,#4f7bbb)}
+.wall.dark .clip-c::after{background:rgba(255,255,255,.45)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="head">
+    <p class="kicker">Tacco · Clothesline Rope Skins Proposal</p>
+    <h1>晾衣绳 · 绳身皮肤 3 款设计提案</h1>
+    <p class="lede">绳身（麻绳 + 两端固定钉）跟随「拉杆样式」配置项换肤：<b>选哪款拉杆，绳与钉就自动换成同一套材质语言</b>，入口不新增，仍在 设置 → 晾衣绳 → 拉杆样式。绳体几何完全不变（同一条下垂曲线、同一拖拽热区），只换颜色 / 材质 / 装饰；<b>夹子随皮肤换装</b>——A 原木夹、B 小铜铃夹、C 双滴小水滴夹。</p>
+    <div class="chips">
+      <span class="chip"><b>实现方式</b>：data-pulltab 选择器覆盖 CSS 变量 + SVG 装饰路径</span>
+      <span class="chip"><b>红线遵守</b>：零 filter / 零动画 / 零几何变化</span>
+      <span class="chip"><b>深色主题</b>：每款均给出暗色版实色</span>
+    </div>
+    <div class="themebar">
+      <button class="on" id="btn-light">浅色壁纸预览</button>
+      <button id="btn-dark">深色壁纸预览</button>
+    </div>
+  </header>
+
+  <!-- ════════ A 素瓷 ════════ -->
+  <section class="opt" id="opt-a" style="--accent:#a98a5d">
+    <div class="opt-head">
+      <div class="opt-no">A</div>
+      <div>
+        <span class="pair-tag">配 拉杆 A「素瓷·侘寂」</span>
+        <h2 class="opt-name">亚麻双股绳 · 陶土圆钉</h2>
+        <p class="opt-mood">未漂染的亚麻本色，纤维松软，钉是搓捏过的陶土</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens" style="padding:0">
+          <span class="tk"><i style="background:#c2a473"></i>主线 亚麻 #c2a473</span>
+          <span class="tk"><i style="background:#8a6a3e"></i>底线 陶褐 #8a6a3e</span>
+          <span class="tk"><i style="background:#a98a5d"></i>陶土钉 #a98a5d</span>
+          <span class="tk dark-tk"><i style="background:#a3875c"></i>暗色主线 #a3875c</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">现状麻绳已接近素瓷气质，本款做「贴色」微调：主线由偏黄的 #b7915e 调暖为<b>米灰亚麻 #c2a473</b>，与瓷扣 #f5efe2 同属一个暖色系；新增等距「绞股短纹」虚线强化双股麻绳的手搓感；两端圆钉从木质米色改为<b>陶土色</b>，与瓷扣底部的陶土绳结互为呼应。<b>夹子保留原木夹</b>——素瓷·侘寂语境里，亚麻绳 + 陶土钉 + 原木夹本来就是一套，木夹是 A 款的基准，也是 B / C 换装前的参照。</p>
+      </div>
+    </div>
+    <div class="wall-wrap">
+      <p class="wall-cap">整绳效果 · 展开态 <em>1:1 真实比例</em></p>
+      <div class="wall">
+        <div class="ropeband rope-a">
+          <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+            <path class="rp-under"  d="M4 28 Q500 48 996 28" fill="none" stroke-width="1" opacity=".5" vector-effect="non-scaling-stroke"/>
+            <path class="rp-main"   d="M4 26 Q500 46 996 26" fill="none" stroke-width="3.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+            <path class="rp-stitch" d="M4 26.8 Q500 46.8 996 26.8"/>
+            <path class="rp-fiber"  d="M4 25 Q500 45 996 25" fill="none" stroke-width="1" stroke-dasharray="5 7" vector-effect="non-scaling-stroke"/>
+          </svg>
+          <span class="nail-a" style="left:8px"></span>
+          <span class="nail-a" style="right:8px"></span>
+        </div>
+        <div class="card" style="left:12%">
+          <span class="clip"></span>
+          <p class="t">周五例会纪要</p><p class="d">带笔记本和投影转接头<br>会后同步给项目群</p>
+        </div>
+        <div class="card c2" style="left:46%">
+          <span class="clip"></span>
+          <p class="t">取快递 · 菜鸟驿站</p><p class="d">18:00 前到达，尾号 2072</p>
+        </div>
+        <div class="card" style="left:76%">
+          <span class="clip"></span>
+          <p class="t">浇花</p><p class="d">绿萝三天一次，别浇多</p>
+        </div>
+      </div>
+    </div>
+    <div class="stage-row">
+      <div class="stage">
+        <p class="wall-cap">绳 + 拉杆成套效果（浅色）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-a" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-stitch" d="M4 16.8 Q200 32.8 396 16.8"/>
+              <path class="rp-fiber" d="M4 15.2 Q200 31.2 396 15.2" fill="none" stroke-width="1" stroke-dasharray="4 8" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span class="nail-a" style="left:6px;top:12px"></span>
+            <span class="nail-a" style="right:6px;top:12px"></span>
+          </div>
+          <div class="pt porcelain" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+      <div class="stage dark">
+        <p class="wall-cap">绳 + 拉杆成套效果（深色壁纸）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-a dark" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <path class="rp-under" d="M4 18 Q200 34 396 18" fill="none" stroke-width="1" opacity=".5" vector-effect="non-scaling-stroke"/>
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-stitch" d="M4 16.8 Q200 32.8 396 16.8"/>
+              <path class="rp-fiber" d="M4 15.2 Q200 31.2 396 15.2" fill="none" stroke-width="1" stroke-dasharray="4 8" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span class="nail-a" style="left:6px;top:12px"></span>
+            <span class="nail-a" style="right:6px;top:12px"></span>
+          </div>
+          <div class="pt porcelain" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ B 黄铜 ════════ -->
+  <section class="opt" id="opt-b" style="--accent:#a47c2c">
+    <div class="opt-head">
+      <div class="opt-no">B</div>
+      <div>
+        <span class="pair-tag">配 拉杆 B「黄铜·铃坠」</span>
+        <h2 class="opt-name">黄铜车刻杆 · 铜环钉 · 小铜铃夹</h2>
+        <p class="opt-mood">老式窗帘盒的黄铜横杆，车削出等距环纹，钉是穿绳的铜环，夹是一颗会响的小铜铃</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens" style="padding:0">
+          <span class="tk"><i style="background:#b8893c"></i>铜杆主色 #b8893c</span>
+          <span class="tk"><i style="background:#f6e3ac"></i>车削高光 #f6e3ac</span>
+          <span class="tk"><i style="background:#7a5824"></i>车刻环纹 #7a5824</span>
+          <span class="tk"><i style="background:#8a6a2d"></i>铜环钉 #8a6a2d</span>
+          <span class="tk"><i style="background:#d6b061"></i>铃身 #d6b061</span>
+          <span class="tk"><i style="background:#f8e8b6"></i>檐口/铃舌 #f8e8b6</span>
+          <span class="tk dark-tk"><i style="background:#9c7836"></i>暗色主色 #9c7836</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">绳子不再是「绳」，而是<b>一根微下垂的黄铜横杆</b>：主线用铜金色，上方叠一条 1.1px 的车削高光线模拟金属反光，再叠等距短划虚线作为<b>车刻环纹</b>（dasharray 2.4/26，纯虚线、零动画成本）；两端的麻绳圆钉换成<b>带孔铜环</b>——正是窗帘绳穿过的那个环。<b>夹子换成「小铜铃夹」</b>：整枚夹子就是一颗小铃铛——钟罩圆顶（74% 上拱的钟形圆角）、一道铜檐口、底下悬着半露的<b>铃舌</b>小圆珠，与铃坠拉杆本是同一串铃铛上的「坠」与「铃」，卡片仿佛是被一颗颗小铃铛别在铜杆上，风一吹（展开/收起动效）仿佛能听见轻响。</p>
+      </div>
+    </div>
+    <div class="wall-wrap">
+      <p class="wall-cap">整绳效果 · 展开态 <em>1:1 真实比例</em></p>
+      <div class="wall">
+        <div class="ropeband rope-b">
+          <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+            <path class="rp-under"  d="M4 28 Q500 48 996 28" fill="none" stroke-width="1.2" opacity=".6" vector-effect="non-scaling-stroke"/>
+            <path class="rp-main"   d="M4 26 Q500 46 996 26" fill="none" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+            <path class="rp-shine"  d="M4 24.4 Q500 44.4 996 24.4"/>
+            <path class="rp-rings"  d="M4 26 Q500 46 996 26"/>
+          </svg>
+          <span class="nail-b" style="left:7px"></span>
+          <span class="nail-b" style="right:7px"></span>
+        </div>
+        <div class="card" style="left:12%">
+          <span class="clip clip-b"></span>
+          <p class="t">周五例会纪要</p><p class="d">带笔记本和投影转接头<br>会后同步给项目群</p>
+        </div>
+        <div class="card c2" style="left:46%">
+          <span class="clip clip-b"></span>
+          <p class="t">取快递 · 菜鸟驿站</p><p class="d">18:00 前到达，尾号 2072</p>
+        </div>
+        <div class="card" style="left:76%">
+          <span class="clip clip-b"></span>
+          <p class="t">浇花</p><p class="d">绿萝三天一次，别浇多</p>
+        </div>
+      </div>
+    </div>
+    <div class="stage-row">
+      <div class="stage">
+        <p class="wall-cap">绳 + 拉杆成套效果（浅色）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-b" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="3.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-shine" d="M4 14.6 Q200 30.6 396 14.6"/>
+              <path class="rp-rings" d="M4 16 Q200 32 396 16"/>
+            </svg>
+            <span class="nail-b" style="left:6px;top:11px"></span>
+            <span class="nail-b" style="right:6px;top:11px"></span>
+          </div>
+          <div class="pt brass" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+      <div class="stage dark">
+        <p class="wall-cap">绳 + 拉杆成套效果（深色壁纸）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-b dark" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <path class="rp-under" d="M4 18 Q200 34 396 18" fill="none" stroke-width="1.2" opacity=".6" vector-effect="non-scaling-stroke"/>
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="3.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-shine" d="M4 14.6 Q200 30.6 396 14.6"/>
+              <path class="rp-rings" d="M4 16 Q200 32 396 16"/>
+            </svg>
+            <span class="nail-b" style="left:6px;top:11px"></span>
+            <span class="nail-b" style="right:6px;top:11px"></span>
+          </div>
+          <div class="pt brass" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ C 琉璃 ════════ -->
+  <section class="opt" id="opt-c" style="--accent:#5b8fd8">
+    <div class="opt-head">
+      <div class="opt-no">C</div>
+      <div>
+        <span class="pair-tag">配 拉杆 C「琉璃·露珠」</span>
+        <h2 class="opt-name">银蓝丝线 · 缀露 · 水晶钉 · 双滴小水滴夹</h2>
+        <p class="opt-mood">更细的一根银蓝丝线，线上凝着几颗露珠，钉是釉面水晶，卡片被两颗等大的露珠对称夹着、微微相向而倾</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens" style="padding:0">
+          <span class="tk"><i style="background:#a9c6ec"></i>丝线 #a9c6ec</span>
+          <span class="tk"><i style="background:#ffffff"></i>高光虚线 #ffffff</span>
+          <span class="tk"><i style="background:#6f9fdd"></i>底线/露珠 #6f9fdd</span>
+          <span class="tk"><i style="background:#7fa8e0"></i>水晶钉 #7fa8e0</span>
+          <span class="tk"><i style="background:#bcd7f6"></i>水滴夹 #bcd7f6</span>
+          <span class="tk dark-tk"><i style="background:#7fa3cf"></i>暗色丝线 #7fa3cf</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">丝线比麻绳更细（3.2 → 2.6px），颜色从暖棕切换为<b>银蓝 #a9c6ec</b>，白色高光虚线改为稀疏长划，像丝线受光；沿曲线<b>缀 4 颗露珠</b>（径向渐变玻璃圆：上白下蓝，各带 1px 暗蓝底线示意「挂」在丝线上），与拉杆的水滴琉璃扣同一语汇；两端钉换<b>银蓝釉面水晶钉</b>。<b>夹子换成「双滴小水滴夹」</b>：整枚夹子就是一颗露珠——圆滚滚的果冻水滴肚（56% 上拱的饱满弧线）、顶部一个细小尖嘴<b>勾在丝线上</b>（与拉杆水滴尖同款造型语言），左上斜一道白釉高光。每张卡片<b>左右各一滴、两滴完全等大（14×20）</b>，以 ±8° 镜像倾角微微相向而倾，像两颗没滴下来的露水面对面替你捏着便签——对称、安稳又带一点互动感；丝线上另外缀的 4 颗静露与夹子的水滴互相呼应，整条绳是一根「清晨沾露的丝线」。</p>
+      </div>
+    </div>
+    <div class="wall-wrap">
+      <p class="wall-cap">整绳效果 · 展开态 <em>1:1 真实比例</em></p>
+      <div class="wall">
+        <div class="ropeband rope-c">
+          <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+            <defs>
+              <radialGradient id="dew" cx="38%" cy="30%" r="75%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="45%" stop-color="#c7dcf8"/>
+                <stop offset="100%" stop-color="#6f9fdd"/>
+              </radialGradient>
+              <path id="ropeC" d="M4 26 Q500 46 996 26" fill="none"/>
+            </defs>
+            <path class="rp-under" d="M4 28 Q500 48 996 28" fill="none" stroke-width="1" opacity=".55" vector-effect="non-scaling-stroke"/>
+            <path class="rp-main"  d="M4 26 Q500 46 996 26" fill="none" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+            <path class="rp-fiber" d="M4 25 Q500 45 996 25" fill="none" stroke-width=".9" stroke-dasharray="4 10" vector-effect="non-scaling-stroke"/>
+            <!-- 露珠：挂在丝线上的 4 颗（x 均布，y 按曲线 26+40t(1-t) 取值再 +2 下垂挂感） -->
+            <circle class="dew" cx="180" cy="40.7" r="4.5" fill="url(#dew)"/>
+            <circle class="dew" cx="390" cy="47.5" r="5.2" fill="url(#dew)"/>
+            <circle class="dew" cx="610" cy="47.5" r="4.2" fill="url(#dew)"/>
+            <circle class="dew" cx="830" cy="39.5" r="4.8" fill="url(#dew)"/>
+          </svg>
+          <span class="nail-c" style="left:8px"></span>
+          <span class="nail-c" style="right:8px"></span>
+        </div>
+        <div class="card" style="left:12%">
+          <span class="clip clip-c" style="left:25%;transform:translateX(-50%) rotate(-8deg)"></span><span class="clip clip-c" style="left:75%;transform:translateX(-50%) rotate(8deg)"></span>
+          <p class="t">周五例会纪要</p><p class="d">带笔记本和投影转接头<br>会后同步给项目群</p>
+        </div>
+        <div class="card c2" style="left:46%">
+          <span class="clip clip-c" style="left:25%;transform:translateX(-50%) rotate(-8deg)"></span><span class="clip clip-c" style="left:75%;transform:translateX(-50%) rotate(8deg)"></span>
+          <p class="t">取快递 · 菜鸟驿站</p><p class="d">18:00 前到达，尾号 2072</p>
+        </div>
+        <div class="card" style="left:76%">
+          <span class="clip clip-c" style="left:25%;transform:translateX(-50%) rotate(-8deg)"></span><span class="clip clip-c" style="left:75%;transform:translateX(-50%) rotate(8deg)"></span>
+          <p class="t">浇花</p><p class="d">绿萝三天一次，别浇多</p>
+        </div>
+      </div>
+    </div>
+    <div class="stage-row">
+      <div class="stage">
+        <p class="wall-cap">绳 + 拉杆成套效果（浅色）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-c" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <defs>
+                <radialGradient id="dew2" cx="38%" cy="30%" r="75%">
+                  <stop offset="0%" stop-color="#ffffff"/><stop offset="45%" stop-color="#c7dcf8"/><stop offset="100%" stop-color="#6f9fdd"/>
+                </radialGradient>
+              </defs>
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="2.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-fiber" d="M4 15.2 Q200 31.2 396 15.2" fill="none" stroke-width=".9" stroke-dasharray="4 10" vector-effect="non-scaling-stroke"/>
+              <circle cx="90" cy="25.5" r="3.6" fill="url(#dew2)"/>
+              <circle cx="200" cy="30" r="4.2" fill="url(#dew2)"/>
+              <circle cx="310" cy="25.5" r="3.8" fill="url(#dew2)"/>
+            </svg>
+            <span class="nail-c" style="left:6px;top:12px"></span>
+            <span class="nail-c" style="right:6px;top:12px"></span>
+          </div>
+          <div class="pt glass" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+      <div class="stage dark">
+        <p class="wall-cap">绳 + 拉杆成套效果（深色壁纸）<em>放大展示</em></p>
+        <div class="mini-wall">
+          <div class="ropeband rope-c dark" style="height:44px">
+            <svg viewBox="0 0 400 44" preserveAspectRatio="none">
+              <defs>
+                <radialGradient id="dew3" cx="38%" cy="30%" r="75%">
+                  <stop offset="0%" stop-color="#dceafc"/><stop offset="45%" stop-color="#8fb4e6"/><stop offset="100%" stop-color="#4f7bbb"/>
+                </radialGradient>
+              </defs>
+              <path class="rp-under" d="M4 18 Q200 34 396 18" fill="none" stroke-width="1" opacity=".55" vector-effect="non-scaling-stroke"/>
+              <path class="rp-main" d="M4 16 Q200 32 396 16" fill="none" stroke-width="2.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+              <path class="rp-fiber" d="M4 15.2 Q200 31.2 396 15.2" fill="none" stroke-width=".9" stroke-dasharray="4 10" vector-effect="non-scaling-stroke"/>
+              <circle cx="90" cy="25.5" r="3.6" fill="url(#dew3)"/>
+              <circle cx="200" cy="30" r="4.2" fill="url(#dew3)"/>
+              <circle cx="310" cy="25.5" r="3.8" fill="url(#dew3)"/>
+            </svg>
+            <span class="nail-c" style="left:6px;top:12px"></span>
+            <span class="nail-c" style="right:6px;top:12px"></span>
+          </div>
+          <div class="pt glass" style="top:8px"><span class="pt-cord"></span><span class="pt-bead"></span><span class="pt-tab"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 实现说明 ════════ -->
+  <section class="notes">
+    <h2>实现落点（供确认后开发参考，本次不改代码）</h2>
+    <ul>
+      <li><b>入口不变</b>：复用现有「设置 → 晾衣绳 → 拉杆样式」，选择 porcelain / brass / glass 时，绳窗根节点已有的 <code>data-pulltab</code> 属性同步驱动绳身与固定钉皮肤，无需新增配置项。</li>
+      <li><b>改动范围</b>：仅 [clothesline.css]（新增三段 <code>.cl-root[data-pulltab=…] .cl-rope-*</code> 变量/覆盖）与 [ClotheslineView.tsx] 的绳体 SVG（B 款增 2 条装饰 path、C 款增露珠 circle，均由同一条曲线坐标公式派生，其余几何不动）。</li>
+      <li><b>夹子跟随换肤（关键差异）</b>：三款夹子不再是同一个木夹——A 保留<b>原木夹</b>（15×32 木质，素瓷语境里木头是对的）；B 换<b>小铜铃夹</b>（16×24 钟形圆顶 + 檐口 + 悬晃铃舌，纯 CSS 圆角 + 渐变实现）；C 换<b>双滴小水滴夹</b>（14×20 等大 ×2，圆肚 + 上尖嘴勾线，±8° 镜像相向微倾，夹位 30% / 70% 左右对称）。实现上 <code>.cl-clip</code> 的悬挂定位逻辑不变，仅由 <code>data-pulltab</code> 切换造型类；C 款双夹为 <code>.cl-clip</code> 副本 ×2（left 百分比驱动 + ±8° 镜像 transform），<span class="r">不改卡片悬挂高度计算</span>。</li>
+      <li><b>几何与交互零变化</b>：绳子仍是 <code>viewBox 0 0 1000 64 / M4 26 Q500 46 996 26</code>，拖拽热区、卡片悬挂高度计算（26+40·t(1−t)）全部共用，<span class="r">不改 Rust 侧任何窗口逻辑</span>。</li>
+      <li><b>红线遵守</b>：三款均为纯色 / 渐变 / dasharray 实色装饰，<span class="r">不用 filter、backdrop-filter、will-change、动画</span>——露珠与铜环钉用 SVG radialGradient 实色填充，规避透明窗合成层重建问题。</li>
+      <li><b>深色主题</b>：每款给出一套暗色实色（不用 filter 变暗），挂 <code>[data-pulltab][data-theme='dark']</code> 双属性选择器，与拉杆皮肤深色覆盖同一写法。</li>
+      <li><b>配置页预览</b>：拉杆样式三选一的缩略图同步加上对应绳身小样，所见即所得。</li>
+    </ul>
+  </section>
+
+</div>
+<script>
+  // 浅色/深色壁纸整体切换：只切换演示墙底色，绳体皮肤切换到对应暗色 token
+  const btnL = document.getElementById('btn-light'), btnD = document.getElementById('btn-dark');
+  function setTheme(dark){
+    document.querySelectorAll('.wall').forEach(w=>{
+      w.classList.toggle('dark', dark);
+      const rb = w.querySelector('.ropeband'); if(rb) rb.classList.toggle('dark', dark);
+      w.querySelectorAll('.card').forEach(c=>c.classList.toggle('dark-card', dark));
+    });
+    document.querySelectorAll('.stage').forEach(s=>s.classList.toggle('dark', dark));
+    btnL.classList.toggle('on', !dark); btnD.classList.toggle('on', dark);
+  }
+  btnL.onclick = ()=>setTheme(false);
+  btnD.onclick = ()=>setTheme(true);
+</script>
+</body>
+</html>

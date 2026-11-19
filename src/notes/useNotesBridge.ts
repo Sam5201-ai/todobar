@@ -16,6 +16,7 @@ import { emit, listen } from '@tauri-apps/api/event'
 import { readFreeQuotaUsed, useTaskStore } from '../useTaskStore'
 import { useAccount } from '../membership'
 import {
+  CL_ARCHIVE_CARD,
   CL_CREATE_NOTE,
   CL_EDIT_NOTE_ITEM,
   CL_NOTE_COLOR_ACTION,
@@ -23,19 +24,22 @@ import {
   CL_NOTE_ITEM_ACTION,
   CL_OPEN_NOTE,
   CL_TOAST,
+  type ClArchiveCard,
   type ClNoteColorAction,
   type ClNoteHung,
   type ClNoteItemAction,
   type ClToastPayload,
 } from '../clothesline/bridge'
-import { clAddCard, clMakeCard } from '../clothesline/bridge'
+import { clAddCard, clArchiveCard, clDeleteArchived, clGetRestoreState, clListArchived, clMakeCard, clRemoveCard } from '../clothesline/bridge'
 import { emitConvertResult, listenConvertRequest } from './bridge'
 import {
   addNoteItem,
+  archiveNote,
   createNote,
   getNotes,
   hydrateNotes,
   MAX_VISIBLE_NOTES,
+  removeNote,
   removeNoteItem,
   toggleNoteItem,
   updateNote,
@@ -265,6 +269,39 @@ export function useNotesBridge(params: {
         updateNote(e.payload.noteId, { colorKey: e.payload.colorKey })
       }).catch(() => null)
       if (u5) unsubs.push(u5)
+
+      // ⑩ ★2026-11-18 归档：便签窗/绳窗的「一体归档 / 永久删除」编排。
+      //    写方只在主窗（单一写方红线）：archiveNote/removeNote 归这里，
+      //    绳卡命令（clArchiveCard/clDeleteArchived）也从这里发起。
+      const u6 = await listen<ClArchiveCard>(CL_ARCHIVE_CARD, (e) => {
+        if (disposed) return
+        const p = e.payload
+        if (!p?.action) return
+        void (async () => {
+          if (p.action === 'archive') {
+            // 1) 便签数据归档（存在且未归档时）；2) 关联绳卡同步归档。
+            const note = getNotes().find((n) => n.id === p.noteId)
+            if (note && note.archivedAt == null) archiveNote(note.id)
+            const cardId =
+              p.cardId ??
+              (await clGetRestoreState()
+                .then((st) => st.cards.find((c) => c.note_id === p.noteId)?.id ?? null)
+                .catch(() => null))
+            if (cardId) await clArchiveCard(cardId).catch(() => undefined)
+          } else if (p.action === 'delete-note') {
+            // 永久删除便签 + 清理关联绳卡（活跃卡由绳窗删除路径带 cardId 过来）。
+            if (p.noteId && getNotes().some((n) => n.id === p.noteId)) removeNote(p.noteId)
+            if (p.cardId) {
+              await clRemoveCard(p.cardId).catch(() => undefined)
+              await clDeleteArchived(p.cardId).catch(() => undefined)
+            }
+            const archived = await clListArchived().catch(() => [])
+            const hit = archived.find((c) => c.note_id === p.noteId)
+            if (hit) await clDeleteArchived(hit.id).catch(() => undefined)
+          }
+        })()
+      }).catch(() => null)
+      if (u6) unsubs.push(u6)
     })()
     return () => {
       disposed = true

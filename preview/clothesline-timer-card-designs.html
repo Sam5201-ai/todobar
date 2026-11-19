@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tacco 番茄钟卡片 · 6 款样式设计提案（弹窗可选）</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   番茄钟卡片样式 3 款设计提案
+   场景：新建/编辑番茄计时弹窗「卡片样式」三选一。
+   三款在【排版结构】与【卡片形态】上均不同，不是换色：
+     A 黄铜怀表 —— 圆形表盘为主体的复古怀表
+     B 站台车票 —— 打孔票边的火车票 / 票根
+     C 像素掌机 —— 外壳 + LCD 屏的电子宠物机
+   实现红线（与绳窗一致）：不透明背景、零 filter / 零 backdrop-filter /
+   零动画零 transition；卡片 168×~192，内容 = 标题 / 时间进度 / 三按钮 / 脚注。
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --sheet-bg:#f2f0ea; --panel:#fffefa; --ink:#24221d; --ink-2:#6b675e;
+  --line:#ddd8cc; --line-soft:#ece8de; --chip:#f6f3ec;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --serif:"Songti SC","Noto Serif CJK SC",Georgia,serif;
+  --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  --radius:14px;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--sheet-bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:44px 28px 72px}
+.head{margin-bottom:26px}
+.kicker{font-size:11px;letter-spacing:.22em;color:var(--ink-2);text-transform:uppercase;margin:0 0 12px}
+h1{font-family:var(--serif);font-size:29px;font-weight:600;margin:0 0 12px}
+.lede{font-size:14px;line-height:1.85;color:var(--ink-2);max-width:820px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.chip{font-size:11px;color:var(--ink-2);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.chip b{color:var(--ink)}
+.themebar{display:flex;gap:10px;margin:20px 0 4px}
+.themebar button{font:600 12px/1 var(--font);color:var(--ink-2);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer}
+.themebar button.on{color:#fff;background:#4a4438;border-color:#4a4438}
+
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:26px;overflow:hidden}
+.opt-head{display:grid;grid-template-columns:64px 1fr 1fr;gap:24px;padding:26px 30px 20px;border-bottom:1px solid var(--line-soft)}
+.opt-no{font-family:var(--serif);font-size:38px;line-height:1;color:var(--accent);opacity:.75}
+.opt-name{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
+.opt-mood{font-size:12px;color:var(--ink-2);margin:0 0 12px;letter-spacing:.04em}
+.opt-why{font-size:13px;line-height:1.8;margin:0}
+.sec-label{font-size:10px;letter-spacing:.16em;color:var(--ink-2);text-transform:uppercase;margin:0 0 8px}
+.pair-tag{display:inline-block;font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 12px;letter-spacing:.08em;margin-bottom:10px;opacity:.85}
+.tokens{display:flex;flex-wrap:wrap;gap:8px}
+.tk{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 6px}
+.tk i{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.08)}
+.tk.dark-tk{border-style:dashed}
+
+.wall-cap{font-size:11px;color:var(--ink-2);letter-spacing:.06em;margin:16px 0 10px;display:flex;justify-content:space-between}
+.wall-cap em{font-style:normal;color:var(--accent)}
+.wall{height:330px;position:relative;border-radius:10px;overflow:hidden;margin:0 30px 26px;min-width:480px;
+  background:linear-gradient(155deg,#e9e5dc 0%,#f4f1e9 45%,#dcd7cc 100%)}
+.wall.dark{background:linear-gradient(155deg,#2e2b26 0%,#3a362f 50%,#262420 100%)}
+.ropeband{position:absolute;left:0;right:0;top:0;height:64px;pointer-events:none}
+.ropeband svg{position:absolute;inset:0;width:100%;height:64px;overflow:visible}
+.rp-main{stroke:#b7915e;stroke-width:3.2;stroke-linecap:round;fill:none}
+.rp-under{stroke:#8a6a3e;stroke-width:1;opacity:.5;fill:none}
+.wall.dark .rp-main{stroke:#a3875c}
+.nail{position:absolute;top:26px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#e8d3ac,#8a6a3e 78%);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.wall.dark .nail{background:radial-gradient(circle at 35% 30%,#c8a878,#5e4a2a 78%)}
+
+/* 木夹（与产品一致） */
+.clip{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:15px;height:32px;
+  border-radius:3px 3px 2px 2px;z-index:3;
+  background:linear-gradient(90deg,#8a5a28,#c89356 28%,#efcf9c 52%,#c89356 76%,#8a5a28);
+  box-shadow:0 2px 4px rgba(60,40,20,.28)}
+.clip::before{content:"";position:absolute;left:3px;right:3px;top:14px;height:1.6px;border-radius:2px;background:rgba(80,52,20,.5)}
+
+/* 卡片基座：168 宽，挂绳下 */
+.tcard{position:absolute;top:44px;width:168px;border-radius:3px;
+  box-shadow:0 8px 18px rgba(40,32,20,.18),0 2px 5px rgba(40,32,20,.1)}
+
+/* ══════════ A 黄铜怀表 ══════════ */
+.tm-watch{height:196px;background:
+  radial-gradient(140% 100% at 30% 0%,#fbf3df 0%,#f3e6c8 58%,#e6d3a8 100%);
+  border:1px solid #c9a96a;padding:8px 10px 7px;text-align:center}
+.tw-plaque{display:inline-block;max-width:130px;font:700 10.5px/1 var(--font);color:#fbf3df;
+  background:linear-gradient(180deg,#d6b061,#a87f34);border:1px solid #8a6a2d;border-radius:3px;
+  padding:5px 12px 6px;letter-spacing:.08em;box-shadow:inset 0 1px 0 rgba(255,246,214,.8),0 1px 2px rgba(90,64,39,.4);
+  clip-path:polygon(6% 0,94% 0,100% 50%,94% 100%,6% 100%,0 50%)}
+.tw-dial{position:relative;width:104px;height:104px;margin:5px auto 0}
+.tw-svg{width:104px;height:104px;transform:rotate(-90deg)}
+.tw-bezel{fill:#f7ecd7;stroke:#b8893c;stroke-width:5}
+.tw-bezel2{fill:none;stroke:#d6b061;stroke-width:1.4}
+.tw-ticks{fill:none;stroke:#8a6a2d;stroke-width:5.5;stroke-dasharray:1.6 9.34}
+.tw-prog{fill:none;stroke:#c2413c;stroke-width:5;stroke-linecap:round;stroke-dasharray:207.3;stroke-dashoffset:78.8}
+.tw-time{position:absolute;inset:0;display:grid;place-items:center;
+  font:800 21px/1 var(--serif);color:#4a3a35;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.tw-sub{font:9px/1 var(--font);color:#a5824d;letter-spacing:.14em;margin-top:1px}
+.tw-btns{display:flex;gap:5px;justify-content:center;margin:7px 0 0}
+.tw-btns button{flex:1 1 0;min-width:0;font:700 10px/1 var(--font);color:#6e5322;
+  background:linear-gradient(180deg,#f3dfae,#dcb976);border:1px solid #a9823c;border-radius:999px;
+  padding:6px 0;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,248,220,.9),0 1px 0 #8a6a2d}
+.tw-foot{font:9px/1.4 var(--serif);color:#9b8256;margin-top:5px;letter-spacing:.06em}
+/* A 深色 */
+.wall.dark .tm-watch{background:radial-gradient(140% 100% at 30% 0%,#3d332a 0%,#332a22 58%,#2a2119 100%);border-color:#5b4a2c}
+.wall.dark .tw-plaque{color:#2e2416;background:linear-gradient(180deg,#e0bd72,#b18a3d);box-shadow:inset 0 1px 0 rgba(255,244,200,.55),0 1px 2px rgba(0,0,0,.5)}
+.wall.dark .tw-bezel{fill:#372e24;stroke:#9c7836}
+.wall.dark .tw-bezel2{stroke:#7d6130}
+.wall.dark .tw-ticks{stroke:#a9873f}
+.wall.dark .tw-prog{stroke:#e06a55}
+.wall.dark .tw-time{color:#f0dfc0}
+.wall.dark .tw-sub{color:#a9873f}
+.wall.dark .tw-btns button{color:#2e2416;background:linear-gradient(180deg,#dcb976,#a9853f);border-color:#7d6130}
+.wall.dark .tw-foot{color:#8a7448}
+
+/* ══════════ B 站台车票 ══════════ */
+.tm-ticket{height:196px;background:#f6eeda;border:1px solid #c9ba97;border-radius:6px;padding:0 0 6px;text-align:center;overflow:hidden}
+.tk-head{display:flex;align-items:center;justify-content:space-between;gap:6px;
+  background:linear-gradient(180deg,#3e6b52,#2f5540);padding:9px 12px 8px}
+.tk-title{font:700 12px/1 var(--font);color:#f7f3e6;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-no{font:9px/1 var(--mono);color:#bcd8c6;letter-spacing:.06em;flex:none}
+.tk-body{position:relative;padding:0 10px}
+/* 左右打孔票边 */
+.tk-body::before,.tk-body::after{content:"";position:absolute;top:4px;bottom:2px;width:8px;
+  background:radial-gradient(circle at 50% 50%,var(--hole,#e9e5dc) 2.6px,transparent 3.2px) 0 0/8px 14px repeat-y}
+.tk-body::before{left:-4px}
+.tk-body::after{right:-4px}
+.wall.dark .tk-body::before,.wall.dark .tk-body::after{--hole:#332f28}
+.tk-time{font:800 27px/1 var(--mono);color:#2f3a2e;font-variant-numeric:tabular-nums;letter-spacing:.04em;margin-top:13px}
+.wall.dark .tk-time{color:#e8e2cf}
+.tk-sub{font:9px/1 var(--mono);color:#8a9384;letter-spacing:.18em;margin-top:4px}
+.wall.dark .tk-sub{color:#7f8a77}
+.tk-perf{margin:10px 8px 0;font:10px/1 var(--mono);color:#a35c48;letter-spacing:2px;white-space:nowrap;overflow:hidden}
+.tk-perf .done{color:#3e6b52}
+.tk-btns{display:flex;gap:0;justify-content:center;margin:9px 14px 0;border:1px dashed #b3a479;border-radius:4px;padding:4px}
+.tk-btns button{flex:1 1 0;min-width:0;font:700 9.5px/1 var(--font);color:#f7f3e6;border:none;cursor:pointer;
+  background:linear-gradient(180deg,#4a7a5f,#35604a);border-radius:3px;padding:6px 0;margin:0 2px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 0 #24402f}
+.tk-btns button:nth-child(2){background:linear-gradient(180deg,#5c8a6d,#42694f)}
+.tk-foot{font:8.5px/1.4 var(--mono);color:#9b937c;margin-top:6px;letter-spacing:.08em}
+.wall.dark .tk-foot{color:#847c66}
+.wall.dark .tm-ticket{background:#38332a;border-color:#57503e}
+.wall.dark .tk-head{background:linear-gradient(180deg,#2c4a39,#22392c)}
+.wall.dark .tk-btns{border-color:#57503e}
+.wall.dark .tk-btns button{background:linear-gradient(180deg,#33563f,#26402f);box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 1px 0 #1a2c20}
+
+/* ══════════ C 像素掌机 ══════════ */
+.tm-lcd{height:196px;background:linear-gradient(160deg,#e8574b 0%,#d34a3f 60%,#c2413c 100%);
+  border:1px solid #a33530;border-radius:10px;padding:7px 9px 6px;text-align:center}
+.lc-label{font:700 9px/1 var(--font);color:#ffe9d6;letter-spacing:.1em;margin:2px 0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-screen{background:#9fb863;border:2.5px solid #5c5148;border-radius:5px 5px 12px 5px;
+  padding:8px 7px 7px;box-shadow:inset 0 2px 0 rgba(60,70,30,.35);position:relative}
+.lc-screen::after{content:"";position:absolute;right:5px;bottom:4px;width:5px;height:5px;border-radius:50%;
+  background:#c2413c;box-shadow:0 0 0 1.5px #5c5148}
+.lc-time{font:800 24px/1 var(--mono);color:#2e3a22;font-variant-numeric:tabular-nums;letter-spacing:.06em;
+  text-shadow:0 1px 0 rgba(255,255,255,.35)}
+.lc-bar{margin-top:6px;height:9px;border:1.5px solid #46543a;background:#8aa15a;border-radius:2px;overflow:hidden}
+.lc-bar i{display:block;height:100%;width:62%;
+  background:repeating-linear-gradient(90deg,#3e6b52 0 6px,#4a7a5f 6px 8px)}
+.lc-btns{display:flex;align-items:center;justify-content:center;gap:6px;margin:8px 0 0}
+/* ★反馈修改：按钮文案与其他款式一致 = 暂停 / 小重置 / +5分；
+   保留掌机键帽质感（奶油色凸面 + 底部厚阴影），改胶囊形以容纳中文文案 */
+.lc-btns button{flex:1 1 0;min-width:0;border:none;cursor:pointer;font:800 9.5px/1 var(--mono);color:#5c211d;
+  height:24px;border-radius:99px;padding:0 2px;
+  background:radial-gradient(circle at 36% 30%,#ffd9c2,#e8a184 62%,#c97a5d 100%);
+  box-shadow:0 2px 0 #8f4a34,inset 0 1px 0 rgba(255,255,255,.7)}
+.lc-foot{font:8px/1.4 var(--mono);color:#8f2f28;letter-spacing:.1em;margin-top:5px}
+.wall.dark .tm-lcd{background:linear-gradient(160deg,#8a3a34 0%,#77312c 60%,#632724 100%);border-color:#4e1f1c}
+.wall.dark .lc-label{color:#f2cdb8}
+.wall.dark .lc-screen{background:#7e9551;border-color:#3c352e;box-shadow:inset 0 2px 0 rgba(40,46,20,.45)}
+.wall.dark .lc-time{color:#222b19}
+.wall.dark .lc-bar{border-color:#333d29;background:#6f8449}
+.wall.dark .lc-btns button{background:radial-gradient(circle at 36% 30%,#e8bba4,#c98c6e 62%,#a56548 100%);box-shadow:0 2px 0 #6e3722,inset 0 1px 0 rgba(255,255,255,.5)}
+.wall.dark .lc-foot{color:#d9897e}
+
+/* ══════════ D 番茄罐头 ══════════ */
+.tm-can{height:196px;background:linear-gradient(90deg,#e0cba4 0%,#f7e9d2 16%,#fbf2e2 42%,#f7e9d2 72%,#ddc69c 100%);
+  border:1px solid #b39a72;border-radius:4px;padding:16px 10px 6px;text-align:center;position:relative;overflow:hidden}
+/* 金属罐顶 */
+.tm-can::before{content:"";position:absolute;left:0;right:0;top:0;height:14px;
+  background:linear-gradient(180deg,#efede6 0%,#cfc9ba 55%,#aaa490 100%);
+  border-bottom:1.5px solid #8f897a}
+.tm-can::after{content:"";position:absolute;left:10px;right:10px;top:4px;height:7px;border-radius:99px;
+  background:linear-gradient(180deg,#fdfdfb,#bdb8a8);box-shadow:inset 0 1px 1px rgba(90,84,66,.45)}
+.cn-band{margin:2px -10px 0;padding:7px 6px 8px;background:linear-gradient(180deg,#cf4a3e,#b0362f);text-align:center}
+.cn-band .cn-title{font:800 12px/1.2 var(--font);color:#fff5e4;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cn-band .cn-en{font:700 7.5px/1 var(--mono);color:#f2c9be;letter-spacing:.3em;margin-top:3px}
+.cn-time{font:800 26px/1 var(--serif);color:#4a3320;font-variant-numeric:tabular-nums;letter-spacing:.03em;margin-top:8px}
+.wall.dark .cn-time{color:#f2e2c4}
+.cn-cap{display:flex;align-items:center;gap:5px;margin:6px 6px 0;font:700 7.5px/1 var(--mono);color:#a5854f;letter-spacing:.1em}
+.cn-cap em{font-style:normal;color:#b0362f}
+.cn-bar{flex:1;height:6px;background:#e9d9b6;border:1px solid #c7ab7d;border-radius:99px;overflow:hidden}
+.cn-bar i{display:block;height:100%;width:62%;background:repeating-linear-gradient(90deg,#cf4a3e 0 5px,#e8dcc0 5px 7px)}
+.wall.dark .cn-bar{background:#453a2c;border-color:#6b5636}
+.cn-btns{display:flex;gap:5px;justify-content:center;margin:7px 0 0}
+.cn-btns button{flex:1 1 0;min-width:0;font:800 9.5px/1 var(--font);color:#b0362f;background:#fdf3dd;
+  border:1.5px solid #cf6a5c;border-radius:999px;padding:5.5px 0;cursor:pointer;
+  box-shadow:inset 0 1px 0 #fffdf4,0 1px 0 #c7ab7d}
+.cn-foot{font:8px/1.4 var(--mono);color:#a5854f;letter-spacing:.12em;margin-top:5px}
+.wall.dark .tm-can{background:linear-gradient(90deg,#4a3d2c 0%,#5c4c34 16%,#6b5940 42%,#5c4c34 72%,#42361f 100%);border-color:#6b5636}
+.wall.dark .tm-can::before{background:linear-gradient(180deg,#8d897c 0%,#6e6a5c 55%,#57534a 100%);border-color:#454038}
+.wall.dark .tm-can::after{background:linear-gradient(180deg,#a8a496,#7d796b);box-shadow:inset 0 1px 1px rgba(30,28,22,.5)}
+.wall.dark .cn-band{background:linear-gradient(180deg,#9e352f,#872a25)}
+.wall.dark .cn-cap{color:#a9873f}
+.wall.dark .cn-btns button{color:#f2c9be;background:#4a3a2c;border-color:#9e5a50;box-shadow:inset 0 1px 0 rgba(255,244,214,.18),0 1px 0 #33291c}
+.wall.dark .cn-foot{color:#a9873f}
+
+/* ══════════ E 咖啡小黑板 ══════════ */
+.tm-board{height:196px;background:linear-gradient(165deg,#cfa571 0%,#b48a58 55%,#9e744a 100%);
+  border:1px solid #8a6540;border-radius:9px;padding:8px;text-align:center}
+.eb-board{height:100%;border-radius:5px;padding:9px 8px 7px;display:flex;flex-direction:column;
+  background:radial-gradient(120% 90% at 68% 22%,#37453b 0%,#2e3a32 55%,#27322b 100%);
+  border:2px solid #243029}
+.eb-title{font:700 12.5px/1.35 var(--serif);color:#f0ead8;letter-spacing:.05em;
+  border-bottom:1.5px dashed rgba(240,234,216,.45);padding-bottom:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eb-time{font:800 26px/1 var(--serif);color:#f0ead8;font-variant-numeric:tabular-nums;letter-spacing:.04em;margin-top:8px}
+.eb-sub{font:9px/1 var(--font);color:#8fa08f;letter-spacing:.2em;margin-top:4px}
+.eb-tally{margin:7px 2px 0;font:800 11px/1 var(--mono);letter-spacing:3px;white-space:nowrap;overflow:hidden}
+.eb-tally .done{color:#e8d48b}
+.eb-tally .rest{color:#556655}
+.eb-btns{display:flex;gap:5px;justify-content:center;margin-top:auto}
+.eb-btns button{flex:1 1 0;min-width:0;font:700 10px/1 var(--font);color:#f0ead8;background:#263028;
+  border:1.5px dashed rgba(240,234,216,.55);border-radius:4px;padding:6px 0;cursor:pointer}
+.eb-foot{font:9px/1.4 var(--serif);color:#8fa08f;margin-top:6px;letter-spacing:.06em}
+.wall.dark .tm-board{background:linear-gradient(165deg,#6b5138 0%,#59422c 55%,#4a3624 100%);border-color:#3d2c1c}
+.wall.dark .eb-board{background:radial-gradient(120% 90% at 68% 22%,#28352c 0%,#212b25 55%,#1b241f 100%);border-color:#161e19}
+.wall.dark .eb-btns button{background:#1b241f}
+.wall.dark .eb-sub,.wall.dark .eb-foot{color:#74857a}
+
+/* ══════════ F 剧场灯牌 ══════════ */
+.tm-marquee{height:196px;background:linear-gradient(170deg,#27304a 0%,#1f2740 55%,#181f33 100%);
+  border:1px solid #10151f;border-radius:11px;padding:10px 9px 6px;text-align:center;position:relative}
+.mq-frame{position:absolute;inset:6px;border:3px dotted #e8b34b;border-radius:8px;pointer-events:none}
+.mq-title{font:700 9px/1 var(--font);color:#f2c14e;letter-spacing:.22em;margin:6px 0 0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mq-title::before,.mq-title::after{content:"◆";font-size:7px;color:#8f7a3a;margin:0 5px;vertical-align:1px}
+.mq-time{font:800 29px/1 var(--mono);color:#fff8e6;font-variant-numeric:tabular-nums;letter-spacing:.05em;margin-top:9px;
+  text-shadow:0 0 1px #fff8e6,0 0 6px rgba(255,216,110,.55)}
+.mq-sub{font:8.5px/1 var(--font);color:#8f9cc4;letter-spacing:.24em;margin-top:5px}
+.mq-bulbs{display:flex;justify-content:center;gap:6px;margin:9px 4px 0}
+.mq-bulbs i{width:7px;height:7px;border-radius:50%;background:#3a4360;box-shadow:inset 0 1px 1px rgba(0,0,0,.5)}
+.mq-bulbs i.lit{background:radial-gradient(circle at 38% 32%,#fff3b8,#ffd257 58%,#d8a12e 100%);
+  box-shadow:0 0 5px rgba(255,210,87,.65)}
+.mq-btns{display:flex;gap:6px;justify-content:center;margin:10px 2px 0}
+.mq-btns button{flex:1 1 0;min-width:0;font:700 9.5px/1 var(--font);color:#ffd257;background:#2c3550;
+  border:1px solid #e8b34b;border-radius:999px;padding:6px 0;cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,248,214,.22),0 1.5px 0 #10151f}
+.mq-foot{font:8px/1.4 var(--mono);color:#8f9cc4;letter-spacing:.16em;margin-top:7px}
+.wall.dark .tm-marquee{background:linear-gradient(170deg,#1c2233 0%,#161c2c 55%,#111624 100%)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="head">
+    <p class="kicker">Tacco · Pomodoro Card Styles Proposal</p>
+    <h1>番茄钟卡片 · 6 款样式设计提案</h1>
+    <p class="lede">用于 新建 / 编辑番茄计时弹窗 的「卡片样式」选择。A/B/C（怀表 / 车票 / 掌机）为上轮已确认方案，★掌机按钮文案已按反馈改为 暂停 / 小重置 / +5分；本轮新增 D/E/F 三款——依然在<b>排版结构与卡片形态</b>上完全不同：D 把整卡做成<b>番茄罐头</b>（金属罐顶 + 波普标签）；E 做成<b>咖啡小黑板</b>（木框 + 粉笔手写 + 正字计数）；F 做成<b>剧场灯牌</b>（灯泡边框 + 熄灯倒数）。全部款式按钮文案统一为 暂停 / 小重置 / +5分，内容元素与现有番茄卡一一对应：标题、倒计时 + 进度、三按钮、状态脚注。</p>
+    <div class="chips">
+      <span class="chip"><b>尺寸</b>：168 × 196（现番茄卡同规格）</span>
+      <span class="chip"><b>红线</b>：不透明背景 / 零 filter / 零动画 / 零 transition</span>
+      <span class="chip"><b>实现</b>：前 3 款复用 paper/minimal/glass，后 3 款新增 can/board/marquee，老数据零迁移</span>
+    </div>
+    <div class="themebar">
+      <button class="on" id="btn-light">浅色壁纸预览</button>
+      <button id="btn-dark">深色壁纸预览</button>
+    </div>
+  </header>
+
+  <!-- ════════ A 黄铜怀表 ══════════ -->
+  <section class="opt" id="opt-a" style="--accent:#a9823c">
+    <div class="opt-head">
+      <div class="opt-no">A</div>
+      <div>
+        <span class="pair-tag">建议作为默认样式（接替 纸感）</span>
+        <h2 class="opt-name">黄铜怀表 · 铜牌标题 · 表冠按钮</h2>
+        <p class="opt-mood">一块挂在绳上的老怀表：燕尾铜牌 + 双层表圈表盘 + 三颗表冠钮</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#f3e6c8"></i>米金表盘 #f3e6c8</span>
+          <span class="tk"><i style="background:#b8893c"></i>表圈黄铜 #b8893c</span>
+          <span class="tk"><i style="background:#c2413c"></i>进度弧 番茄红 #c2413c</span>
+          <span class="tk"><i style="background:#4a3a35"></i>刻度/时间 深褐 #4a3a35</span>
+          <span class="tk dark-tk"><i style="background:#372e24"></i>暗色表盘 #372e24</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">与绳窗的「黄铜·铃坠」老物件语汇同源。排版重构：<b>圆形表盘取代竖排三段式</b>——104px 双层表圈（外圈 5px 黄铜 + 内圈 1.4px 亮线），表盘上 12 个短刻度由 SVG dasharray 环生成（复用现有进度 SVG，仅加装饰圆）；标题从普通文字变成<b>燕尾铜牌</b>（clip-path 切角）；时间用衬线字居中在表盘里；三按钮做成<b>黄铜凸面表冠</b>（胶囊 + 内高光）；脚注改衬线英文刻字感。自定义卡色 → 表圈与铜牌取色。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-watch" style="left:9%">
+        <span class="clip"></span>
+        <div class="tw-plaque">写周报</div>
+        <div class="tw-dial">
+          <svg class="tw-svg" viewBox="0 0 100 100">
+            <circle class="tw-bezel" cx="50" cy="50" r="44"/>
+            <circle class="tw-bezel2" cx="50" cy="50" r="39.5"/>
+            <circle class="tw-ticks" cx="50" cy="50" r="42.5"/>
+            <circle class="tw-prog" cx="50" cy="50" r="33"/>
+          </svg>
+          <div class="tw-time">18:32</div>
+        </div>
+        <div class="tw-sub">POMODORO · 剩余</div>
+        <div class="tw-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+        <div class="tw-foot">已完成 · 倒计时 · 右键更多</div>
+      </div>
+      <div class="tcard tm-watch" style="left:58%">
+        <span class="clip"></span>
+        <div class="tw-plaque">深度工作</div>
+        <div class="tw-dial">
+          <svg class="tw-svg" viewBox="0 0 100 100">
+            <circle class="tw-bezel" cx="50" cy="50" r="44"/>
+            <circle class="tw-bezel2" cx="50" cy="50" r="39.5"/>
+            <circle class="tw-ticks" cx="50" cy="50" r="42.5"/>
+            <circle class="tw-prog" cx="50" cy="50" r="33" style="stroke-dashoffset:0"/>
+          </svg>
+          <div class="tw-time" style="color:#c2413c">00:00</div>
+        </div>
+        <div class="tw-sub">POMODORO · 已完成</div>
+        <div class="tw-btns"><button>继续</button><button>小重置</button><button>+5分</button></div>
+        <div class="tw-foot">已完成 · 倒计时 · 右键更多</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ B 站台车票 ══════════ -->
+  <section class="opt" id="opt-b" style="--accent:#3e6b52">
+    <div class="opt-head">
+      <div class="opt-no">B</div>
+      <div>
+        <span class="pair-tag">备选一（接替 极简）</span>
+        <h2 class="opt-name">站台车票 · 打孔票边 · 剪线进度</h2>
+        <p class="opt-mood">一张挂在绳上的硬板票：墨绿票头 + 打孔边 + 检票剪刀线</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#f6eeda"></i>硬板票纸 #f6eeda</span>
+          <span class="tk"><i style="background:#3e6b52"></i>票头墨绿 #3e6b52</span>
+          <span class="tk"><i style="background:#2f3a2e"></i>票面时间 墨黑 #2f3a2e</span>
+          <span class="tk"><i style="background:#a35c48"></i>剪刀线 褪色红 #a35c48</span>
+          <span class="tk dark-tk"><i style="background:#38332a"></i>暗色票纸 #38332a</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">横版票面排版，与圆形表盘、竖排掌机都不同：<b>票头横条</b>（墨绿实色 + 白字标题 + 等宽票号 NO.xxxx）；票身左右两列<b>半圆打孔</b>（radial-gradient 圆点列，孔色即墙色 → 真实「打透」感）；时间用<b>大号等宽字</b>放在票面（衬线表的对面，这里是机械滚轮感）；进度是一行<b>检票剪刀虚线 ✂────</b>，已走区段变墨绿实心点、未走为空心——每分钟「剪」一格；三按钮做成<b>票根撕联</b>（虚线框内三枚墨绿小票）。标题过长省略号，票号可取卡片 id 尾号。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-ticket" style="left:9%">
+        <span class="clip"></span>
+        <div class="tk-head"><span class="tk-title">取快递 · 菜鸟驿站</span><span class="tk-no">NO.2072</span></div>
+        <div class="tk-body">
+          <div class="tk-time">18:32</div>
+          <div class="tk-sub">MIN : SEC 剩余</div>
+          <div class="tk-perf"><span class="done">●●●●●●</span>╌✂<span>○○○○</span></div>
+          <div class="tk-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+          <div class="tk-foot">TACCO STATION · 右键更多 · 撕票无效</div>
+        </div>
+      </div>
+      <div class="tcard tm-ticket" style="left:58%">
+        <span class="clip"></span>
+        <div class="tk-head"><span class="tk-title">深度工作</span><span class="tk-no">NO.0857</span></div>
+        <div class="tk-body">
+          <div class="tk-time">00:00</div>
+          <div class="tk-sub">CHECKED · 已完成</div>
+          <div class="tk-perf"><span class="done">●●●●●●●●●●</span></div>
+          <div class="tk-btns"><button>继续</button><button>小重置</button><button>+5分</button></div>
+          <div class="tk-foot">TACCO STATION · 右键更多 · 撕票无效</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ C 像素掌机 ══════════ -->
+  <section class="opt" id="opt-c" style="--accent:#d34a3f">
+    <div class="opt-head">
+      <div class="opt-no">C</div>
+      <div>
+        <span class="pair-tag">备选二（接替 玻璃）</span>
+        <h2 class="opt-name">像素掌机 · LCD 屏 · 分段电量条</h2>
+        <p class="opt-mood">一台挂在小卖部门口的电子宠物机：番茄红外壳 + 墨绿液晶屏</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#d34a3f"></i>外壳番茄红 #d34a3f</span>
+          <span class="tk"><i style="background:#9fb863"></i>LCD 墨绿 #9fb863</span>
+          <span class="tk"><i style="background:#2e3a22"></i>液晶字 深橄榄 #2e3a22</span>
+          <span class="tk"><i style="background:#5c5148"></i>屏框暖灰 #5c5148</span>
+          <span class="tk dark-tk"><i style="background:#8a3a34"></i>暗色外壳 #8a3a34</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">「外壳套屏幕」的<b>嵌套结构</b>是三款里唯一的：卡片 = 塑料外壳（右上角圆角一大一小的老掌机轮廓），里面<b>内嵌 LCD 屏</b>（墨绿底 + 深橄榄字 + 暖灰屏框 + 右下角红色电源灯）；进度不用圆环，改成<b>分段电量条</b>（10 格 repeating-gradient，每分钟掉一格，像宠物机的饱食度）；标题变成屏幕上方一行<b>像素标牌</b>「◉ TOMATO-01 · 写周报」；三按钮保留掌机键帽质感（奶油色凸面 + 底部厚阴影），文案与其他款式统一为<b>暂停 / 小重置 / +5分</b>。等宽字 + tabular-nums 就是液晶数字的味儿，不用引字体。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-lcd" style="left:9%">
+        <span class="clip"></span>
+        <div class="lc-label">◉ TOMATO-01 · 写周报</div>
+        <div class="lc-screen">
+          <div class="lc-time">18:32</div>
+          <div class="lc-bar"><i style="width:62%"></i></div>
+        </div>
+        <div class="lc-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+        <div class="lc-foot">倒计时 · 右键更多 · ©TACCO</div>
+      </div>
+      <div class="tcard tm-lcd" style="left:58%">
+        <span class="clip"></span>
+        <div class="lc-label">◉ TOMATO-02 · 深度工作</div>
+        <div class="lc-screen">
+          <div class="lc-time">00:00</div>
+          <div class="lc-bar"><i style="width:100%"></i></div>
+        </div>
+        <div class="lc-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+        <div class="lc-foot">已完成 · 右键更多 · ©TACCO</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ D 番茄罐头 ══════════ -->
+  <section class="opt" id="opt-d" style="--accent:#b0362f">
+    <div class="opt-head">
+      <div class="opt-no">D</div>
+      <div>
+        <span class="pair-tag">新增提案一</span>
+        <h2 class="opt-name">番茄罐头 · 波普标签 · 容量条进度</h2>
+        <p class="opt-mood">一罐挂在绳上的番茄罐头：金属罐顶 + 波普红标签 + 分段容量条</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#f7e9d2"></i>罐身标签纸 #f7e9d2</span>
+          <span class="tk"><i style="background:#cf4a3e"></i>标签红条 #cf4a3e</span>
+          <span class="tk"><i style="background:#efede6"></i>金属罐顶 #efede6</span>
+          <span class="tk"><i style="background:#4a3320"></i>时间 深赭 #4a3320</span>
+          <span class="tk dark-tk"><i style="background:#5c4c34"></i>暗色罐身 #5c4c34</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">「罐头」是<b>层叠横带结构</b>：顶部一条<b>金属罐顶</b>（银灰渐变 + 拉丝环），罐身是左右两道<b>圆柱明暗带</b>的标签纸（纯横向渐变模拟圆罐立体感，不用任何 3D/filter）；标签正中一条<b>通栏红色波普条</b>写标题，下面大号衬线时间像罐头的净含量数字；进度做成<b>「REMAINING 容量条」</b>——红白相间的分段条从右往左消耗，旁边有营养标签式小注（<em>62% LEFT</em>）；三按钮做成<b>红色印章椭圆票</b>（实色浅底 + 红描边），文案 暂停/小重置/+5分。自定义卡色 → 染红色波普条，就是安迪·沃霍尔换一个颜色的罐头。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-can" style="left:9%">
+        <span class="clip"></span>
+        <div class="cn-band"><div class="cn-title">写周报</div><div class="cn-en">TOMATO · TACCO FOODS</div></div>
+        <div class="cn-time">18:32</div>
+        <div class="cn-cap"><em>62% LEFT</em><span class="cn-bar"><i></i></span></div>
+        <div class="cn-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+        <div class="cn-foot">NET WT · 倒计时 · 右键更多</div>
+      </div>
+      <div class="tcard tm-can" style="left:58%">
+        <span class="clip"></span>
+        <div class="cn-band"><div class="cn-title">深度工作</div><div class="cn-en">TOMATO · TACCO FOODS</div></div>
+        <div class="cn-time">00:00</div>
+        <div class="cn-cap"><em>100% LEFT</em><span class="cn-bar"><i style="width:100%"></i></span></div>
+        <div class="cn-btns"><button>继续</button><button>小重置</button><button>+5分</button></div>
+        <div class="cn-foot">SOLD OUT · 已完成 · 右键更多</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ E 咖啡小黑板 ══════════ -->
+  <section class="opt" id="opt-e" style="--accent:#2e3a32">
+    <div class="opt-head">
+      <div class="opt-no">E</div>
+      <div>
+        <span class="pair-tag">新增提案二</span>
+        <h2 class="opt-name">咖啡小黑板 · 木框粉笔 · 正字计数进度</h2>
+        <p class="opt-mood">咖啡店门口的小黑板：原木外框 + 粉笔手写体 + 「正」字计数进度</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#b48a58"></i>原木外框 #b48a58</span>
+          <span class="tk"><i style="background:#2e3a32"></i>板面墨绿 #2e3a32</span>
+          <span class="tk"><i style="background:#f0ead8"></i>粉笔白 #f0ead8</span>
+          <span class="tk"><i style="background:#e8d48b"></i>黄粉笔 #e8d48b</span>
+          <span class="tk dark-tk"><i style="background:#4a3624"></i>暗色木框 #4a3624</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">唯一一款<b>带外框的「框中框」</b>：卡片 = 原木外框（对角木纹渐变）+ 内嵌墨绿黑板（右上角留一块"擦痕"的浅色实色斑，是黑板被擦过的地方，纯 radial 实色不透明）；标题用<b>粉笔手写体</b>（衬线斜排 + 虚线粉笔下划线）；时间装在一个<b>粉笔虚线框</b>里；进度是全场最有味的——<b>「正」字计数</b>：每过 1 分钟多写一笔（正=5 分钟，黄粉笔写已完成、灰绿粉笔写剩余），像咖啡店记客人次；三按钮是<b>粉笔描边黑板按钮</b>（虚线框 + 板面实色），文案 暂停/小重置/+5分。与其他款的差距：它是唯一<b>不发光、不印刷、全是手写感</b>的一款。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-board" style="left:9%">
+        <span class="clip"></span>
+        <div class="eb-board">
+          <div class="eb-title">今日 · 写周报</div>
+          <div class="eb-time">18:32</div>
+          <div class="eb-sub">还 剩 三 十 八 分</div>
+          <div class="eb-tally"><span class="done">正正</span><span class="rest">丂丂丂丂</span></div>
+          <div class="eb-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+          <div class="eb-foot">倒计时 · 右键更多</div>
+        </div>
+      </div>
+      <div class="tcard tm-board" style="left:58%">
+        <span class="clip"></span>
+        <div class="eb-board">
+          <div class="eb-title">今日 · 深度工作</div>
+          <div class="eb-time">00:00</div>
+          <div class="eb-sub">写 满 一 个 正 字</div>
+          <div class="eb-tally"><span class="done">正正正正正</span></div>
+          <div class="eb-btns"><button>继续</button><button>小重置</button><button>+5分</button></div>
+          <div class="eb-foot">已完成 · 右键更多</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ F 剧场灯牌 ══════════ -->
+  <section class="opt" id="opt-f" style="--accent:#e8b34b">
+    <div class="opt-head">
+      <div class="opt-no">F</div>
+      <div>
+        <span class="pair-tag">新增提案三</span>
+        <h2 class="opt-name">剧场灯牌 · 灯泡边框 · 熄灯倒数进度</h2>
+        <p class="opt-mood">小剧场门口的跑马灯牌：金色灯泡绕边一圈，时间像开演倒数</p>
+        <p class="sec-label">材质 tokens</p>
+        <div class="tokens">
+          <span class="tk"><i style="background:#27304a"></i>灯牌深蓝 #27304a</span>
+          <span class="tk"><i style="background:#e8b34b"></i>灯泡金 #e8b34b</span>
+          <span class="tk"><i style="background:#fff8e6"></i>灯字暖白 #fff8e6</span>
+          <span class="tk"><i style="background:#3a4360"></i>熄灯灰蓝 #3a4360</span>
+          <span class="tk dark-tk"><i style="background:#1c2233"></i>暗色灯牌 #1c2233</span>
+        </div>
+      </div>
+      <div>
+        <p class="sec-label">设计意图</p>
+        <p class="opt-why">全场唯一一款<b>天生深色</b>的卡片：整卡是剧场灯牌，四周一圈<b>金色 dotted 圆点边框</b>（一行 CSS 的 dotted border 就是灯泡串，纯静态不闪烁）；标题是<b>「◆ 今日场次 ◆」式金色字距标牌</b>；时间用大号等宽暖白字 + 一点<b>静态灯字晕染</b>（双层 text-shadow，不违反零 filter 红线）；进度独此一家——<b>灯泡倒数</b>：一排 10 颗小灯泡，亮着的代表剩余分钟，每过 1 分钟<b>熄灭一颗</b>（亮灯 = 金色径向渐变 + 柔光 box-shadow，熄灯 = 灰蓝凹陷），比电量条更有仪式感；三按钮是<b>金边灯牌胶囊</b>，文案 暂停/小重置/+5分。自定义卡色 → 染灯泡与标牌的暖金色相（红牌/蓝牌/绿牌剧场）。</p>
+      </div>
+    </div>
+    <p class="wall-cap">整卡效果 · 挂绳 1:1<em>浅色 / 深色</em></p>
+    <div class="wall">
+      <div class="ropeband">
+        <svg viewBox="0 0 1000 64" preserveAspectRatio="none">
+          <path class="rp-under" d="M4 28 Q500 48 996 28"/>
+          <path class="rp-main" d="M4 26 Q500 46 996 26"/>
+        </svg>
+        <span class="nail" style="left:8px"></span><span class="nail" style="right:8px"></span>
+      </div>
+      <div class="tcard tm-marquee" style="left:9%">
+        <span class="clip"></span>
+        <div class="mq-frame"></div>
+        <div class="mq-title">今 日 场 次 · 写 周 报</div>
+        <div class="mq-time">18:32</div>
+        <div class="mq-sub">距离开演 · MIN:SEC</div>
+        <div class="mq-bulbs"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i class="lit"></i><i></i><i></i><i></i><i></i></div>
+        <div class="mq-btns"><button>暂停</button><button>小重置</button><button>+5分</button></div>
+        <div class="mq-foot">TACCO THEATER · 右键更多</div>
+      </div>
+      <div class="tcard tm-marquee" style="left:58%">
+        <span class="clip"></span>
+        <div class="mq-frame"></div>
+        <div class="mq-title">今 日 场 次 · 深 度 工 作</div>
+        <div class="mq-time">00:00</div>
+        <div class="mq-sub">全 部 熄 灯 · 已 完 成</div>
+        <div class="mq-bulbs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="mq-btns"><button>继续</button><button>小重置</button><button>+5分</button></div>
+        <div class="mq-foot">TACCO THEATER · 右键更多</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 实现说明 ══════════ -->
+  <section class="notes" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 30px;margin-top:8px">
+    <h2 style="font-family:var(--serif);font-size:18px;font-weight:600;margin:0 0 12px">实现落点（供确认后开发参考，本次不改代码）</h2>
+    <ul style="margin:0;padding-left:20px;font-size:13px;line-height:2">
+      <li><b>入口扩展</b>：番茄弹窗「卡片样式」由三选一扩为<b>六选一</b>（怀表 / 车票 / 掌机 / 罐头 / 小黑板 / 灯牌）。前 3 款复用现有 data-style 值（paper→怀表 / minimal→车票 / glass→掌机），后 3 款新增值 can / board / marquee；老数据零迁移（旧值继续渲染新皮肤），已挂旧卡片自动获得新样式。</li>
+      <li><b>排版重构</b>：六款各自重排 .cl-face（怀表=圆盘主体、车票=票头+票身横版、掌机=外壳嵌套屏幕、罐头=罐顶+通栏标签横带、黑板=木框中框、灯牌=灯泡边框），进度环 SVG 复用现有 cl-tm-svg，怀表加装饰刻度圆，掌机改分段条、罐头改容量条、黑板改正字行、灯牌改灯泡行（其余隐藏圆环）。</li>
+      <li><b>按钮语义不变</b>：六款按钮文案统一为 暂停/小重置/+5分，事件逻辑零改动，仅键面材质随皮肤变化。</li>
+      <li><b>自定义卡色</b>：card_color 继续生效——怀表染表圈铜牌、车票染票头横条、掌机染外壳、罐头染波普红条、黑板染木框、灯牌染灯泡金色相，屏幕/票纸/板面保持固定色保证可读性。</li>
+      <li><b>红线遵守</b>：全部不透明背景（color-mix 不透明版 / 实色渐变），<b>零 filter、零 backdrop-filter、零动画零 transition</b>；打孔边用 radial-gradient 实色圆点（孔色=墙色变量，非 alpha）。</li>
+      <li><b>深色主题</b>：每款一套暗色实色（[data-theme='dark'] 双属性选择器），LCD 屏本身即深色，暗色下仅外壳与屏框加深。</li>
+      <li><b>尺寸不变</b>：168 × 196（现番茄卡规格），三按钮 9.5~10px 不换行，300px 窄视口约束继续满足。</li>
+    </ul>
+  </section>
+
+</div>
+<script>
+  const btnL = document.getElementById('btn-light'), btnD = document.getElementById('btn-dark');
+  function setTheme(dark){
+    document.querySelectorAll('.wall').forEach(w=>w.classList.toggle('dark', dark));
+    btnL.classList.toggle('on', !dark); btnD.classList.toggle('on', dark);
+  }
+  btnL.onclick = ()=>setTheme(false);
+  btnD.onclick = ()=>setTheme(true);
+</script>
+</body>
+</html>

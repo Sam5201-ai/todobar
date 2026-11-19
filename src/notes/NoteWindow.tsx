@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
-import { Check, Copy, Palette, Pin, PinOff, Shirt, X } from 'lucide-react'
+import { Check, Copy, ListTodo, Palette, Pin, PinOff, Shirt, X } from 'lucide-react'
 
 import './notes.css'
 import {
@@ -11,7 +11,6 @@ import {
   getNoteSync,
   MIN_BG_ALPHA,
   NOTE_COLORS,
-  collapseNote,
   noteColorOf,
   removeNoteItem,
   toggleNoteItem,
@@ -21,7 +20,7 @@ import {
 } from './store'
 import { listenConvertResult, requestConvert } from './bridge'
 import { copyText } from '../clipboard'
-import { clAddCard, clGetRestoreState, clMakeCard, CL_DROP_NOTE_WINDOW, CL_NOTE_HUNG } from '../clothesline/bridge'
+import { clAddCard, clGetRestoreState, clMakeCard, CL_ARCHIVE_CARD, CL_DROP_NOTE_WINDOW, CL_NOTE_HUNG, type ClArchiveCard } from '../clothesline/bridge'
 import { isFullAccess, loadAccount } from '../account'
 
 const win = getCurrentWindow()
@@ -36,6 +35,8 @@ export function NoteWindow() {
   const [newText, setNewText] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [styleOpen, setStyleOpen] = useState(false)
+  /** × 确认条：关闭便利签时让用户选「归档 / 删除」（2026-11-18 归档功能）。 */
+  const [confirmClose, setConfirmClose] = useState(false)
   const positionedRef = useRef(false)
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
@@ -143,15 +144,33 @@ export function NoteWindow() {
     })()
   }, [note])
 
-  // ——— 关闭窗口:只隐藏不删除(2026-11-15 需求:桌面便利签右上角 × 仅做关闭显示,
-  //      数据保留;绳上便利签只有点绳卡片 × 才删除)。折叠 = collapsed:true,
-  //      重启不再自动弹窗,数据仍留在 notes/store,可从管理面板重新取出。
-  //    彻底删除入口仍在主窗便利签管理面板的删除按钮。 ———
+  // ——— 关闭窗口:× 弹「归档 / 删除」确认条(2026-11-18 归档功能)。
+  //      归档/删除的落盘都由主窗 notes/store.ts 单一写方编排(本窗只 emit 事件);
+  //      挂绳自动收起路径(CL_NOTE_HUNG → collapsed:true)不受影响。 ———
   const handleClose = useCallback(() => {
+    setConfirmClose(true)
+  }, [])
+
+  const doCloseWindow = useCallback(() => {
     if (!note) return
-    collapseNote(note.id)
     void invoke('notes_close_window', { noteId: note.id }).catch(() => {})
   }, [note])
+
+  /** 归档:主窗 archiveNote + 关联绳卡同步归档(一体归档),然后关窗。 */
+  const doArchiveClose = useCallback(() => {
+    if (!note) return
+    setConfirmClose(false)
+    void emit(CL_ARCHIVE_CARD, { action: 'archive', noteId: note.id } satisfies ClArchiveCard).catch(() => {})
+    doCloseWindow()
+  }, [note, doCloseWindow])
+
+  /** 删除:永久移除(主窗 removeNote + 清理关联绳卡),无撤销,然后关窗。 */
+  const doDeleteClose = useCallback(() => {
+    if (!note) return
+    setConfirmClose(false)
+    void emit(CL_ARCHIVE_CARD, { action: 'delete-note', noteId: note.id } satisfies ClArchiveCard).catch(() => {})
+    doCloseWindow()
+  }, [note, doCloseWindow])
 
   // ——— 标题栏拖动 + 磁力吸附挂绳 ———
   // 改用「自主拖拽」而非原生 startDragging：原生拖动进入 OS 移动循环后 WebView 拿不到
@@ -479,7 +498,7 @@ export function NoteWindow() {
           >
             {note.pinned ? <Pin size={13} /> : <PinOff size={13} />}
           </button>
-          <button type="button" className="ns-btn ns-close" title="删除便利签" onClick={handleClose}>
+          <button type="button" className="ns-btn ns-close" title="关闭便利签" onClick={handleClose}>
             <X size={13} />
           </button>
         </div>
@@ -585,7 +604,9 @@ export function NoteWindow() {
                     disabled={it.converted}
                     onClick={() => handleConvert(note.id, it.id, it.text)}
                   >
-                    <span className="ns-to-todo">→待办</span>
+                    {/* ★2026-11-19：文字「→待办」改为 SVG 图标，与绳窗便利签卡的
+                        「转为待办」图标一致（lucide ListTodo）。 */}
+                    <ListTodo size={12} strokeWidth={2} />
                   </button>
                   <button
                     type="button"
@@ -632,6 +653,27 @@ export function NoteWindow() {
       </div>
 
       {toast ? <div className="ns-toast">{toast}</div> : null}
+
+      {/* × 确认条:归档 / 删除 两选(2026-11-18 归档功能) */}
+      {confirmClose ? (
+        <div className="ns-confirm" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="ns-confirm-card">
+            <div className="ns-confirm-title">关闭便利签</div>
+            <div className="ns-confirm-text">归档保留内容，可稍后恢复；删除将永久移除。</div>
+            <div className="ns-confirm-actions">
+              <button type="button" className="ns-confirm-btn is-primary" onClick={doArchiveClose}>
+                归档
+              </button>
+              <button type="button" className="ns-confirm-btn is-danger" onClick={doDeleteClose}>
+                删除
+              </button>
+              <button type="button" className="ns-confirm-btn" onClick={() => setConfirmClose(false)}>
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

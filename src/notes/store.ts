@@ -74,6 +74,9 @@ export type Note = {
   updatedAt: number
   /** 收起态:数据保留、窗口销毁,可从管理器召回。 */
   collapsed: boolean
+  /** 归档时间戳(ms)。有值 = 已归档:桌面不开窗、绳上卡同步归档,归档页可查看/恢复。
+   *  ⚠️ hydrateNotes 对归档签豁免「legacy 收起态清理」,否则归档数据重启即丢。 */
+  archivedAt?: number
 }
 
 /**
@@ -156,6 +159,7 @@ function normalizeNote(raw: unknown): Note | null {
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : Date.now(),
     updatedAt: typeof v.updatedAt === 'number' ? v.updatedAt : Date.now(),
     collapsed: v.collapsed === true,
+    archivedAt: typeof v.archivedAt === 'number' ? v.archivedAt : undefined,
   }
 }
 
@@ -302,8 +306,11 @@ export async function hydrateNotes(): Promise<void> {
     ts[k] = Math.max(ts[k] ?? 0, v)
   }
 
-  // ③ 过滤:已删除 + 旧版收起态
-  const merged = [...byId.values()].filter((n) => !(n.id in ts) && !n.collapsed)
+  // ③ 过滤:已删除 + 旧版收起态(归档签豁免:archivedAt 有值时必须保留,
+  //    否则归档数据会在重启回灌时被当成 legacy 收起态清掉)。
+  const merged = [...byId.values()].filter(
+    (n) => !(n.id in ts) && (!n.collapsed || n.archivedAt != null),
+  )
 
   // ④ 清理过期墓碑(超 TTL 且两侧数据里都不存在了)
   const now = Date.now()
@@ -367,9 +374,9 @@ export function getNoteSync(id: string): Note | null {
   return getNotes().find((n) => n.id === id) ?? null
 }
 
-/** 当前应处于显示态(未收起)的便利签。 */
+/** 当前应处于显示态(未收起)的便利签。归档签不算可见(桌面不开窗)。 */
 export function visibleNotes(): Note[] {
-  return getNotes().filter((n) => !n.collapsed)
+  return getNotes().filter((n) => !n.collapsed && !n.archivedAt)
 }
 
 /** 是否还能再显示一个窗口(受同时显示上限约束)。 */
@@ -436,6 +443,19 @@ export function collapseNote(id: string): void {
 
 export function restoreNote(id: string): void {
   updateNote(id, { collapsed: false })
+}
+
+/** 归档:数据保留、桌面不开窗、绳上关联卡由主窗编排同步归档;归档页可查看/恢复。
+ *  collapsed 保持归档前的状态(挂绳中的签本就是 collapsed:true,恢复后仍回绳上折叠态)。 */
+export function archiveNote(id: string): void {
+  updateNote(id, { archivedAt: Date.now() })
+}
+
+/** 取消归档:清 archivedAt。collapsed 未被归档改动,恢复即「回到归档前位置」
+ *  (原挂绳的回绳折叠态、原在桌面的回桌面可见态,由调用方按需开窗)。 */
+export function unarchiveNote(id: string): void {
+  if (!getNoteSync(id)) return
+  updateNote(id, { archivedAt: undefined })
 }
 
 export function setAllCollapsed(collapsed: boolean): void {

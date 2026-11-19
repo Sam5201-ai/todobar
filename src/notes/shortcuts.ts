@@ -38,3 +38,32 @@ export async function initNoteShortcuts(onTriggered: () => void): Promise<void> 
     /* 非 Tauri 环境(纯浏览器预览)事件不可用 */
   }
 }
+
+// ——— 打开归档页 全局快捷键(2026-11-18 归档) ———
+
+/**
+ * 注册 / 注销「打开归档页」快捷键。空字符串表示注销。非会员功能,不做会员闸门。
+ */
+export async function applyArchiveShortcut(
+  shortcut: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await invoke('register_archive_shortcut', { shortcut })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/**
+ * 建立归档快捷键触发监听(只做一次)。Rust 触发后向主窗发 archive-open-trigger。
+ */
+export async function initArchiveShortcutTrigger(onTriggered: () => void): Promise<void> {
+  try {
+    await listen('archive-open-trigger', () => {
+      onTriggered()
+    })
+  } catch {
+    /* 非 Tauri 环境(纯浏览器预览)事件不可用 */
+  }
+}

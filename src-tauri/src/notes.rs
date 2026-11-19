@@ -286,3 +286,44 @@ pub fn register_note_shortcut(
     *state.managed.lock().unwrap() = sc;
     Ok(())
 }
+
+// ————————————————————————— 打开归档页 全局快捷键 —————————————————————————
+
+/// 当前托管的「打开归档」快捷键，供下次注册前注销（模式同 NoteShortcutState）。
+#[derive(Default)]
+pub struct ArchiveShortcutState {
+    managed: std::sync::Mutex<String>,
+}
+
+/// 注册 / 注销「打开归档」全局快捷键（由前端在设置变化时调用）。
+/// 触发后向主窗口发 `archive-open-trigger` 事件，主窗据此唤起并打开归档页。
+#[tauri::command]
+pub fn register_archive_shortcut(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ArchiveShortcutState>,
+    shortcut: String,
+) -> Result<(), String> {
+    let gs = app.global_shortcut();
+
+    let prev = state.managed.lock().unwrap().clone();
+    if !prev.trim().is_empty() {
+        let _ = gs.unregister(prev.as_str());
+    }
+
+    let sc = shortcut.trim().to_string();
+    if sc.is_empty() {
+        *state.managed.lock().unwrap() = String::new();
+        return Ok(());
+    }
+
+    gs.on_shortcut(sc.as_str(), move |app, _sc, event| {
+        if event.state() == ShortcutState::Pressed {
+            let _ = app.emit_to("main", "archive-open-trigger", ());
+        }
+    })
+    .map_err(|e| format!("归档快捷键 “{sc}” 注册失败: {e}"))?;
+
+    crate::append_app_log(&format!("[notes] 归档快捷键已注册: {sc}"));
+    *state.managed.lock().unwrap() = sc;
+    Ok(())
+}
