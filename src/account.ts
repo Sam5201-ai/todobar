@@ -11,6 +11,7 @@ export const AUTH_BASE = 'https://sync.tuanzhang.site'
 
 import { trackEvent } from './analytics'
 import { invoke } from '@tauri-apps/api/core'
+import { t } from './i18n'
 
 export const ACCOUNT_KEY = 'ticktask.account'
 const DEVICE_KEY = 'ticktask.deviceId'
@@ -89,12 +90,15 @@ export function isFullAccess(a: AccountState | null): boolean {
 /** 受限用户(未登录 / 试用过期且未激活)单日可新建的「主任务」条数上限。 */
 export const FREE_DAILY_TASK_LIMIT = 3
 
-/** 受限功能统一提示文案(各入口点击后 toast 用)。 */
-export const MEMBER_ONLY_TIP = '此为会员功能,开通会员后可无限制使用'
+/** 受限功能统一提示文案(各入口点击后 toast 用)。运行时取当前语言的词条。 */
+export function memberOnlyTip(): string {
+  return t('account.memberOnly')
+}
 
-/** 按功能名拼受限提示:「XX为会员功能,开通会员后可无限制使用」。 */
+/** 按功能名拼受限提示:「XX为会员功能,开通会员后可无限制使用」。
+ *  feature 由调用方传已翻译的功能名(如 t('feature.cloudSync'))。 */
 export function memberOnly(feature: string): string {
-  return `${feature}为会员功能,开通会员后可无限制使用`
+  return t('account.memberOnlyFeature', { feature })
 }
 
 export interface DeviceInfo {
@@ -236,7 +240,7 @@ async function errMsg(res: Response): Promise<string> {
   } catch {
     /* 非 JSON */
   }
-  return `请求失败(${res.status})`
+  return t('account.requestFail', { code: res.status })
 }
 
 function toAccount(email: string, data: { token: string; user: AccountUser }): AccountState {
@@ -301,7 +305,7 @@ export async function register(
       avatar,
       deviceId: getDeviceId(),
       deviceFingerprint: fp,
-      deviceName: '此设备',
+      deviceName: t('device.thisDevice'),
     }),
   })
   if (!res.ok) throw new Error(await errMsg(res))
@@ -323,7 +327,7 @@ export async function login(email: string, password: string): Promise<AccountSta
       password,
       deviceId: getDeviceId(),
       deviceFingerprint: fp,
-      deviceName: '此设备',
+      deviceName: t('device.thisDevice'),
     }),
   })
   if (!res.ok) throw new Error(await errMsg(res))
@@ -397,7 +401,7 @@ export async function updateProfile(
   patch: { nickname?: string; avatar?: string | null },
 ): Promise<AccountState> {
   const cur = loadAccount()
-  if (!cur) throw new Error('未登录')
+  if (!cur) throw new Error(t('store.notLoggedIn'))
   const res = await fetch(`${AUTH_BASE}/api/auth/profile`, {
     method: 'POST',
     headers: authHeaders(),
@@ -449,7 +453,7 @@ export async function refreshAccount(): Promise<AccountState | null> {
 /** 兑换激活码:成功后账号升级为会员(本地登录态同步刷新)。 */
 export async function redeemActivationCode(code: string): Promise<AccountState> {
   const cur = loadAccount()
-  if (!cur) throw new Error('未登录')
+  if (!cur) throw new Error(t('store.notLoggedIn'))
   const res = await fetch(`${AUTH_BASE}/api/activation/redeem`, {
     method: 'POST',
     headers: authHeaders(),

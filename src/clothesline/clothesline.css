@@ -266,6 +266,46 @@ body, body:focus, body:focus-visible,
   border-radius: 0 0 9px 9px;
   height: 20px;
 }
+/* ★2026-11-20：操作指引问号按钮（收起按钮右侧）。同款小胶囊，圆形更贴合「帮助」语义。 */
+.cl-tool-help {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  position: relative;
+}
+/* 悬停小浮窗提示（图标下方）。工具条贴近窗口上缘，向下展开不会越过窗口。 */
+.cl-tool-help::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  font: 500 10.5px/1 var(--cl-font);
+  color: #2c3548;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(120, 140, 180, 0.3);
+  border-radius: 7px;
+  padding: 5px 9px;
+  box-shadow: 0 4px 12px rgba(30, 40, 60, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 40;
+}
+.cl-tool-help:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+.cl-root[data-theme='dark'] .cl-tool-help::after {
+  color: #cdd6ea;
+  background: rgba(40, 44, 54, 0.96);
+  border-color: #4a5160;
+}
 .cl-root[data-theme='dark'] .cl-tool-count,
 .cl-root[data-theme='dark'] .cl-tool-btn {
   background: rgba(40, 44, 54, 0.92);
@@ -338,15 +378,10 @@ body, body:focus, body:focus-visible,
   width: 214px;
   display: none;
   flex-direction: column;
-  /* ★问题11「＋ 下拉菜单底部被截断」：绳窗只有 300px 逻辑高，9 个菜单项排下来
-     会超出 WebView2 窗口物理边界被直接裁掉（窗口外的部分根本不会渲染）。
-     必须在窗口内给菜单自身可滚动区域，而不是指望溢出显示。 */
-  max-height: calc(100% - 74px);
-  overflow-y: auto;
+  /* ★2026-11-20：菜单单屏显示 —— 打开菜单时前端会临时把绳窗向下加高到菜单内容
+     底边（窗口透明，多出区域不可见），这里不再限制高度，菜单高度由内容撑开，
+     旧版 max-height + overflow-y 滚动条方案废弃。 */
   overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #c9cfda transparent;
   padding: 7px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
@@ -394,6 +429,53 @@ body, body:focus, body:focus-visible,
 .cl-root[data-theme='dark'] .cl-add-sheet button { color: #e6e9f0; }
 .cl-root[data-theme='dark'] .cl-add-sheet button:hover { background: #3a4050; }
 .cl-root[data-theme='dark'] .cl-add-sheet .cl-sheet-sep { background: #414653; }
+
+/* ★2026-11-20 修复：面板盒高度 = 300 × card_size 且 overflow:hidden。卡片尺寸调小
+   后面板盒比 ＋ 菜单矮，菜单底部被 DOM 容器裁掉（OS 窗口加高也救不回来）。
+   菜单打开期间临时放开裁切：菜单绝对定位在面板盒下方延伸的部分，由加高后的
+   OS 窗口负责渲染（窗口高度已按菜单底边临时加高）。 */
+.cl-root.is-menu-open { overflow: visible; }
+
+/* —— ★2026-11-20：操作指引弹窗（复用 .cl-modal 卡片 + 指引清单）—— */
+.cl-guide { width: 400px; gap: 12px; }
+.cl-guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.cl-guide-list li {
+  position: relative;
+  padding-left: 16px;
+  font: 400 12.5px/1.6 var(--cl-font);
+  color: #3c4250;
+}
+.cl-guide-list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  opacity: 0.75;
+}
+.cl-guide-close {
+  align-self: flex-end;
+  font: 600 12px/1 var(--cl-font);
+  color: #fff;
+  background: var(--cl-accent);
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.cl-guide-close:hover { filter: brightness(1.08); }
+.cl-root[data-theme='dark'] .cl-guide-list li { color: #c6ccda; }
+.cl-root[data-theme='dark'] .cl-guide-close { background: #2b3550; color: #a8c2ff; }
 
 /* —— 收起态把手 / 下拉胶囊（外框定位尺寸保持不变，命中矩形才不会错位）—— */
 .cl-handle {
@@ -2338,37 +2420,13 @@ body, body:focus, body:focus-visible,
   cursor: pointer;
 }
 .cl-edit-actions button:hover { background: color-mix(in srgb, var(--cl-rope) 38%, transparent); }
-/* ★2026-11-18 归档：取下确认弹窗（归档 / 删除 两选）。 */
+/* ★2026-11-18 归档：取下确认弹窗（归档 / 删除 两选）。
+   ★2026-11-19 反馈3：入场/退场动画全部删除——透明分层窗上任何 transform/opacity
+   动画都会被 DWM 逐帧合成，肉眼可见「从上往下滑到居中」的卡顿轨迹（根因B 同款）。
+   改为直接渲染终态、即时开合，与主窗弹窗体验一致。 */
 .cl-modal-confirm {
   width: 330px;
   gap: 10px;
-  will-change: transform, opacity;
-  animation: cl-modal-pop 160ms cubic-bezier(0.22, 1.2, 0.36, 1);
-}
-/* 退场：缩退 + 下沉淡出（is-closing 由 JS 挂 140ms 后卸载）。 */
-.cl-modal-confirm.is-closing {
-  animation: cl-modal-drop 140ms ease-in forwards;
-  pointer-events: none;
-}
-@keyframes cl-modal-pop {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.94) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1) translateY(0);
-  }
-}
-@keyframes cl-modal-drop {
-  from {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1) translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.95) translateY(10px);
-  }
 }
 .cl-modal-confirm .cl-modal-label {
   font: 500 11.5px/1.7 var(--cl-font);

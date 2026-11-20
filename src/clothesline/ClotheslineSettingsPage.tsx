@@ -25,6 +25,7 @@ import {
   type MonitorInfo,
 } from './bridge'
 import { useAccount } from '../membership'
+import { useI18n } from '../i18n'
 import './clothesline-settings.css'
 
 type RowProps = {
@@ -70,6 +71,7 @@ function Switch({
 }
 
 export function ClotheslineSettingsPage() {
+  const { t } = useI18n()
   const [settings, setSettings] = useState<ClotheslineSettings | null>(null)
   const [monitors, setMonitors] = useState<MonitorInfo[]>([])
   const [busy, setBusy] = useState(false)
@@ -178,22 +180,22 @@ export function ClotheslineSettingsPage() {
     ''
 
   if (!settings) {
-    return <div className="cl-set-body cl-set-loading">正在读取晾衣绳设置…</div>
+    return <div className="cl-set-body cl-set-loading">{t('clothesline.set.loading')}</div>
   }
 
   const singleScreen = monitors.length <= 1
   return (
     <div className="cl-set-body">
       <div className="cl-set-group">
-        <div className="cl-set-group-title">顶部晾衣绳</div>
+        <div className="cl-set-group-title">{t('clothesline.set.groupTitle')}</div>
 
-        <Row title="启用顶部晾衣绳" sub="在屏幕顶部挂一条常驻绳，聚合桌面卡片">
+        <Row title={t('clothesline.set.enableTitle')} sub={t('clothesline.set.enableSub')}>
           <Switch checked={settings.enabled} onChange={(v) => void setEnabled(v)} disabled={busy} />
         </Row>
 
         <Row
-          title="开机自动显示"
-          sub={settings.enabled ? '跟随 Tacco 启动时自动展开' : '需先启用顶部晾衣绳'}
+          title={t('clothesline.set.bootTitle')}
+          sub={settings.enabled ? t('clothesline.set.bootSubOn') : t('clothesline.set.bootSubOff')}
         >
           <Switch
             checked={settings.auto_show_on_boot}
@@ -202,7 +204,7 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
-        <Row title="展开 / 收起晾衣绳" sub="收起后只保留一个木夹把手">
+        <Row title={t('clothesline.set.expandTitle')} sub={t('clothesline.set.expandSub')}>
           <Switch
             checked={settings.expanded}
             onChange={(v) => void patch({ expanded: v })}
@@ -210,27 +212,27 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
-        <Row title="拉杆样式" sub="拉杆、绳身与夹子同步换装：素瓷麻绳 / 黄铜铜铃 / 琉璃露珠，默认素瓷">
+        <Row title={t('clothesline.set.pulltabTitle')} sub={t('clothesline.set.pulltabSub')}>
           <select
             className="cl-set-select"
             value={settings.pulltab_style ?? 'porcelain'}
             disabled={busy}
             onChange={(e) => void patch({ pulltab_style: e.target.value as ClPulltabStyle })}
           >
-            <option value="porcelain">素瓷 · 侘寂（默认）</option>
-            <option value="brass">黄铜 · 铃坠</option>
-            <option value="glass">琉璃 · 露珠</option>
+            <option value="porcelain">{t('clothesline.set.stylePorcelain')}</option>
+            <option value="brass">{t('clothesline.set.styleBrass')}</option>
+            <option value="glass">{t('clothesline.set.styleGlass')}</option>
           </select>
         </Row>
 
         <Row
-          title="显示屏幕"
+          title={t('clothesline.set.monitorTitle')}
           sub={
             singleScreen
-              ? '仅检测到一块屏幕'
+              ? t('clothesline.set.monitorSingle')
               : monitorFallback
-                ? '上次记忆的屏幕已断开，当前显示在主屏'
-                : '卡片绳将挂在这块屏幕上'
+                ? t('clothesline.set.monitorFallback')
+                : t('clothesline.set.monitorSub')
           }
           disabled={singleScreen || !settings.enabled}
         >
@@ -242,16 +244,16 @@ export function ClotheslineSettingsPage() {
           >
             {monitors.map((m, i) => (
               <option key={m.stable_id} value={m.stable_id}>
-                {m.is_primary ? '主屏' : `屏幕 ${i + 1}`} · {m.width}×{m.height}
+                {m.is_primary ? t('dock.primary') : t('clothesline.set.screenN', { n: i + 1 })} · {m.width}×{m.height}
               </option>
             ))}
-            {monitors.length === 0 ? <option value="">未检测到屏幕</option> : null}
+            {monitors.length === 0 ? <option value="">{t('clothesline.set.noMonitor')}</option> : null}
           </select>
         </Row>
 
         <Row
-          title="晾衣绳长度"
-          sub="绳子横向长度占可用区的比例，影响单屏可挂卡片数量"
+          title={t('clothesline.set.ropeTitle')}
+          sub={t('clothesline.set.ropeSub')}
           disabled={!settings.enabled}
         >
           <div className="cl-set-range">
@@ -271,8 +273,8 @@ export function ClotheslineSettingsPage() {
         </Row>
 
         <Row
-          title="卡片尺寸"
-          sub="当前尺寸为最小，最大可放大一倍"
+          title={t('clothesline.set.cardSizeTitle')}
+          sub={t('clothesline.set.cardSizeSub')}
           disabled={!settings.enabled}
         >
           <div className="cl-set-range">
@@ -291,7 +293,7 @@ export function ClotheslineSettingsPage() {
           </div>
         </Row>
 
-        <Row title="清风动效" sub="绳上卡片随风极淡摆动，鼠标悬停时暂停">
+        <Row title={t('clothesline.set.windTitle')} sub={t('clothesline.set.windSub')}>
           <Switch
             checked={settings.wind_effect}
             onChange={(v) => void patch({ wind_effect: v })}
@@ -299,7 +301,16 @@ export function ClotheslineSettingsPage() {
           />
         </Row>
 
-        <Row title="截图自动挂上晾衣绳" sub="截图复制后，截图会自动挂在晾衣绳上">
+        {/* ★2026-11-19 反馈4：悬停自动展开（默认启用）。OS 命中循环检测光标贴上缘。 */}
+        <Row title={t('clothesline.set.hoverTitle')} sub={t('clothesline.set.hoverSub')}>
+          <Switch
+            checked={settings.auto_expand_hover}
+            onChange={(v) => void patch({ auto_expand_hover: v })}
+            disabled={busy}
+          />
+        </Row>
+
+        <Row title={t('clothesline.set.shotTitle')} sub={t('clothesline.set.shotSub')}>
           <Switch
             checked={settings.auto_fly_shot}
             onChange={(v) => void patch({ auto_fly_shot: v })}
@@ -310,15 +321,15 @@ export function ClotheslineSettingsPage() {
 
       <div className="cl-set-status">
         <span className={`cl-set-dot ${settings.enabled ? 'is-on' : ''}`} />
-        {settings.enabled ? '晾衣绳运行中' : '晾衣绳已关闭'}
+        {settings.enabled ? t('clothesline.set.statusOn') : t('clothesline.set.statusOff')}
         <span className="cl-set-status-sep">·</span>
-        已挂 {usage}/{fullAccess ? 24 : 12} 张
+        {t('clothesline.set.usage', { used: usage, total: fullAccess ? 24 : 12 })}
         <span className="cl-set-status-sep">·</span>
-        拖木夹可移动 · 卡片可拖动排序 · 置顶开关在「⋯ 更多」
+        {t('clothesline.set.hint')}
       </div>
 
       <p className="cl-set-footnote">
-        更多操作（置顶、拖绳换屏、木夹排序、卡片编辑、新建计时）可直接上手操作，不在此处重复设置。
+        {t('clothesline.set.footnote')}
       </p>
     </div>
   )

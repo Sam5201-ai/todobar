@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { t, useI18n, type LocaleKey } from './i18n'
 
 // ============================================================================
 // 通用工具
@@ -23,7 +24,7 @@ function daysBetween(aKey: string, bKey: string): number {
 
 /** 把浮点噪声收敛到 12 位有效数字,避免 0.1+0.2=0.30000000004 之类展示。 */
 function formatNumber(n: number): string {
-  if (!Number.isFinite(n)) return '错误'
+  if (!Number.isFinite(n)) return t('calc.error')
   if (n === 0) return '0'
   const r = Math.round(n * 1e10) / 1e10
   if (Number.isInteger(r)) return String(r)
@@ -55,7 +56,7 @@ function tokenize(expr: string): Tok[] {
 
 function evaluate(expr: string): number {
   const tokens = tokenize(resolvePercent(expr))
-  if (tokens.length === 0) throw new Error('空表达式')
+  if (tokens.length === 0) throw new Error(t('calc.err.empty'))
   let pos = 0
   const peek = () => tokens[pos]
   const next = () => tokens[pos++]
@@ -94,8 +95,8 @@ function evaluate(expr: string): number {
   }
 
   const result = parseExpr()
-  if (pos < tokens.length) throw new Error('表达式不完整')
-  if (!Number.isFinite(result)) throw new Error('计算溢出')
+  if (pos < tokens.length) throw new Error(t('calc.err.incomplete'))
+  if (!Number.isFinite(result)) throw new Error(t('calc.err.overflow'))
   return result
 }
 
@@ -110,7 +111,7 @@ function resolvePercent(expr: string): string {
   while (s.includes('%')) {
     const i = s.indexOf('%')
     const m = /(\d+(?:\.\d+)?|\.\d+)%$/.exec(s.slice(0, i + 1))
-    if (!m) throw new Error('表达式错误')
+    if (!m) throw new Error(t('calc.err.invalid'))
     const numStr = m[1]
     const start = i - numStr.length
     const before = s.slice(0, start).trimEnd()
@@ -300,58 +301,58 @@ function ageFrom(birthKey: string): { years: number; months: number; days: numbe
 // 单位换算(线性) + 温度(仿射)
 // ============================================================================
 
-type Unit = { key: string; label: string; factor: number }
+type Unit = { key: string; label: LocaleKey; factor: number }
 
-const LINEAR: Record<string, { label: string; units: Unit[] }> = {
+const LINEAR: Record<string, { label: LocaleKey; units: Unit[] }> = {
   length: {
-    label: '长度',
+    label: 'calc.cat.length',
     units: [
-      { key: 'm', label: '米 (m)', factor: 1 },
-      { key: 'km', label: '千米 (km)', factor: 1000 },
-      { key: 'cm', label: '厘米 (cm)', factor: 0.01 },
-      { key: 'mm', label: '毫米 (mm)', factor: 0.001 },
-      { key: 'ft', label: '英尺 (ft)', factor: 0.3048 },
-      { key: 'mi', label: '英里 (mi)', factor: 1609.344 },
-      { key: 'in', label: '英寸 (in)', factor: 0.0254 },
+      { key: 'm', label: 'calc.unit.m', factor: 1 },
+      { key: 'km', label: 'calc.unit.km', factor: 1000 },
+      { key: 'cm', label: 'calc.unit.cm', factor: 0.01 },
+      { key: 'mm', label: 'calc.unit.mm', factor: 0.001 },
+      { key: 'ft', label: 'calc.unit.ft', factor: 0.3048 },
+      { key: 'mi', label: 'calc.unit.mi', factor: 1609.344 },
+      { key: 'in', label: 'calc.unit.in', factor: 0.0254 },
     ],
   },
   weight: {
-    label: '重量',
+    label: 'calc.cat.weight',
     units: [
-      { key: 'kg', label: '千克 (kg)', factor: 1 },
-      { key: 'g', label: '克 (g)', factor: 0.001 },
-      { key: 'mg', label: '毫克 (mg)', factor: 1e-6 },
-      { key: 'lb', label: '磅 (lb)', factor: 0.45359237 },
-      { key: 'oz', label: '盎司 (oz)', factor: 0.028349523125 },
+      { key: 'kg', label: 'calc.unit.kg', factor: 1 },
+      { key: 'g', label: 'calc.unit.g', factor: 0.001 },
+      { key: 'mg', label: 'calc.unit.mg', factor: 1e-6 },
+      { key: 'lb', label: 'calc.unit.lb', factor: 0.45359237 },
+      { key: 'oz', label: 'calc.unit.oz', factor: 0.028349523125 },
     ],
   },
   area: {
-    label: '面积',
+    label: 'calc.cat.area',
     units: [
-      { key: 'm2', label: '平方米 (m²)', factor: 1 },
-      { key: 'km2', label: '平方千米 (km²)', factor: 1e6 },
-      { key: 'ha', label: '公顷 (ha)', factor: 10000 },
-      { key: 'mu', label: '亩', factor: 666.6666666667 },
-      { key: 'ft2', label: '平方英尺 (ft²)', factor: 0.09290304 },
+      { key: 'm2', label: 'calc.unit.m2', factor: 1 },
+      { key: 'km2', label: 'calc.unit.km2', factor: 1e6 },
+      { key: 'ha', label: 'calc.unit.ha', factor: 10000 },
+      { key: 'mu', label: 'calc.unit.mu', factor: 666.6666666667 },
+      { key: 'ft2', label: 'calc.unit.ft2', factor: 0.09290304 },
     ],
   },
   volume: {
-    label: '体积',
+    label: 'calc.cat.volume',
     units: [
-      { key: 'l', label: '升 (L)', factor: 1 },
-      { key: 'ml', label: '毫升 (mL)', factor: 0.001 },
-      { key: 'm3', label: '立方米 (m³)', factor: 1000 },
-      { key: 'gal', label: '加仑(美) (gal)', factor: 3.785411784 },
+      { key: 'l', label: 'calc.unit.l', factor: 1 },
+      { key: 'ml', label: 'calc.unit.ml', factor: 0.001 },
+      { key: 'm3', label: 'calc.unit.m3', factor: 1000 },
+      { key: 'gal', label: 'calc.unit.gal', factor: 3.785411784 },
     ],
   },
 }
 
 /** 货币:汇率以「1 CNY = ? 外币」为基准,联网实时刷新,失败回退到内置估算。 */
-const CURRENCIES = [
-  { key: 'CNY', label: '人民币 ¥', symbol: '¥' },
-  { key: 'USD', label: '美元 $', symbol: '$' },
-  { key: 'EUR', label: '欧元 €', symbol: '€' },
-  { key: 'JPY', label: '日元 ¥', symbol: '¥' },
+const CURRENCIES: { key: string; label: LocaleKey; symbol: string }[] = [
+  { key: 'CNY', label: 'calc.cur.CNY', symbol: '¥' },
+  { key: 'USD', label: 'calc.cur.USD', symbol: '$' },
+  { key: 'EUR', label: 'calc.cur.EUR', symbol: '€' },
+  { key: 'JPY', label: 'calc.cur.JPY', symbol: '¥' },
 ]
 
 // 离线估算(仅供参考):1 CNY ≈ 这些值外币。联网成功后被覆盖。
@@ -383,18 +384,19 @@ function fToC(f: number) {
 
 export function CalculatorView() {
   const [mode, setMode] = useState<'calc' | 'date' | 'unit'>('calc')
+  const { t } = useI18n()
 
   return (
     <div className="cal-view">
       <div className="segmented-control cal-mode">
         <button type="button" className={mode === 'calc' ? 'is-selected' : ''} onClick={() => setMode('calc')}>
-          计算
+          {t('calc.mode.calc')}
         </button>
         <button type="button" className={mode === 'date' ? 'is-selected' : ''} onClick={() => setMode('date')}>
-          日期
+          {t('calc.mode.date')}
         </button>
         <button type="button" className={mode === 'unit' ? 'is-selected' : ''} onClick={() => setMode('unit')}>
-          换算
+          {t('calc.mode.unit')}
         </button>
       </div>
       {mode === 'calc' && <CalcPad />}
@@ -466,6 +468,7 @@ function CalcPad() {
   const [current, setCurrent] = useState('0')
   const [evaluated, setEvaluated] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useI18n()
 
   // 显示区:上方 = 用户完整录入的算式(便于检查),下方 = 实时计算结果。
   const exprEndsWithOp = /[+\-−×÷(]\s*$/.test(expr)
@@ -612,7 +615,7 @@ function CalcPad() {
       case 'inv': {
         setCurrent((c) => {
           const n = numericOf(c)
-          if (!Number.isFinite(n) || n === 0) return '错误'
+          if (!Number.isFinite(n) || n === 0) return t('calc.error')
           return formatNumber(1 / n)
         })
         return
@@ -627,7 +630,7 @@ function CalcPad() {
       case 'sqrt': {
         setCurrent((c) => {
           const n = numericOf(c)
-          if (!Number.isFinite(n) || n < 0) return '错误'
+          if (!Number.isFinite(n) || n < 0) return t('calc.error')
           return formatNumber(Math.sqrt(n))
         })
         return
@@ -639,7 +642,7 @@ function CalcPad() {
         try {
           const result = evaluate(full)
           if (!Number.isFinite(result)) {
-            setError('计算溢出')
+            setError(t('calc.err.overflow'))
             return
           }
           // 保留完整算式在上方便于检查,结果放在下方的 current。
@@ -647,7 +650,7 @@ function CalcPad() {
           setCurrent(formatNumber(result))
           setEvaluated(true)
         } catch (err) {
-          setError(err instanceof Error ? err.message : '表达式错误')
+          setError(err instanceof Error ? err.message : t('calc.err.invalid'))
         }
         return
       }
@@ -697,9 +700,7 @@ function CalcPad() {
           </button>
         ))}
       </div>
-      <p className="calc-hint">
-        支持四则运算、括号、小数与负数;% 按「相对于前一项的百分比」计算(如 200 + 10% = 220)。
-      </p>
+      <p className="calc-hint">{t('calc.hint.calc')}</p>
     </div>
   )
 }
@@ -712,6 +713,7 @@ function DateTools() {
   const [sub, setSub] = useState<'diff' | 'work' | 'age'>('diff')
   const [holidayTick, setHolidayTick] = useState(0)
   const today = dayKeyOf(new Date())
+  const { t } = useI18n()
 
   const [fromDiff, setFromDiff] = useState(today)
   const [toDiff, setToDiff] = useState(dayKeyOf(new Date(Date.now() + 86400000)))
@@ -748,31 +750,31 @@ function DateTools() {
     <div className="cal-date">
       <div className="segmented-control cal-sub">
         <button type="button" className={sub === 'diff' ? 'is-selected' : ''} onClick={() => setSub('diff')}>
-          日期差
+          {t('calc.sub.diff')}
         </button>
         <button type="button" className={sub === 'work' ? 'is-selected' : ''} onClick={() => setSub('work')}>
-          工作日
+          {t('calc.sub.work')}
         </button>
         <button type="button" className={sub === 'age' ? 'is-selected' : ''} onClick={() => setSub('age')}>
-          年龄
+          {t('calc.sub.age')}
         </button>
       </div>
 
       {sub === 'diff' && (
         <div className="cal-tool">
           <label className="cal-row">
-            <span>开始日期</span>
+            <span>{t('due.startAria')}</span>
             <input type="date" value={fromDiff} max={toDiff} onChange={(e) => setFromDiff(e.target.value)} />
           </label>
           <label className="cal-row">
-            <span>结束日期</span>
+            <span>{t('due.endAria')}</span>
             <input type="date" value={toDiff} min={fromDiff} onChange={(e) => setToDiff(e.target.value)} />
           </label>
           <div className="cal-result">
-            <strong>{Math.abs(diffDays)}</strong> 天
-            {diffDays < 0 && <em className="cal-note">（结束早于开始，已取绝对值）</em>}
+            <strong>{Math.abs(diffDays)}</strong> {t('calc.unit.day')}
+            {diffDays < 0 && <em className="cal-note">{t('calc.diff.absNote')}</em>}
             <div className="cal-subline">
-              ≈ {Math.floor(Math.abs(diffDays) / 7)} 周 {Math.abs(diffDays) % 7} 天
+              {t('calc.diff.weeksDay', { n: Math.floor(Math.abs(diffDays) / 7), m: Math.abs(diffDays) % 7 })}
             </div>
           </div>
         </div>
@@ -781,16 +783,16 @@ function DateTools() {
       {sub === 'work' && (
         <div className="cal-tool">
           <label className="cal-row">
-            <span>开始日期</span>
+            <span>{t('due.startAria')}</span>
             <input type="date" value={fromWork} max={toWork} onChange={(e) => setFromWork(e.target.value)} />
           </label>
           <label className="cal-row">
-            <span>结束日期</span>
+            <span>{t('due.endAria')}</span>
             <input type="date" value={toWork} min={fromWork} onChange={(e) => setToWork(e.target.value)} />
           </label>
           <div className="cal-result">
-            <strong>{workDays}</strong> 个工作日
-            <div className="cal-subline">已自动扣除周六、周日与中国法定节假日(含调休补班)。</div>
+            <strong>{workDays}</strong> {t('calc.work.daysSuffix')}
+            <div className="cal-subline">{t('calc.work.note')}</div>
           </div>
         </div>
       )}
@@ -798,26 +800,23 @@ function DateTools() {
       {sub === 'age' && (
         <div className="cal-tool">
           <label className="cal-row">
-            <span>出生日期</span>
+            <span>{t('calc.birthDate')}</span>
             <input type="date" value={birth} max={today} onChange={(e) => setBirth(e.target.value)} />
           </label>
           <div className="cal-result">
             {age ? (
               <div className="cal-result-line">
-                <strong>{age.years}</strong> 岁 <strong>{age.months}</strong> 个月{' '}
-                <strong>{age.days}</strong> 天
+                <strong>{age.years}</strong> {t('calc.age.years')} <strong>{age.months}</strong> {t('calc.age.months')}{' '}
+                <strong>{age.days}</strong> {t('calc.unit.day')}
               </div>
             ) : (
-              <em className="cal-note">请选择有效的出生日期。</em>
+              <em className="cal-note">{t('calc.age.invalid')}</em>
             )}
           </div>
         </div>
       )}
 
-      <p className="calc-hint">
-        法定节假日已内置 2024–{BUILT_IN_HOLIDAY_END_YEAR}（{BUILT_IN_HOLIDAY_END_YEAR}
-        为暂定，以国务院办公厅公布为准）；之后的年份会联网自动获取并缓存到本机，离线或获取失败时按周末自动排除。
-      </p>
+      <p className="calc-hint">{t('calc.hint.date', { n: BUILT_IN_HOLIDAY_END_YEAR })}</p>
     </div>
   )
 }
@@ -828,6 +827,7 @@ function DateTools() {
 
 function UnitTools() {
   const [cat, setCat] = useState<'currency' | 'length' | 'weight' | 'area' | 'temp' | 'volume'>('currency')
+  const { t } = useI18n()
 
   // 货币实时汇率
   const [rates, setRates] = useState<Record<string, number>>(FALLBACK_RATES)
@@ -867,14 +867,14 @@ function UnitTools() {
     setToU('')
   }, [cat])
 
-  const TEMP_UNITS = [
-    { key: 'C', label: '摄氏度 (°C)' },
-    { key: 'F', label: '华氏度 (°F)' },
+  const TEMP_UNITS: { key: string; label: LocaleKey }[] = [
+    { key: 'C', label: 'calc.unit.c' },
+    { key: 'F', label: 'calc.unit.f' },
   ]
 
   // 各分类的单位选项与默认单位(对未知分类做兜底,避免 LINEAR[cat] 为 undefined 时崩溃)
   const linear = cat === 'currency' || cat === 'temp' ? null : (LINEAR[cat]?.units ?? LINEAR.length.units)
-  const opts: { key: string; label: string }[] =
+  const opts: { key: string; label: LocaleKey }[] =
     cat === 'currency' ? CURRENCIES : cat === 'temp' ? TEMP_UNITS : linear!
   const defFrom = cat === 'currency' ? 'CNY' : cat === 'temp' ? 'C' : linear![0].key
   const defTo = cat === 'currency' ? 'USD' : cat === 'temp' ? 'F' : linear![1]?.key ?? linear![0].key
@@ -907,7 +907,7 @@ function UnitTools() {
           ? `1 ${fc?.symbol ?? fromKey} = ${formatNumber(one)} ${tc?.symbol ?? toKey}（1 ${tc?.symbol ?? toKey} ≈ ${formatNumber(back)} ${fc?.symbol ?? fromKey}）`
           : `1 ${fc?.symbol ?? fromKey} = ${formatNumber(one)} ${tc?.symbol ?? toKey}`
       } else {
-        resultText = '汇率缺失'
+        resultText = t('calc.rate.missing')
       }
     } else if (cat === 'temp') {
       let r = NaN
@@ -922,7 +922,7 @@ function UnitTools() {
         const base = num * fu.factor
         resultText = formatNumber(base / tu.factor)
       } else {
-        resultText = '单位无效'
+        resultText = t('calc.unit.invalid')
       }
     }
   }
@@ -932,13 +932,13 @@ function UnitTools() {
     setToU(fromKey)
   }
 
-  const subCats: { key: typeof cat; label: string }[] = [
-    { key: 'currency', label: '货币' },
-    { key: 'length', label: '长度' },
-    { key: 'weight', label: '重量' },
-    { key: 'area', label: '面积' },
-    { key: 'temp', label: '温度' },
-    { key: 'volume', label: '体积' },
+  const subCats: { key: typeof cat; label: LocaleKey }[] = [
+    { key: 'currency', label: 'calc.cat.currency' },
+    { key: 'length', label: 'calc.cat.length' },
+    { key: 'weight', label: 'calc.cat.weight' },
+    { key: 'area', label: 'calc.cat.area' },
+    { key: 'temp', label: 'calc.cat.temp' },
+    { key: 'volume', label: 'calc.cat.volume' },
   ]
 
   return (
@@ -946,38 +946,38 @@ function UnitTools() {
       <div className="segmented-control cal-sub cal-sub-6">
         {subCats.map((s) => (
           <button key={s.key} type="button" className={cat === s.key ? 'is-selected' : ''} onClick={() => setCat(s.key)}>
-            {s.label}
+            {t(s.label)}
           </button>
         ))}
       </div>
 
       <div className="cal-tool">
         <label className="cal-row">
-          <span>数值</span>
+          <span>{t('calc.amount')}</span>
           <input
             type="number"
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="输入数值"
+            placeholder={t('calc.amountPlaceholder')}
           />
         </label>
 
         <div className="cal-convert-line">
-          <select value={fromKey} onChange={(e) => setFromU(e.target.value)} aria-label="原单位">
+          <select value={fromKey} onChange={(e) => setFromU(e.target.value)} aria-label={t('calc.fromAria')}>
             {opts.map((u) => (
               <option key={u.key} value={u.key}>
-                {u.label}
+                {t(u.label)}
               </option>
             ))}
           </select>
-          <button type="button" className="cal-swap" aria-label="交换单位" onClick={swap}>
+          <button type="button" className="cal-swap" aria-label={t('calc.swapAria')} onClick={swap}>
             ⇄
           </button>
-          <select value={toKey} onChange={(e) => setToU(e.target.value)} aria-label="目标单位">
+          <select value={toKey} onChange={(e) => setToU(e.target.value)} aria-label={t('calc.toAria')}>
             {opts.map((u) => (
               <option key={u.key} value={u.key}>
-                {u.label}
+                {t(u.label)}
               </option>
             ))}
           </select>
@@ -989,10 +989,10 @@ function UnitTools() {
           {cat === 'currency' && (
             <div className="cal-subline">
               {rateLive && rateUpdated
-                ? `汇率更新于 ${rateUpdated}（实时）`
-                : '当前为离线估算汇率，仅供参考；联网后将自动刷新。'}
-              <button type="button" className="cal-refresh" onClick={() => void loadRates()} aria-label="刷新汇率">
-                <RefreshCw size={12} /> 刷新
+                ? t('calc.rate.updated', { time: rateUpdated })
+                : t('calc.rate.offline')}
+              <button type="button" className="cal-refresh" onClick={() => void loadRates()} aria-label={t('calc.rate.refreshAria')}>
+                <RefreshCw size={12} /> {t('calc.refresh')}
               </button>
             </div>
           )}
@@ -1000,9 +1000,7 @@ function UnitTools() {
       </div>
 
       <p className="calc-hint">
-        {cat === 'currency'
-          ? '货币按国际中间价实时换算（联网获取）；与银行挂牌价存在正常小幅差异，汇率波动，结果以成交时为准。'
-          : '长度/重量/面积/体积按标准换算系数计算；温度为摄氏 ⇆ 华氏。'}
+        {cat === 'currency' ? t('calc.hint.currency') : t('calc.hint.unit')}
       </p>
     </div>
   )

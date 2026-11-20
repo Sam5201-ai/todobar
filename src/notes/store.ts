@@ -13,6 +13,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { loadDiskPref, saveDiskPref } from '../prefs'
+import type { LocaleKey } from '../i18n'
 
 const STORAGE_KEY = 'ticktask.notes.v1'
 const DISK_KEY = 'notes'
@@ -83,13 +84,13 @@ export type Note = {
  * 预设色板。bg 为 "R, G, B" 三元组(便于拼 rgba),fg 为该背景上的文字色。
  * 每档都保证低透明度下文字仍有足够对比度。
  */
-export const NOTE_COLORS: { key: string; label: string; bg: string; fg: string }[] = [
-  { key: 'yellow', label: '柠檬黄', bg: '253, 216, 110', fg: '#4a3710' },
-  { key: 'pink', label: '樱花粉', bg: '252, 186, 200', fg: '#5c2131' },
-  { key: 'blue', label: '晴空蓝', bg: '168, 214, 250', fg: '#123a55' },
-  { key: 'green', label: '薄荷绿', bg: '175, 232, 199', fg: '#12462f' },
-  { key: 'purple', label: '薰衣草', bg: '212, 190, 245', fg: '#3a2352' },
-  { key: 'gray', label: '石墨灰', bg: '206, 212, 218', fg: '#2c3033' },
+export const NOTE_COLORS: { key: string; label: LocaleKey; bg: string; fg: string }[] = [
+  { key: 'yellow', label: 'clothesline.color.lemon', bg: '253, 216, 110', fg: '#4a3710' },
+  { key: 'pink', label: 'clothesline.color.sakura', bg: '252, 186, 200', fg: '#5c2131' },
+  { key: 'blue', label: 'clothesline.color.sky', bg: '168, 214, 250', fg: '#123a55' },
+  { key: 'green', label: 'clothesline.color.mint', bg: '175, 232, 199', fg: '#12462f' },
+  { key: 'purple', label: 'clothesline.color.lavender', bg: '212, 190, 245', fg: '#3a2352' },
+  { key: 'gray', label: 'clothesline.color.graphite', bg: '206, 212, 218', fg: '#2c3033' },
 ]
 
 export function noteColorOf(key: string) {

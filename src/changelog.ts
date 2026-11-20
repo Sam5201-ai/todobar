@@ -5,6 +5,7 @@
  * 策略:优先用本地缓存秒开,网络回来后覆盖;网络失败且有缓存时静默降级,不打扰用户。
  */
 import { AUTH_BASE } from './account'
+import { t } from './i18n'
 
 export interface ReleaseRecord {
   /** 版本号,如 0.4.51。 */
@@ -54,10 +55,10 @@ export function readReleaseCache(): ReleaseRecord[] | null {
 /** 拉取远程版本记录,成功后刷新本地缓存。失败抛错由调用方决定是否降级。 */
 export async function fetchReleases(): Promise<ReleaseRecord[]> {
   const res = await fetch(`${AUTH_BASE}/api/releases`)
-  if (!res.ok) throw new Error(`服务器返回 ${res.status}`)
+  if (!res.ok) throw new Error(t('common.serverStatus', { code: res.status }))
   const data = (await res.json()) as { releases?: unknown }
   const list = normalizeReleases(data.releases)
-  if (!list) throw new Error('版本记录格式错误')
+  if (!list) throw new Error(t('changelog.formatError'))
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ list }))
   } catch {

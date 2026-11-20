@@ -1,4 +1,5 @@
 import { Solar, Lunar, HolidayUtil } from 'lunar-javascript'
+import { t } from './i18n'
 
 /** YYYY-MM-DD(本地日)。 */
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -200,7 +201,7 @@ function islamicDate(y: number, m: number, d: number): string {
     })
     const parts = fmt.formatToParts(new Date(Date.UTC(y, m - 1, d)))
     const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
-    return `${get('year')}年${get('month')}月${get('day')}日`
+    return t('huangli.date.ymd', { y: get('year'), m: get('month'), d: get('day') })
   } catch {
     return ''
   }
@@ -242,7 +243,7 @@ export function getHuangliDetail(year: number, month: number, day: number): HlDe
       const nextS = next.getSolar()
       const n = daysBetween({ year: prevS.getYear(), month: prevS.getMonth(), day: prevS.getDay() }, { year, month, day }) + 1
       const remain = daysBetween({ year, month, day }, { year: nextS.getYear(), month: nextS.getMonth(), day: nextS.getDay() })
-      jieQiText = `${prev.getName()} 第${n}天(距下一个节气“${next.getName()}”,还有${remain}天)`
+      jieQiText = t('huangli.jieqi.cycle', { name: prev.getName(), n, next: next.getName(), remain })
     }
   } catch {
     jieQiText = ''

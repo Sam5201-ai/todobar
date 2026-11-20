@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "archive-preview"
   ],
   "permissions": [
     "core:default",
@@ -12,7 +13,10 @@
     "core:window:allow-set-position",
     "core:window:allow-set-size",
     "core:window:allow-set-focus",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
     "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
     "core:window:allow-current-monitor",
     "core:window:allow-cursor-position",
     "core:window:allow-set-ignore-cursor-events",

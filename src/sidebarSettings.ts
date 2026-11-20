@@ -6,6 +6,7 @@ import {
   type TopbarToolsPref,
 } from './topbarTools'
 import type { DockSide, MonitorPref } from './dock'
+import { t, type LocaleKey } from './i18n'
 
 // 保持 v19:新增字段(topbarTools / dockSide / targetMonitor)一律由
 // sanitizeSettings 自动补齐,无需升 key。
@@ -17,28 +18,28 @@ const STORAGE_KEY = SIDEBAR_SETTINGS_KEY
 
 export type ThemeMode = 'light' | 'dark'
 
-/** 待办标题字体选项。stack 为 font-family 字体栈。 */
+/** 待办标题字体选项。stack 为 font-family 字体栈。label 为中文参考,展示经 fontLabel() 走 t()。 */
 export const FONT_OPTIONS: { key: string; label: string; stack: string }[] = [
-  { key: 'song', label: '宋体', stack: '"宋体", SimSun, "Songti SC", "NSimSun", serif' },
-  { key: 'hei', label: '黑体', stack: '"黑体", SimHei, "Source Han Sans SC", "Microsoft YaHei", sans-serif' },
-  { key: 'yahei', label: '微软雅黑', stack: '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif' },
-  { key: 'kai', label: '楷体', stack: '"楷体", KaiTi, "Kaiti SC", STKaiti, serif' },
-  { key: 'deng', label: '等线', stack: '"等线", "DengXian", "Microsoft YaHei", sans-serif' },
-  { key: 'fangsong', label: '仿宋', stack: '"仿宋", FangSong, "FangSong_GB2312", serif' },
-  { key: 'system', label: '系统默认', stack: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif' },
+  { key: 'song', label: '宋体', stack: '"宋体", SimSun, "Songti SC", "NSimSun", serif' }, // i18n-allow
+  { key: 'hei', label: '黑体', stack: '"黑体", SimHei, "Source Han Sans SC", "Microsoft YaHei", sans-serif' }, // i18n-allow
+  { key: 'yahei', label: '微软雅黑', stack: '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif' }, // i18n-allow
+  { key: 'kai', label: '楷体', stack: '"楷体", KaiTi, "Kaiti SC", STKaiti, serif' }, // i18n-allow
+  { key: 'deng', label: '等线', stack: '"等线", "DengXian", "Microsoft YaHei", sans-serif' }, // i18n-allow
+  { key: 'fangsong', label: '仿宋', stack: '"仿宋", FangSong, "FangSong_GB2312", serif' }, // i18n-allow
+  { key: 'system', label: '系统默认', stack: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif' }, // i18n-allow
 ]
 
-/** 背景选项。CSS 类名统一为 `bg-${key}`;图片类对应 public/ 下的图片。 */
+/** 背景选项。CSS 类名统一为 `bg-${key}`;图片类对应 public/ 下的图片。label 为中文参考,展示经 backgroundLabel() 走 t()。 */
 export const BACKGROUND_OPTIONS: { key: string; label: string }[] = [
-  { key: 'solid', label: '纯色' },
-  { key: 'aurora', label: '极光' },
-  { key: 'img-teal', label: '清蓝' },
-  { key: 'img-mountain', label: '远山' },
-  { key: 'img-wave', label: '海浪' },
-  { key: 'img-leaf', label: '枝叶' },
-  { key: 'img-star', label: '星夜' },
-  { key: 'img-cyber', label: '赛博' },
-  { key: 'img-anime', label: '动漫' },
+  { key: 'solid', label: '纯色' }, // i18n-allow
+  { key: 'aurora', label: '极光' }, // i18n-allow
+  { key: 'img-teal', label: '清蓝' }, // i18n-allow
+  { key: 'img-mountain', label: '远山' }, // i18n-allow
+  { key: 'img-wave', label: '海浪' }, // i18n-allow
+  { key: 'img-leaf', label: '枝叶' }, // i18n-allow
+  { key: 'img-star', label: '星夜' }, // i18n-allow
+  { key: 'img-cyber', label: '赛博' }, // i18n-allow
+  { key: 'img-anime', label: '动漫' }, // i18n-allow
 ]
 
 const FONT_KEYS = FONT_OPTIONS.map((f) => f.key)
@@ -46,6 +47,42 @@ const BG_KEYS = BACKGROUND_OPTIONS.map((b) => b.key)
 
 export function fontStackOf(key: string): string {
   return FONT_OPTIONS.find((f) => f.key === key)?.stack ?? FONT_OPTIONS[0].stack
+}
+
+/** 字体/背景 label 的词条映射(label 字段仅作中文参考,展示一律经 t())。 */
+const FONT_LABEL_KEYS: Record<string, LocaleKey> = {
+  song: 'settings.font.song',
+  hei: 'settings.font.hei',
+  yahei: 'settings.font.yahei',
+  kai: 'settings.font.kai',
+  deng: 'settings.font.deng',
+  fangsong: 'settings.font.fangsong',
+  system: 'settings.font.system',
+}
+const BG_LABEL_KEYS: Record<string, LocaleKey> = {
+  solid: 'settings.bg.solid',
+  aurora: 'settings.bg.aurora',
+  'img-teal': 'settings.bg.imgTeal',
+  'img-mountain': 'settings.bg.imgMountain',
+  'img-wave': 'settings.bg.imgWave',
+  'img-leaf': 'settings.bg.imgLeaf',
+  'img-star': 'settings.bg.imgStar',
+  'img-cyber': 'settings.bg.imgCyber',
+  'img-anime': 'settings.bg.imgAnime',
+}
+
+/** 字体显示名(当前语言);未知 key 回退注册表 label。 */
+export function fontLabel(key: string): string {
+  const k = FONT_LABEL_KEYS[key]
+  if (k) return t(k)
+  return FONT_OPTIONS.find((f) => f.key === key)?.label ?? key
+}
+
+/** 背景显示名(当前语言);未知 key 回退注册表 label。 */
+export function backgroundLabel(key: string): string {
+  const k = BG_LABEL_KEYS[key]
+  if (k) return t(k)
+  return BACKGROUND_OPTIONS.find((b) => b.key === key)?.label ?? key
 }
 
 export type SidebarSettings = {
@@ -74,6 +111,8 @@ export type SidebarSettings = {
   archiveShortcut: string
   /** 首页顶栏快捷入口:完整顺序 + 勾选启用的工具(设置按钮固定,不参与配置)。 */
   topbarTools: TopbarToolsPref
+  /** 悬停自动展开:收起时光标移入把手区域自动展开,移出窗口自动收起。 */
+  hoverAutoExpand: boolean
   /** 主窗停靠在哪一侧桌缘。 */
   dockSide: DockSide
   /** 主窗显示在哪块屏幕:主屏(默认)/ 副屏 / 具体显示器 key。会被持久化。 */
@@ -101,6 +140,7 @@ export const defaultSidebarSettings: SidebarSettings = {
   clipboardShortcut: 'CommandOrControl+Shift+V',
   archiveShortcut: 'Alt+A',
   topbarTools: { ...DEFAULT_TOPBAR_TOOLS },
+  hoverAutoExpand: true,
   dockSide: 'right',
   targetMonitor: 'primary',
 }
@@ -183,6 +223,8 @@ function sanitizeSettings(value: Partial<SidebarSettings>): SidebarSettings {
         ? value.archiveShortcut
         : defaultSidebarSettings.archiveShortcut,
     topbarTools: sanitizeTopbarTools(value.topbarTools ?? defaultSidebarSettings.topbarTools),
+    hoverAutoExpand:
+      value.hoverAutoExpand ?? defaultSidebarSettings.hoverAutoExpand,
     dockSide: value.dockSide === 'left' ? 'left' : 'right',
     targetMonitor: normalizeMonitorPref(value.targetMonitor),
   }

@@ -41,7 +41,7 @@ import avatarA4 from './assets/avatars/a4.png'
 import avatarA5 from './assets/avatars/a5.png'
 // 「联系客服 - 加入反馈群」微信二维码(本地打包,不依赖联网)。
 import devWechatQr from './assets/dev-wechat-qr.jpg'
-import { useSidebarSettings, fontStackOf, FONT_OPTIONS, BACKGROUND_OPTIONS } from './sidebarSettings'
+import { useSidebarSettings, fontStackOf, fontLabel, backgroundLabel, FONT_OPTIONS, BACKGROUND_OPTIONS } from './sidebarSettings'
 import type { SidebarSettings } from './sidebarSettings'
 import {
   dockFrame,
@@ -57,6 +57,8 @@ import {
   type MonitorPref,
 } from './dock'
 import { AccountSetting, AccountModal } from './AccountSetting'
+import { GeneralSetting } from './GeneralSetting'
+import { t, useI18n, getLocale, type LocaleKey } from './i18n'
 import ScreenshotSettingsPanel from './screenshot/ScreenshotSettingsPanel'
 import { ShortcutField } from './ShortcutField'
 import { applyArchiveShortcut, applyNoteShortcut, initArchiveShortcutTrigger } from './notes/shortcuts'
@@ -71,6 +73,8 @@ import {
   formatShortcut,
   sanitizeTopbarTools,
   splitTopbarTools,
+  toolName,
+  toolTip,
   topbarPosition,
   type TopbarTool,
   type TopbarToolId,
@@ -133,7 +137,7 @@ import { loadHolidays } from './holidays'
 import { HuangliView } from './HuangliView'
 import { CalculatorView } from './CalculatorView'
 import { ErrorBoundary } from './ErrorBoundary'
-import { loadCapabilities, caps, capsReady, allows } from './platformCapabilities'
+import { loadCapabilities, caps, allows } from './platformCapabilities'
 import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { SalaryView, STORE_KEY as SALARY_STORE_KEY } from './SalaryView'
@@ -185,6 +189,10 @@ type HandleDragState = {
   moved: boolean
   latestHandleY: number | null
 }
+
+/** 悬停自动展开:移入把手的防误触延时 / 展开态移出窗口的防抖收起延时。 */
+const HOVER_EXPAND_DELAY_MS = 180
+const HOVER_COLLAPSE_DELAY_MS = 300
 
 function sortTasks(taskList: Task[]) {
   return [...taskList].sort((a, b) => {
@@ -242,7 +250,15 @@ function sortByDue(taskList: Task[]) {
 
 // ---- 日期工具(日/周/月三个 tab 共用) ---------------------------------------
 
-const WEEKDAY_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const WEEKDAY_KEYS = [
+  'weekday.sun',
+  'weekday.mon',
+  'weekday.tue',
+  'weekday.wed',
+  'weekday.thu',
+  'weekday.fri',
+  'weekday.sat',
+] as const
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 /** ISO(UTC) → 本地 "YYYY-MM-DD HH:mm",用于反馈历史时间展示。 */
@@ -291,11 +307,11 @@ function mondayOf(d: Date): Date {
 type TabKey = 'day' | 'week' | 'month' | 'birthday'
 
 /** 顶部 tab 栏只放待办分类;黄历不进 tab,由顶栏图标按钮开关。 */
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'day', label: '日待办' },
-  { key: 'week', label: '周待办' },
-  { key: 'month', label: '月待办' },
-  { key: 'birthday', label: '记节日' },
+const TABS: { key: TabKey; labelKey: LocaleKey }[] = [
+  { key: 'day', labelKey: 'tab.day' },
+  { key: 'week', labelKey: 'tab.week' },
+  { key: 'month', labelKey: 'tab.month' },
+  { key: 'birthday', labelKey: 'tab.birthday' },
 ]
 
 /** 系统头像表:avatar 字段存 'a1'~'a5'。 */
@@ -307,6 +323,15 @@ const AVATARS: Record<string, string> = {
   a5: avatarA5,
 }
 const AVATAR_KEYS = ['a1', 'a2', 'a3', 'a4', 'a5']
+
+/** 生日弹窗的关系选项(渲染时经 t() 翻译,存储值为当前语言的文案)。 */
+const BIRTHDAY_RELATION_KEYS = [
+  'birthday.relation.self',
+  'birthday.relation.family',
+  'birthday.relation.friend',
+  'birthday.relation.colleague',
+  'birthday.relation.classmate',
+] as const
 
 /** 生日列表的排序键:先按「距离下一次生日还有几天」升序。 */
 function sortBirthdays(items: Birthday[]): Birthday[] {
@@ -333,21 +358,31 @@ function birthdayOccurrence(b: Birthday, from: Date): Date | null {
 }
 
 /** 生日当天的公历日期(不含提醒时分),用于列表展示。 */
-const CN_WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六']
+const WEEKDAY_SHORT_KEYS = [
+  'weekday.short.sun',
+  'weekday.short.mon',
+  'weekday.short.tue',
+  'weekday.short.wed',
+  'weekday.short.thu',
+  'weekday.short.fri',
+  'weekday.short.sat',
+] as const
 
 /** 倒计时文案:0→今天,1→明天,其余→N 天后。 */
 function countdownLabel(days: number | null): string {
   if (days === null) return '—'
-  if (days === 0) return '今天'
-  if (days === 1) return '明天'
-  if (days < 0) return '已过'
-  if (days <= 30) return `${days} 天后`
-  if (days <= 365) return `${Math.round(days / 30)} 个月后`
-  return `${days} 天后`
+  if (days === 0) return t('date.today')
+  if (days === 1) return t('date.tomorrow')
+  if (days < 0) return t('date.past')
+  if (days <= 30) return t('date.daysLater', { days })
+  if (days <= 365) return t('date.monthsLater', { months: Math.round(days / 30) })
+  return t('date.daysLater', { days })
 }
 
 function App() {
   const store = useTaskStore()
+  // i18n:主界面可见文案(顶栏 tooltip / aria / toast)取当前语言;语言切换时整树重渲染。
+  const { t, locale } = useI18n()
   // 会员权限:未登录 / 试用过期未激活 = 受限(云端同步、计薪组件、子任务、
   // 单日新建上限、提醒、生日纪念日均按此判定)。登录或激活后自动重渲染放行。
   const { fullAccess, account } = useAccount()
@@ -378,6 +413,8 @@ function App() {
   // 期间窗口保持可点(不穿透),避免面板还在滑出就把点击放给桌面。
   const dockAnimToken = useRef(0)
   const dockAnimatingRef = useRef(false)
+  // 悬停自动展开:把手 mouseenter 的延时展开 timer(到期前移出把手则取消)。
+  const hoverExpandTimer = useRef<number | null>(null)
   /** 上一次真正落位的几何,用于识别「切屏/改边/改宽度」迁移(迁移不做动画)。 */
   const appliedDockRef = useRef<{ geom: DockGeometry } | null>(null)
   /**
@@ -599,7 +636,8 @@ function App() {
   useEffect(() => {
     const onMigrated = (e: Event) => {
       const n = (e as CustomEvent<number>).detail
-      if (typeof n === 'number' && n > 0) setToast({ kind: 'ok', text: `已把本地 ${n} 条数据并入账号` })
+      if (typeof n === 'number' && n > 0)
+        setToast({ kind: 'ok', text: t('sync.mergedLocal', { count: n }) })
     }
     window.addEventListener(DATA_MIGRATED_EVENT, onMigrated)
     return () => window.removeEventListener(DATA_MIGRATED_EVENT, onMigrated)
@@ -637,11 +675,16 @@ function App() {
   useEffect(() => {
     const status = store.syncState.status
     if (prevSyncStatus.current === 'syncing' && status === 'idle') {
-      setToast({ kind: 'ok', text: '同步成功' })
+      setToast({ kind: 'ok', text: t('sync.success') })
     } else if (prevSyncStatus.current === 'syncing' && status === 'error') {
       // 未登录/非会员(如刚登出)不弹同步失败:此时本就不该同步,弹窗只会造成困扰。
       if (fullAccess) {
-        setToast({ kind: 'err', text: `同步失败:${store.syncState.lastError ?? '网络异常'}` })
+        setToast({
+          kind: 'err',
+          text: t('sync.failReason', {
+            message: store.syncState.lastError ?? t('sync.error.network'),
+          }),
+        })
       }
     }
     prevSyncStatus.current = status
@@ -655,12 +698,12 @@ function App() {
 
   const onHeaderSync = () => {
     if (!store.syncConfig.enabled) {
-      setToast({ kind: 'err', text: '请先登录账号以开启云同步' })
+      setToast({ kind: 'err', text: t('sync.needLogin') })
       return
     }
     // 会员闸门:受限用户(未登录 / 试用过期未激活)不能上传云端。
     if (!fullAccess) {
-      handleLocked('云同步')
+      handleLocked(t('feature.cloudSync'))
       return
     }
     trackFeature('sync')
@@ -672,27 +715,30 @@ function App() {
     setRestoreSheetOpen(false)
     // 会员闸门:受限用户不能从云端恢复数据。
     if (!fullAccess) {
-      handleLocked('恢复云端数据')
+      handleLocked(t('feature.restoreCloud'))
       return
     }
     if (!store.syncConfig.enabled) {
-      setToast({ kind: 'err', text: '请先登录账号以开启云同步' })
+      setToast({ kind: 'err', text: t('sync.needLogin') })
       return
     }
     const r = await store.restoreFromCloud(mode)
     if (!r.ok) {
-      setToast({ kind: 'err', text: `恢复失败:${r.reason ?? '未知错误'}` })
+      setToast({
+        kind: 'err',
+        text: t('restore.fail', { message: r.reason ?? t('restore.error.unknown') }),
+      })
       return
     }
     if (mode === 'overwrite') {
       setToast({
         kind: 'ok',
-        text: `已用云端覆盖本地:恢复 ${r.added ?? 0} 条,移除本地独有 ${r.removed ?? 0} 条`,
+        text: t('restore.overwriteDone', { added: r.added ?? 0, removed: r.removed ?? 0 }),
       })
     } else {
       setToast({
         kind: 'ok',
-        text: `已从云端补充 ${r.added ?? 0} 条,跳过本地已有 ${r.skipped ?? 0} 条`,
+        text: t('restore.mergeDone', { added: r.added ?? 0, skipped: r.skipped ?? 0 }),
       })
     }
   }
@@ -862,15 +908,15 @@ function App() {
       .catch(() => undefined)
     void listen<{ id: string }>(CL_OPEN_TASK, (e) => {
       if (cancelled) return
-      const t = store.tasks.find((x) => x.id === e.payload.id)
-      if (!t) {
-        setToast({ kind: 'err', text: '这条待办已删除' })
+      const task = store.tasks.find((x) => x.id === e.payload.id)
+      if (!task) {
+        setToast({ kind: 'err', text: t('toast.taskDeleted') })
         return
       }
-      setActiveTab(t.listId === 'month' ? 'month' : 'day')
-      if (t.dueDate) setSelectedDateKey(t.dueDate.slice(0, 10))
+      setActiveTab(task.listId === 'month' ? 'month' : 'day')
+      if (task.dueDate) setSelectedDateKey(task.dueDate.slice(0, 10))
       setClotheslineOpen(false)
-      setToast({ kind: 'ok', text: '已定位到这条待办' })
+      setToast({ kind: 'ok', text: t('toast.taskLocated') })
     })
       .then((fn) => {
         if (cancelled) fn()
@@ -916,7 +962,7 @@ function App() {
       recCardId = cardId
       recTitle = title
       if (getRecorderSnapshot().status !== 'idle') {
-        failStart('已有录音在进行中')
+        failStart(t('recorder.busy'))
         return
       }
       await startRecording({ title })
@@ -952,7 +998,7 @@ function App() {
             emitState(
               res
                 ? { status: 'idle', done: 'saved', error: null }
-                : { status: 'idle', done: 'failed', error: '当前没有进行中的录音' },
+                : { status: 'idle', done: 'failed', error: t('recorder.noActive') },
             )
             recCardId = null
             recTitle = null
@@ -1002,8 +1048,8 @@ function App() {
     note: formatShortcut(settings.noteShortcut),
     clipboard: formatShortcut(settings.clipboardShortcut),
     archive: formatShortcut(settings.archiveShortcut),
-    sync: lastSyncLabel ? `同步于 ${lastSyncLabel}` : '',
-  }), [settings.noteShortcut, settings.clipboardShortcut, settings.archiveShortcut, lastSyncLabel])
+    sync: lastSyncLabel ? t('sync.syncedAt', { time: lastSyncLabel }) : '',
+  }), [settings.noteShortcut, settings.clipboardShortcut, settings.archiveShortcut, lastSyncLabel, locale])
 
   // 侧栏收起时菜单不该残留;点击菜单外 / Esc 关闭(带 StrictMode 卸载守卫)。
   useEffect(() => {
@@ -1051,7 +1097,7 @@ function App() {
         break
       case 'clipboard':
         void clipboardOpenWindow().then((ok) => {
-          if (!ok) setToast({ kind: 'err', text: '剪贴板窗口打开失败，请重启工具后再试' })
+          if (!ok) setToast({ kind: 'err', text: t('toast.clipboardOpenFail') })
         })
         break
       case 'calculator':
@@ -1183,24 +1229,24 @@ function App() {
       chips.push({
         key,
         dayLabel: `${d.getMonth() + 1}/${d.getDate()}`,
-        weekLabel: offset === 0 ? '今天' : WEEKDAY_CN[d.getDay()],
+        weekLabel: offset === 0 ? t('date.today') : t(WEEKDAY_KEYS[d.getDay()]),
         dot: dayTasks.length === 0 ? 'none' : openCount > 0 ? 'open' : 'done',
       })
     }
     return chips
-  }, [store.tasks, todayKey])
+  }, [store.tasks, todayKey, locale])
 
   const selectedDateLabel = useMemo(() => {
     const d = parseDayKey(selectedDateKey)
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY_CN[d.getDay()]}`
-  }, [selectedDateKey])
+    return t('date.monthDay', { m: d.getMonth() + 1, d: d.getDate(), w: t(WEEKDAY_KEYS[d.getDay()]) })
+  }, [selectedDateKey, locale])
 
   // 周/月视图日期栏「+」:把点击的那一天带进添加弹窗(展示用),保存时按该日期落库。
   const addSheetDateLabel = useMemo(() => {
     if (!addSheetDateKey) return null
     const d = parseDayKey(addSheetDateKey)
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY_CN[d.getDay()]}`
-  }, [addSheetDateKey])
+    return t('date.monthDay', { m: d.getMonth() + 1, d: d.getDate(), w: t(WEEKDAY_KEYS[d.getDay()]) })
+  }, [addSheetDateKey, locale])
 
   const openAddSheetForDate = (key: string) => {
     trackFeature('add-task')
@@ -1219,7 +1265,7 @@ function App() {
       const key = dayKeyOf(d)
       return {
         key,
-        label: `${key.slice(5)} ${WEEKDAY_CN[d.getDay()]}`,
+        label: `${key.slice(5)} ${t(WEEKDAY_KEYS[d.getDay()])}`,
         isToday: key === todayKey,
         items: sortByDue(
           (settings.showCompleted ? expanded : expanded.filter((t) => !t.done)).filter(
@@ -1228,7 +1274,7 @@ function App() {
         ),
       }
     })
-  }, [store.tasks, todayKey, weekAnchor, settings.showCompleted])
+  }, [store.tasks, todayKey, weekAnchor, settings.showCompleted, locale])
   const weekTotal = weekGroups.reduce((sum, g) => sum + g.items.length, 0)
 
   const weekRangeLabel = useMemo(() => {
@@ -1254,7 +1300,7 @@ function App() {
         const visible = settings.showCompleted ? items : items.filter((t) => !t.done)
         groups.push({
           key,
-          label: `${key.slice(5)} ${WEEKDAY_CN[parseDayKey(key).getDay()]}`,
+          label: `${key.slice(5)} ${t(WEEKDAY_KEYS[parseDayKey(key).getDay()])}`,
           isToday: key === todayKey,
           items: sortByDue(visible),
         })
@@ -1269,15 +1315,15 @@ function App() {
     if (visibleUndated.length > 0 && isCurrent) {
       groups.push({
         key: 'undated',
-        label: '未安排日期',
+        label: t('date.undated'),
         isToday: false,
         items: sortTasks(visibleUndated),
       })
     }
     return groups
-  }, [store.tasks, todayKey, settings.showCompleted, monthCursor])
+  }, [store.tasks, todayKey, settings.showCompleted, monthCursor, locale])
   const monthTotal = monthGroups.reduce((sum, g) => sum + g.items.length, 0)
-  const monthLabel = `${monthCursor.year}年${monthCursor.month + 1}月`
+  const monthLabel = t('date.monthYear', { year: monthCursor.year, month: monthCursor.month + 1 })
   const monthIsCurrent =
     monthCursor.year === new Date().getFullYear() && monthCursor.month === new Date().getMonth()
 
@@ -1423,11 +1469,12 @@ function App() {
       // 重复模板投影出「今天」的虚拟实例:每个发生日按自己生效的提醒时间弹通知。
       // 模板本身不直接提醒(recurrence 非空即跳过);去重 key 用实例 id,天然带发生日。
       const todayInstances = expandRecurrences(store.tasks, new Date(now), new Date(now))
-      for (const t of [...store.tasks, ...todayInstances]) {
-        if (t.done || t.recurrence || !t.remindAt || remindedRef.current!.has(t.id)) continue
-        if (new Date(t.remindAt).getTime() <= now) {
-          remindedRef.current!.add(t.id)
-          await notify('待办提醒', t.title)
+      for (const task of [...store.tasks, ...todayInstances]) {
+        if (task.done || task.recurrence || !task.remindAt || remindedRef.current!.has(task.id))
+          continue
+        if (new Date(task.remindAt).getTime() <= now) {
+          remindedRef.current!.add(task.id)
+          await notify(t('notify.taskReminder'), task.title)
         }
       }
 
@@ -1448,19 +1495,23 @@ function App() {
         const isAnniversary = (b.kind ?? 'birthday') === 'anniversary'
         const isToday = dayKeyOf(occurrence) === dayKeyOf(nowDate)
         const label = b.calendar === 'lunar'
-          ? `农历${formatLunar(b.month, b.day, b.isLeapMonth)}`
-          : `${b.month} 月 ${b.day} 日`
+          ? t('birthday.lunarDate', { date: formatLunar(b.month, b.day, b.isLeapMonth) })
+          : t('birthday.solarDate', { m: b.month, d: b.day })
         await notify(
           isToday
             ? isAnniversary
-              ? `今天是 ${b.name}`
-              : `今天是 ${b.name} 的生日`
+              ? t('birthday.todayAnniversary', { name: b.name })
+              : t('birthday.todayBirthday', { name: b.name })
             : isAnniversary
-              ? `${b.name} 快到了`
-              : `${b.name} 的生日快到了`,
+              ? t('birthday.upcomingAnniversary', { name: b.name })
+              : t('birthday.upcomingBirthday', { name: b.name }),
           isToday
-            ? `${label}${b.relation ? ` · ${b.relation}` : ''}`
-            : `${label} · 还有 ${daysUntilBirthday(b.calendar, b.month, b.day, b.isLeapMonth, nowDate)} 天`,
+            ? t('birthday.todayBody', { label, relation: b.relation ? ` · ${b.relation}` : '' })
+            : t('birthday.upcomingBody', {
+                label,
+                // daysUntilBirthday 理论上返回 null(日期非法),原模板串此时也按 "null" 渲染,断言仅消除类型噪音。
+                days: daysUntilBirthday(b.calendar, b.month, b.day, b.isLeapMonth, nowDate) as number,
+              }),
         )
       }
     }
@@ -1947,6 +1998,42 @@ function App() {
     }
   }, [dockGeom, isNative, isOpen, nativeHandleCenter, settings.handleHeight])
 
+  // 悬停自动展开:展开态下光标移出原生窗口 → 延时自动收起;延时期间重新进入则取消。
+  // relatedTarget 为 null 是「光标越过窗口边界」的标志(mouseout 离开 / mouseover 进入),
+  // 面板内部元素间移动 relatedTarget 不为 null,不会误触发。
+  useEffect(() => {
+    if (!settings.hoverAutoExpand) return
+    let timer: number | null = null
+    const schedule = () => {
+      if (timer !== null) return
+      timer = window.setTimeout(() => {
+        timer = null
+        if (!dragState.current && !dockAnimatingRef.current) setIsOpen(false)
+      }, HOVER_COLLAPSE_DELAY_MS)
+    }
+    const cancel = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+    }
+    const onMouseOut = (e: MouseEvent) => {
+      if (e.relatedTarget || !isOpen) return
+      schedule()
+    }
+    const onMouseOver = (e: MouseEvent) => {
+      if (e.relatedTarget) return
+      cancel()
+    }
+    window.addEventListener('mouseout', onMouseOut)
+    window.addEventListener('mouseover', onMouseOver)
+    return () => {
+      window.removeEventListener('mouseout', onMouseOut)
+      window.removeEventListener('mouseover', onMouseOver)
+      cancel()
+    }
+  }, [settings.hoverAutoExpand, isOpen])
+
   // ---- 主视图操作 ------------------------------------------------------------
 
   const handleRename = (task: Task, title: string) => {
@@ -1972,7 +2059,7 @@ function App() {
     if (!pending) return
     // 会员闸门:受限用户不能给重复事项添加子任务(- 与一次性事项同口径)。
     if (pending.kind === 'child' && !fullAccess) {
-      handleLocked('添加子任务')
+      handleLocked(t('feature.addSubtask'))
       return
     }
     if (pending.kind === 'edit') {
@@ -1994,7 +2081,7 @@ function App() {
     recurrence: Recurrence | null = null,
   ) => {
     // 会员闸门①:受限用户单日新建主任务上限(子任务/下级不计入,只数主任务)。
-    const quotaMsg = `单日最多新建 ${FREE_DAILY_TASK_LIMIT} 条,开通会员可解除限制`
+    const quotaMsg = t('quota.dailyLimit', { count: FREE_DAILY_TASK_LIMIT })
     if (!fullAccess && store.freeQuotaUsed >= FREE_DAILY_TASK_LIMIT) {
       setToast({ kind: 'err', text: quotaMsg })
       return
@@ -2019,7 +2106,7 @@ function App() {
     // 会员闸门②:受限用户不能添加子任务 / 下级;主任务照常创建,只丢弃层级。
     if (!fullAccess) {
       if (subs.some((s) => s.title.trim())) {
-        handleLocked('添加子任务')
+        handleLocked(t('feature.addSubtask'))
       }
       return
     }
@@ -2059,13 +2146,13 @@ function App() {
         setToast({
           kind: 'ok',
           text: quotaHint
-            ? `已添加 ${added} 条,超出单日上限的 ${dropped} 条未添加`
-            : `已从截图添加 ${added} 条任务`,
+            ? t('ocr.addedPartial', { added, dropped })
+            : t('ocr.added', { count: added }),
         })
       } else {
         setToast({
           kind: 'err',
-          text: `单日最多新建 ${FREE_DAILY_TASK_LIMIT} 条,开通会员可解除限制`,
+          text: t('quota.dailyLimit', { count: FREE_DAILY_TASK_LIMIT }),
         })
       }
     }).then((fn) => {
@@ -2163,7 +2250,7 @@ function App() {
     onAddChild: (parentId: string, title: string) => {
       // 会员闸门:受限用户不能添加子任务。
       if (!fullAccess) {
-        handleLocked('添加子任务')
+        handleLocked(t('feature.addSubtask'))
         return
       }
       // 重复事项的虚拟实例:弹出范围确认(仅本次 / 整组),否则直接加子任务。
@@ -2247,6 +2334,26 @@ function App() {
     setIsOpen((c) => !c)
   }
 
+  // 悬停自动展开:收起态光标移入把手 → 延时展开。收起态下命中测试轮询已把
+  // 光标所在区域放开为可点,mouseenter 可正常到达;移入动画/拖拽期间不触发。
+  const onHandleMouseEnter = () => {
+    if (!settings.hoverAutoExpand || isOpen) return
+    if (dragState.current || dockAnimatingRef.current) return
+    if (hoverExpandTimer.current !== null) return
+    hoverExpandTimer.current = window.setTimeout(() => {
+      hoverExpandTimer.current = null
+      setIsOpen(true)
+    }, HOVER_EXPAND_DELAY_MS)
+  }
+
+  // 延时到期前移出把手:取消本次自动展开(路过屏幕边缘不算悬停)。
+  const onHandleMouseLeave = () => {
+    if (hoverExpandTimer.current !== null) {
+      window.clearTimeout(hoverExpandTimer.current)
+      hoverExpandTimer.current = null
+    }
+  }
+
   const appStyle = {
     '--panel-width': `${effectivePanelWidth}px`,
     '--tab-width': `${settings.tabWidth}px`,
@@ -2272,8 +2379,8 @@ function App() {
       } dock-${settings.dockSide} theme-${settings.theme} bg-${settings.background}`}
       style={appStyle}
     >
-      <section className="desktop-preview" aria-label="Tacco 桌面预览" aria-hidden={isNative}>
-        <nav className="system-bar" aria-label="桌面菜单">
+      <section className="desktop-preview" aria-label={t('preview.desktopAria')} aria-hidden={isNative}>
+        <nav className="system-bar" aria-label={t('preview.menuAria')}>
           <div className="window-dots" aria-hidden="true">
             <span />
             <span />
@@ -2284,24 +2391,21 @@ function App() {
             <span>Tacco</span>
           </div>
           <div className="system-actions">
-            <button type="button" aria-label="搜索">
+            <button type="button" aria-label={t('common.search')}>
               <Search size={16} />
             </button>
-            <button type="button" aria-label="设置">
+            <button type="button" aria-label={t('common.settings')}>
               <Settings size={16} />
             </button>
           </div>
         </nav>
-        <section className="canvas" aria-label="桌面工作区">
+        <section className="canvas" aria-label={t('preview.workspaceAria')}>
           <div className="desk-copy">
             <div className="mark">
               <PanelRightOpenIcon />
             </div>
-            <h1>为专注工作而生的右缘待办栏。</h1>
-            <p>
-              浏览器页面仅为开发预览。正式产品是原生 macOS 与 Windows
-              桌面工具,支持快捷键、悬浮窗口与云端同步。
-            </p>
+            <h1>{t('preview.headline')}</h1>
+            <p>{t('preview.desc')}</p>
           </div>
         </section>
       </section>
@@ -2326,13 +2430,15 @@ function App() {
       <button
         className={`edge-handle ${isOpen ? 'is-open' : ''}`}
         type="button"
-        aria-label={isOpen ? '收起 Tacco' : '展开 Tacco'}
+        aria-label={isOpen ? t('app.collapseAria') : t('app.expandAria')}
         aria-expanded={isOpen}
         onPointerDown={onHandlePointerDown}
         onPointerMove={onHandlePointerMove}
         onPointerUp={onHandlePointerUp}
         onPointerCancel={onHandlePointerUp}
         onClick={onHandleClick}
+        onMouseEnter={onHandleMouseEnter}
+        onMouseLeave={onHandleMouseLeave}
       >
         <span className="handle-symbol" aria-hidden="true">
           <PanelRightOpenIcon className="handle-icon-open" size={15} />
@@ -2343,13 +2449,13 @@ function App() {
       <aside
         ref={setSidebarHost}
         className={`todo-sidebar ${isOpen ? 'is-open' : ''}`}
-        aria-label="Tacco 侧栏"
+        aria-label={t('app.sidebarAria')}
         aria-hidden={!isOpen}
       >
         {/* 独立页面(设置 / 万年历):绝对定位覆盖层,从右滑入展开、向右滑出关闭 */}
         <PageShell
           open={isSettingsOpen}
-          title="待办设置"
+          title={t('page.settings')}
           tone="settings"
           onClose={() => setIsSettingsOpen(false)}
         >
@@ -2384,26 +2490,26 @@ function App() {
             )}
           </div>
         </PageShell>
-        <PageShell open={huangliOpen} title="万年历" onClose={() => setHuangliOpen(false)}>
+        <PageShell open={huangliOpen} title={t('page.huangli')} onClose={() => setHuangliOpen(false)}>
           <HuangliView />
         </PageShell>
-        <PageShell open={calculatorOpen} title="计算器" onClose={() => setCalculatorOpen(false)}>
+        <PageShell open={calculatorOpen} title={t('page.calculator')} onClose={() => setCalculatorOpen(false)}>
           <ErrorBoundary label="计算器">
             <CalculatorView />
           </ErrorBoundary>
         </PageShell>
-        <PageShell open={salaryOpen} title="牛马计薪器" onClose={() => setSalaryOpen(false)}>
+        <PageShell open={salaryOpen} title={t('page.salary')} onClose={() => setSalaryOpen(false)}>
           <ErrorBoundary label="牛马计薪器">
             <SalaryView />
           </ErrorBoundary>
         </PageShell>
-        <PageShell open={recorderOpen} title="录音机" onClose={() => setRecorderOpen(false)}>
+        <PageShell open={recorderOpen} title={t('page.recorder')} onClose={() => setRecorderOpen(false)}>
           <ErrorBoundary label="录音机">
             <RecorderView />
           </ErrorBoundary>
         </PageShell>
         {caps().clothesline && (
-          <PageShell open={clotheslineOpen} title="晾衣绳" onClose={() => setClotheslineOpen(false)}>
+          <PageShell open={clotheslineOpen} title={t('page.clothesline')} onClose={() => setClotheslineOpen(false)}>
             <ErrorBoundary label="晾衣绳设置">
               <ClotheslineSettingsPage />
             </ErrorBoundary>
@@ -2412,9 +2518,9 @@ function App() {
         {/* ★2026-11-18 归档：统一归档页（便利签 / 随手记 / 番茄），总数胶囊挂顶栏右侧 */}
         <PageShell
           open={archiveOpen}
-          title="归档"
+          title={t('page.archive')}
           onClose={() => setArchiveOpen(false)}
-          actions={<span className="arch-total">{archiveCount} 条</span>}
+          actions={<span className="arch-total">{archiveCount} {t('common.items')}</span>}
         >
           <ErrorBoundary label="归档">
             <ArchiveView onCountChange={setArchiveCount} />
@@ -2431,39 +2537,39 @@ function App() {
               </div>
               <div className="icon-cluster">
                 {/* 动态槽位:按用户配置的顺序占用顶栏,装不下的收进「⋯ 更多」 */}
-                {topbar.shown.map((t) => {
+                {topbar.shown.map((tool) => {
                   const active =
-                    t.id === 'calculator' ? calculatorOpen
-                      : t.id === 'huangli' ? huangliOpen
-                        : t.id === 'salary' ? salaryOpen
-                          : t.id === 'recorder' ? recorderOpen
-                            : t.id === 'clothesline' ? clotheslineOpen
+                    tool.id === 'calculator' ? calculatorOpen
+                      : tool.id === 'huangli' ? huangliOpen
+                        : tool.id === 'salary' ? salaryOpen
+                          : tool.id === 'recorder' ? recorderOpen
+                            : tool.id === 'clothesline' ? clotheslineOpen
                               : false
                   const cls = [
-                    t.id === 'recorder' ? 'rec-entry' : '',
+                    tool.id === 'recorder' ? 'rec-entry' : '',
                     active ? 'is-active' : '',
-                    t.id === 'sync' && store.syncState.status === 'syncing' ? 'is-syncing' : '',
+                    tool.id === 'sync' && store.syncState.status === 'syncing' ? 'is-syncing' : '',
                   ].filter(Boolean).join(' ')
                   const button = (
                     <button
-                      key={t.id}
+                      key={tool.id}
                       type="button"
                       className={cls || undefined}
-                      aria-label={t.name}
+                      aria-label={toolName(tool.id)}
                       aria-pressed={active || undefined}
-                      data-tip={t.tip}
-                      onClick={() => runTopbarTool(t.id, t.name)}
+                      data-tip={toolTip(tool.id)}
+                      onClick={() => runTopbarTool(tool.id, toolName(tool.id))}
                     >
-                      <TopbarToolIcon id={t.id} />
-                      {t.id === 'recorder' && recorderActive ? (
+                      <TopbarToolIcon id={tool.id} />
+                      {tool.id === 'recorder' && recorderActive ? (
                         <i className="rec-dot" aria-hidden="true" />
                       ) : null}
                     </button>
                   )
                   // 同步图标下方仍挂「上次同步时间」,沿用原 .sync-cluster 包装。
-                  if (t.id === 'sync') {
+                  if (tool.id === 'sync') {
                     return (
-                      <div className="sync-cluster" key={`wrap-${t.id}`}>
+                      <div className="sync-cluster" key={`wrap-${tool.id}`}>
                         {button}
                         <em className="sync-cluster-time">{lastSyncLabel}</em>
                       </div>
@@ -2476,11 +2582,11 @@ function App() {
                     ref={moreBtnRef}
                     type="button"
                     className={moreOpen ? 'is-active' : ''}
-                    aria-label="更多工具"
+                    aria-label={t('topbar.more')}
                     aria-expanded={moreOpen}
                     aria-haspopup="menu"
                     // 菜单展开时撤掉 tooltip:鼠标仍停在按钮上,气泡会盖住菜单头部。
-                    data-tip={moreOpen ? undefined : `更多工具 (${topbar.hidden.length})`}
+                    data-tip={moreOpen ? undefined : t('topbar.moreCount', { count: topbar.hidden.length })}
                     onClick={() => setMoreOpen((c) => !c)}
                   >
                     <Ellipsis size={16} />
@@ -2490,9 +2596,9 @@ function App() {
                 <button
                   type="button"
                   className={isSettingsOpen ? 'is-active' : ''}
-                  aria-label="侧栏设置"
+                  aria-label={t('topbar.sidebarSettings')}
                   aria-pressed={isSettingsOpen}
-                  data-tip="设置"
+                  data-tip={t('topbar.settings')}
                   onClick={openSettingsPage}
                 >
                   <Settings size={16} />
@@ -2516,7 +2622,7 @@ function App() {
             </header>
 
             <div className="sidebar-pinned">
-              <nav className="tab-bar" role="tablist" aria-label="待办分类">
+              <nav className="tab-bar" role="tablist" aria-label={t('tab.barAria')}>
                 {TABS.map((tab) => (
                   <button
                     key={tab.key}
@@ -2533,14 +2639,14 @@ function App() {
                       setMonthCursor({ year: now.getFullYear(), month: now.getMonth() })
                     }}
                   >
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </button>
                 ))}
               </nav>
 
               {activeTab === 'day' && (
                 <>
-                  <div className="date-strip" ref={dateStripRef} aria-label="日期选择">
+                  <div className="date-strip" ref={dateStripRef} aria-label={t('date.stripAria')}>
                     {dateStrip.map((chip) => (
                       <button
                         type="button"
@@ -2551,7 +2657,7 @@ function App() {
                         }`}
                         aria-pressed={chip.key === selectedDateKey}
                         aria-label={`${chip.dayLabel} ${chip.weekLabel}${
-                          chip.dot === 'open' ? ',有未完成待办' : chip.dot === 'done' ? ',已全部完成' : ''
+                          chip.dot === 'open' ? t('date.dotOpen') : chip.dot === 'done' ? t('date.dotDone') : ''
                         }`}
                         onClick={() => setSelectedDateKey(chip.key)}
                       >
@@ -2563,7 +2669,7 @@ function App() {
                   </div>
                   <div className="range-label">
                     {selectedDateLabel}
-                    <em>{dayTop.length} 项</em>
+                    <em>{dayTop.length} {t('common.unit')}</em>
                   </div>
                 </>
               )}
@@ -2574,19 +2680,19 @@ function App() {
                     <button
                       type="button"
                       className="range-nav-button"
-                      aria-label="上一周"
+                      aria-label={t('week.prevAria')}
                       onClick={() => shiftWeek(-1)}
                     >
                       <ChevronLeft size={15} />
                     </button>
                     <div className="range-nav-label">
-                      <strong>{weekRangeLabel.isCurrent ? '本周' : `一周`}</strong>
+                      <strong>{weekRangeLabel.isCurrent ? t('week.thisWeek') : t('week.aWeek')}</strong>
                       <em>{weekRangeLabel.text}</em>
                     </div>
                     <button
                       type="button"
                       className="range-nav-button"
-                      aria-label="下一周"
+                      aria-label={t('week.nextAria')}
                       onClick={() => shiftWeek(1)}
                     >
                       <ChevronRight size={15} />
@@ -2598,12 +2704,12 @@ function App() {
                       className="range-today-link"
                       onClick={() => setWeekAnchor(mondayOf(new Date()).getTime())}
                     >
-                      回到本周
+                      {t('week.back')}
                     </button>
                   )}
                   <div className="range-label">
-                    本周待办
-                    <em>{weekTotal} 项</em>
+                    {t('week.todoTitle')}
+                    <em>{weekTotal} {t('common.unit')}</em>
                   </div>
                 </>
               )}
@@ -2614,7 +2720,7 @@ function App() {
                     <button
                       type="button"
                       className="range-nav-button"
-                      aria-label="上一月"
+                      aria-label={t('month.prevAria')}
                       onClick={() => shiftMonth(-1)}
                     >
                       <ChevronLeft size={15} />
@@ -2625,7 +2731,7 @@ function App() {
                     <button
                       type="button"
                       className="range-nav-button"
-                      aria-label="下一月"
+                      aria-label={t('month.nextAria')}
                       onClick={() => shiftMonth(1)}
                     >
                       <ChevronRight size={15} />
@@ -2640,12 +2746,12 @@ function App() {
                         setMonthCursor({ year: now.getFullYear(), month: now.getMonth() })
                       }}
                     >
-                      回到本月
+                      {t('month.back')}
                     </button>
                   )}
                   <div className="range-label">
-                    本月待办
-                    <em>{monthTotal} 项</em>
+                    {t('month.todoTitle')}
+                    <em>{monthTotal} {t('common.unit')}</em>
                   </div>
                 </>
               )}
@@ -2655,7 +2761,7 @@ function App() {
               {activeTab === 'day' && (
                 <div className="tree-list list-anim" key={selectedDateKey}>
                   {dayTop.length === 0 ? (
-                    <div className="tree-empty">当天暂无待办,点击下方「添加事项」新建。</div>
+                    <div className="tree-empty">{t('day.empty')}</div>
                   ) : (
                     dayTop.map((t) => (
                       <TaskNode
@@ -2678,11 +2784,11 @@ function App() {
                         <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
                           <span>{group.label}</span>
                           <div className="range-group-actions">
-                            <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                            <em>{group.items.filter((item) => !item.done).length} {t('common.pending')}</em>
                             <button
                               type="button"
                               className="icon-button range-group-add"
-                              aria-label={`在 ${group.label} 添加事项`}
+                              aria-label={t('add.atGroup', { label: group.label })}
                               onClick={() => openAddSheetForDate(group.key)}
                             >
                               <Plus size={13} />
@@ -2703,7 +2809,7 @@ function App() {
                       </div>
                     ) : null,
                   )}
-                  {weekTotal === 0 && <div className="tree-empty">本周暂无待办。</div>}
+                  {weekTotal === 0 && <div className="tree-empty">{t('week.empty')}</div>}
                 </>
               )}
 
@@ -2714,13 +2820,13 @@ function App() {
                       <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
                         <span>{group.label}</span>
                         <div className="range-group-actions">
-                          <em>{group.items.filter((t) => !t.done).length} 待完成</em>
+                          <em>{group.items.filter((item) => !item.done).length} {t('common.pending')}</em>
                           {/* 「未安排日期」不是真实日期,不提供按日新增入口。 */}
                           {group.key !== 'undated' && (
                             <button
                               type="button"
                               className="icon-button range-group-add"
-                              aria-label={`在 ${group.label} 添加事项`}
+                              aria-label={t('add.atGroup', { label: group.label })}
                               onClick={() => openAddSheetForDate(group.key)}
                             >
                               <Plus size={13} />
@@ -2741,14 +2847,14 @@ function App() {
                       </div>
                     </div>
                   ))}
-                  {monthTotal === 0 && <div className="tree-empty">本月暂无待办。</div>}
+                  {monthTotal === 0 && <div className="tree-empty">{t('month.empty')}</div>}
                 </>
               )}
 
               {activeTab === 'birthday' && (
                 <div className="birthday-view">
                   <OccasionGroup
-                    title="生日"
+                    title={t('birthday.title')}
                     icon={<Cake size={13} />}
                     items={birthdayItems}
                     collapsed={occasionCollapsed.birthday}
@@ -2756,15 +2862,15 @@ function App() {
                       setOccasionCollapsed((s) => ({ ...s, birthday: !s.birthday }))
                     }
                     onOpen={setBirthdaySheet}
-                    emptyText="还没有记录生日,点下方「添加生日」记下家人和好友的生日吧。"
+                    emptyText={t('birthday.empty')}
                     summary={
                       birthdayUpcomingCount > 0
-                        ? `未来 30 天内有 ${birthdayUpcomingCount} 个生日`
+                        ? t('birthday.upcomingSummary', { count: birthdayUpcomingCount })
                         : null
                     }
                   />
                   <OccasionGroup
-                    title="纪念日"
+                    title={t('anniversary.title')}
                     icon={<Gift size={13} />}
                     items={anniversaryItems}
                     collapsed={occasionCollapsed.anniversary}
@@ -2772,7 +2878,7 @@ function App() {
                       setOccasionCollapsed((s) => ({ ...s, anniversary: !s.anniversary }))
                     }
                     onOpen={setBirthdaySheet}
-                    emptyText="还没有纪念日,点下方「添加纪念日」记下值得纪念的日子吧。"
+                    emptyText={t('anniversary.empty')}
                     summary={null}
                   />
                 </div>
@@ -2787,14 +2893,14 @@ function App() {
                   onClick={() => {
                     // 会员闸门:受限用户不能新增生日(已有记录仍可查看编辑)。
                     if (!fullAccess) {
-                      handleLocked('添加生日')
+                      handleLocked(t('feature.addBirthday'))
                       return
                     }
                     setBirthdaySheet('new-birthday')
                   }}
                 >
                   <Cake size={16} />
-                  添加生日
+                  {t('feature.addBirthday')}
                 </button>
                 <button
                   type="button"
@@ -2802,20 +2908,20 @@ function App() {
                   onClick={() => {
                     // 会员闸门:受限用户不能新增纪念日。
                     if (!fullAccess) {
-                      handleLocked('添加纪念日')
+                      handleLocked(t('feature.addAnniversary'))
                       return
                     }
                     setBirthdaySheet('new-anniversary')
                   }}
                 >
                   <Gift size={16} />
-                  添加纪念日
+                  {t('feature.addAnniversary')}
                 </button>
               </div>
             ) : (
               <button type="button" className="fab-add" onClick={() => { trackFeature('add-task'); setAddSheetDateKey(null); setAddSheetOpen(true) }}>
                 <Plus size={16} />
-                添加事项
+                {t('add.task')}
               </button>
             )}
 
@@ -2823,7 +2929,11 @@ function App() {
               <AddTaskSheet
                 dateLabel={
                   addSheetDateLabel ??
-                  (activeTab === 'day' ? selectedDateLabel : activeTab === 'week' ? '本周' : '本月')
+                  (activeTab === 'day'
+                    ? selectedDateLabel
+                    : activeTab === 'week'
+                      ? t('week.thisWeek')
+                      : t('month.thisMonth'))
                 }
                 onClose={() => {
                   setAddSheetOpen(false)
@@ -2875,35 +2985,38 @@ function App() {
                 <div
                   className="sheet confirm-sheet"
                   role="dialog"
-                  aria-label="重复事项范围"
+                  aria-label={t('recur.scopeAria')}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="sheet-grip" aria-hidden="true" />
                   <div className="sheet-title">
-                    {recurScope.kind === 'edit' ? '编辑重复事项' : '添加子任务'}
+                    {recurScope.kind === 'edit' ? t('recur.editTitle') : t('feature.addSubtask')}
                   </div>
                   <p className="confirm-desc">
-                    该事项在多个日期重复出现,请选择本次
-                    {recurScope.kind === 'edit' ? '修改' : '操作'}的范围:
+                    {t('recur.scopeDesc', {
+                      action: recurScope.kind === 'edit' ? t('recur.actionEdit') : t('recur.actionOperate'),
+                    })}
                   </p>
                   <button
                     type="button"
                     className="sheet-danger"
                     onClick={() => applyRecurScope('this')}
                   >
-                    仅本次（{recurScope.dateKey.slice(5)}{' '}
-                    {WEEKDAY_CN[parseDayKey(recurScope.dateKey).getDay()]}）
+                    {t('recur.thisOnce', {
+                      date: recurScope.dateKey.slice(5),
+                      week: t(WEEKDAY_KEYS[parseDayKey(recurScope.dateKey).getDay()]),
+                    })}
                   </button>
                   <button
                     type="button"
                     className="sheet-danger is-strong"
                     onClick={() => applyRecurScope('all')}
                   >
-                    应用到所有重复日
+                    {t('recur.applyAll')}
                   </button>
                   <div className="sheet-actions">
                     <button type="button" onClick={() => setRecurScope(null)}>
-                      取消
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -2920,7 +3033,9 @@ function App() {
                   } else if (!store.addBirthday(draft)) {
                     // 会员闸门兜底:入口已拦,这里防止其他路径绕过时静默失败。
                     handleLocked(
-                      birthdaySheet === 'new-anniversary' ? '添加纪念日' : '添加生日',
+                      birthdaySheet === 'new-anniversary'
+                        ? t('feature.addAnniversary')
+                        : t('feature.addBirthday'),
                     )
                   }
                   setBirthdaySheet(null)
@@ -2945,25 +3060,25 @@ function App() {
                 <div
                   className="sheet confirm-sheet"
                   role="dialog"
-                  aria-label="恢复云端数据"
+                  aria-label={t('feature.restoreCloud')}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="sheet-grip" aria-hidden="true" />
-                  <div className="sheet-title">恢复云端数据</div>
+                  <div className="sheet-title">{t('feature.restoreCloud')}</div>
                   <p className="confirm-desc">
-                    将云端数据拉取到本设备。请选择恢复方式（不影响云端已保存的数据）：
+                    {t('restore.desc')}
                   </p>
                   <button type="button" className="sheet-danger is-strong" onClick={() => handleRestore('overwrite')}>
-                    覆盖本地数据
-                    <span className="sheet-sub">用云端完全替换本地：本地独有事项将被移除</span>
+                    {t('restore.overwrite')}
+                    <span className="sheet-sub">{t('restore.overwriteSub')}</span>
                   </button>
                   <button type="button" className="sheet-primary" onClick={() => handleRestore('merge')}>
-                    在现有基础上添加
-                    <span className="sheet-sub">仅补充云端有、本地无的事项；同名事项按 ID 跳过，不会产生重复</span>
+                    {t('restore.merge')}
+                    <span className="sheet-sub">{t('restore.mergeSub')}</span>
                   </button>
                   <div className="sheet-actions">
                     <button type="button" onClick={() => setRestoreSheetOpen(false)}>
-                      取消
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -3001,9 +3116,12 @@ function App() {
                     try {
                       const migrated = (await store.switchAccountProfile(acc.email)) ?? 0
                       if (migrated > 0)
-                        setToast({ kind: 'ok', text: `已把本地 ${migrated} 条数据并入账号` })
+                        setToast({ kind: 'ok', text: t('sync.mergedLocal', { count: migrated }) })
                     } catch (e) {
-                      setToast({ kind: 'err', text: `切换账号数据失败: ${(e as Error).message}` })
+                      setToast({
+                        kind: 'err',
+                        text: t('account.switchFail', { message: (e as Error).message }),
+                      })
                     }
                     store.setSyncConfig({ enabled: true, endpoint: AUTH_BASE, token: acc.token })
                   })()
@@ -3112,24 +3230,25 @@ function TopbarMoreMenu({
   topmost: boolean
   onToggleTopmost: () => void
 }) {
+  const { t } = useI18n()
   return (
-    <div className="topbar-menu" ref={menuRef} role="menu" aria-label="更多工具">
+    <div className="topbar-menu" ref={menuRef} role="menu" aria-label={t('topbar.more')}>
       <div className="tm-head">
-        <span>更多工具</span>
-        <em>已收起 {hidden.length} 个</em>
+        <span>{t('topbar.more')}</span>
+        <em>{t('topbar.collapsedCount', { count: hidden.length })}</em>
       </div>
-      {hidden.map((t) => (
+      {hidden.map((tool) => (
         <button
           type="button"
           className="tm-item"
-          key={t.id}
+          key={tool.id}
           role="menuitem"
-          onClick={() => onRun(t.id, t.name)}
+          onClick={() => onRun(tool.id, toolName(tool.id))}
         >
-          <TopbarToolIcon id={t.id} size={15} />
-          <span className="nm">{t.name}</span>
-          {t.vip ? <span className="tm-vip">会员</span> : null}
-          {shortcutLabels[t.id] ? <span className="kd">{shortcutLabels[t.id]}</span> : null}
+          <TopbarToolIcon id={tool.id} size={15} />
+          <span className="nm">{toolName(tool.id)}</span>
+          {tool.vip ? <span className="tm-vip">{t('common.vip')}</span> : null}
+          {shortcutLabels[tool.id] ? <span className="kd">{shortcutLabels[tool.id]}</span> : null}
         </button>
       ))}
       <div className="tm-sep" />
@@ -3145,14 +3264,14 @@ function TopbarMoreMenu({
         }}
       >
         <Shirt size={15} />
-        <span className="nm">晾衣绳置顶</span>
+        <span className="nm">{t('topbar.clotheslineTopmost')}</span>
         <span className={`tm-mini-switch ${topmost ? 'is-on' : ''}`}>
           <i />
         </span>
       </button>
       <button type="button" className="tm-manage" onClick={onManage}>
         <Settings size={14} />
-        管理顶栏入口…
+        {t('topbar.manage')}
       </button>
     </div>
   )
@@ -3174,12 +3293,13 @@ function TopbarToolsSetting({
   focusToken: number
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const { t } = useI18n()
   const { shown, hidden } = splitTopbarTools(pref, panelWidth)
   // 统计口径与可见工具一致:剔除当前平台不支持的工具。
-  const supportedTools = TOPBAR_TOOLS.filter((t) => !t.requires || (capsReady() && allows(t.requires)))
+  const supportedTools = TOPBAR_TOOLS.filter((t) => !t.requires || allows(t.requires))
   const supportedEnabled = pref.enabled.filter((id) => {
     const t = TOPBAR_TOOLS.find((x) => x.id === id)
-    return t && (!t.requires || (capsReady() && allows(t.requires)))
+    return t && (!t.requires || allows(t.requires))
   })
   const offCount = supportedTools.length - supportedEnabled.length
 
@@ -3191,24 +3311,25 @@ function TopbarToolsSetting({
 
   return (
     <div className="settings-group" id="topbar-tools-group">
-      <div className="settings-group-title">顶栏快捷入口</div>
+      <div className="settings-group-title">{t('topbar.groupTitle')}</div>
       <button
         type="button"
         className="tt-entry"
         onClick={() => setSheetOpen(true)}
-        aria-label="管理顶栏快捷入口"
+        aria-label={t('topbar.manageAria')}
       >
         <span className="tt-entry-ico"><Settings size={15} /></span>
         <span className="tt-entry-text">
-          <strong>管理工具入口</strong>
+          <strong>{t('topbar.manageTools')}</strong>
           <em>
-            顶栏 {shown.length} 个 · 更多 {hidden.length} 个
-            {offCount > 0 ? ` · 隐藏 ${offCount} 个` : ''}
+            {offCount > 0
+              ? t('topbar.statOff', { shown: shown.length, hidden: hidden.length, off: offCount })
+              : t('topbar.stat', { shown: shown.length, hidden: hidden.length })}
           </em>
         </span>
         <ChevronRight size={14} />
       </button>
-      <p className="settings-hint">可调整顶部栏工具顺序</p>
+      <p className="settings-hint">{t('topbar.hint')}</p>
       {sheetOpen ? (
         <TopbarToolsSheet
           pref={pref}
@@ -3237,6 +3358,7 @@ function TopbarToolsSheet({
   onClose: () => void
 }) {
   const { closing, requestClose } = useSheetClose(onClose)
+  const { t } = useI18n()
   const [draft, setDraft] = useState<TopbarToolsPref>(() => sanitizeTopbarTools(pref))
 
   useEffect(() => {
@@ -3251,7 +3373,7 @@ function TopbarToolsSheet({
   const rows = draft.order
     .map((id) => TOPBAR_TOOLS.find((t) => t.id === id))
     .filter((t): t is TopbarTool => Boolean(t))
-    .filter((t) => !t.requires || (capsReady() && allows(t.requires)))
+    .filter((t) => !t.requires || allows(t.requires))
 
   const toggle = (id: TopbarToolId) => {
     const enabled = draft.enabled.includes(id)
@@ -3281,48 +3403,46 @@ function TopbarToolsSheet({
       <div
         className={`sheet tt-sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="顶栏快捷入口"
+        aria-label={t('topbar.groupTitle')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">顶栏快捷入口</div>
-        <p className="settings-hint">
-          勾选要显示的工具，用箭头调整顺序；靠前的优先占用顶栏，其余自动收进「⋯ 更多」。
-        </p>
+        <div className="sheet-title">{t('topbar.groupTitle')}</div>
+        <p className="settings-hint">{t('topbar.sheetHint')}</p>
         <div className="tt-list">
-          {rows.map((t, i) => {
-            const on = draft.enabled.includes(t.id)
-            const pos = topbarPosition(draft, t.id, panelWidth)
+          {rows.map((tool, i) => {
+            const on = draft.enabled.includes(tool.id)
+            const pos = topbarPosition(draft, tool.id, panelWidth)
             return (
-              <div className={`tt-row ${on ? '' : 'is-off'}`} key={t.id}>
+              <div className={`tt-row ${on ? '' : 'is-off'}`} key={tool.id}>
                 <button
                   type="button"
                   className={`tt-check ${on ? 'is-on' : ''}`}
                   aria-pressed={on}
-                  aria-label={`${on ? '隐藏' : '显示'}${t.name}入口`}
-                  onClick={() => toggle(t.id)}
+                  aria-label={t(on ? 'topbar.hideAria' : 'topbar.showAria', { name: toolName(tool.id) })}
+                  onClick={() => toggle(tool.id)}
                 >
                   {on ? <Check size={11} strokeWidth={3} /> : null}
                 </button>
-                <span className="tt-icon"><TopbarToolIcon id={t.id} size={15} /></span>
-                <span className="tt-nm">{t.name}</span>
+                <span className="tt-icon"><TopbarToolIcon id={tool.id} size={15} /></span>
+                <span className="tt-nm">{toolName(tool.id)}</span>
                 <span className={`tt-pos ${pos === 'top' ? 'is-top' : ''}`}>
-                  {pos === 'top' ? '顶栏' : pos === 'more' ? '更多' : '隐藏'}
+                  {pos === 'top' ? t('topbar.pos.top') : pos === 'more' ? t('topbar.pos.more') : t('topbar.pos.off')}
                 </span>
                 <span className="tt-move">
                   <button
                     type="button"
-                    aria-label={`上移${t.name}`}
+                    aria-label={t('topbar.moveUpAria', { name: toolName(tool.id) })}
                     disabled={i === 0}
-                    onClick={() => move(t.id, -1)}
+                    onClick={() => move(tool.id, -1)}
                   >
                     <ChevronUp size={11} />
                   </button>
                   <button
                     type="button"
-                    aria-label={`下移${t.name}`}
+                    aria-label={t('topbar.moveDownAria', { name: toolName(tool.id) })}
                     disabled={i === rows.length - 1}
-                    onClick={() => move(t.id, 1)}
+                    onClick={() => move(tool.id, 1)}
                   >
                     <ChevronDown size={11} />
                   </button>
@@ -3337,18 +3457,18 @@ function TopbarToolsSheet({
             className="tt-reset"
             onClick={() => setDraft({ ...DEFAULT_TOPBAR_TOOLS })}
           >
-            恢复默认
+            {t('dataDir.reset')}
           </button>
           <div className="tt-sheet-buttons">
             <button type="button" className="tt-btn" onClick={requestClose}>
-              取消
+              {t('common.cancel')}
             </button>
             <button type="button" className="tt-btn is-primary" onClick={save}>
-              保存
+              {t('common.save')}
             </button>
           </div>
         </div>
-        <p className="settings-hint">保存后才会更新顶栏；取消则保留原配置。</p>
+        <p className="settings-hint">{t('topbar.saveHint')}</p>
       </div>
     </div>
   )
@@ -3366,8 +3486,9 @@ function DockPositionSetting({
   fallback: boolean
   onChange: (patch: Partial<SidebarSettings>) => void
 }) {
+  const { t } = useI18n()
   const [options, setOptions] = useState<DockMonitorOption[]>([
-    { value: 'primary', label: '主屏' },
+    { value: 'primary', label: t('dock.primary') },
   ])
   const [count, setCount] = useState(0)
   useEffect(() => {
@@ -3386,37 +3507,37 @@ function DockPositionSetting({
   // 之前选过的屏被拔掉时,保留该项让用户看得见,配合「已回退」提示。
   const shownOptions = options.some((o) => o.value === targetMonitor)
     ? options
-    : [...options, { value: targetMonitor, label: '原屏幕（当前不可用）' }]
+    : [...options, { value: targetMonitor, label: t('dock.unavailable') }]
 
   return (
     <div className="settings-group" id="dock-position-group">
-      <div className="settings-group-title">窗口位置</div>
+      <div className="settings-group-title">{t('settings.group.dockPos')}</div>
       <div className="dock-setting-row">
-        <span>贴边方向</span>
-        <div className="segmented-control" aria-label="贴边方向">
+        <span>{t('settings.dock.side')}</span>
+        <div className="segmented-control" aria-label={t('settings.dock.side')}>
           <button
             type="button"
             className={dockSide === 'left' ? 'is-selected' : ''}
             onClick={() => onChange({ dockSide: 'left' })}
           >
-            桌面左侧
+            {t('settings.dock.left')}
           </button>
           <button
             type="button"
             className={dockSide === 'right' ? 'is-selected' : ''}
             onClick={() => onChange({ dockSide: 'right' })}
           >
-            桌面右侧
+            {t('settings.dock.right')}
           </button>
         </div>
       </div>
       <div className={`dock-setting-row ${multi ? '' : 'is-disabled'}`}>
-        <span>显示屏幕</span>
+        <span>{t('settings.dock.screen')}</span>
         <select
           className="dock-select"
           value={targetMonitor}
           disabled={!multi}
-          aria-label="显示屏幕"
+          aria-label={t('settings.dock.screen')}
           onChange={(e) => onChange({ targetMonitor: e.target.value })}
         >
           {shownOptions.map((o) => (
@@ -3428,10 +3549,10 @@ function DockPositionSetting({
       </div>
       <p className="settings-hint">
         {fallback
-          ? '指定的屏幕当前不可用，已临时回退到主屏；重新接入后可切回。'
+          ? t('settings.dock.fallback')
           : multi
-            ? '切换后立即生效，无需重启。'
-            : '当前仅检测到 1 个显示器，接入副屏后可选择。'}
+            ? t('settings.dock.multi')
+            : t('settings.dock.single')}
       </p>
     </div>
   )
@@ -3463,6 +3584,7 @@ function PageShell({
   actions?: ReactNode
   children: ReactNode
 }) {
+  const { t } = useI18n()
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
   useEffect(() => {
@@ -3491,7 +3613,7 @@ function PageShell({
     >
       <div className="page-panel-header">
         <div className="page-panel-title">
-          <button type="button" aria-label="返回" onClick={onClose}>
+          <button type="button" aria-label={t('common.back')} onClick={onClose}>
             <ArrowLeft size={16} />
           </button>
           <strong>{title}</strong>
@@ -3516,6 +3638,7 @@ function VersionSetting({
   update: UpdateState
   setUpdate: Dispatch<SetStateAction<UpdateState>>
 }) {
+  const { t } = useI18n()
   async function checkUpdate() {
     setUpdate({ status: 'checking' })
     try {
@@ -3526,14 +3649,14 @@ function VersionSetting({
           : { status: 'latest' },
       )
     } catch (err) {
-      setUpdate({ status: 'error', message: `检查失败: ${(err as Error).message}` })
+      setUpdate({ status: 'error', message: t('version.checkFail', { message: (err as Error).message }) })
     }
   }
   return (
     <div className="settings-group settings-appearance">
-      <div className="settings-group-title">版本</div>
+      <div className="settings-group-title">{t('settings.group.version')}</div>
       <div className="sync-now-button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', padding: 0, border: 'none', cursor: 'default' }}>
-        <span style={{ fontSize: 13 }}>当前版本{appVersion ? ` v${appVersion}` : ''}</span>
+        <span style={{ fontSize: 13 }}>{t('version.current')}{appVersion ? ` v${appVersion}` : ''}</span>
         <button
           type="button"
           className="sync-now-button"
@@ -3541,7 +3664,7 @@ function VersionSetting({
           onClick={() => void checkUpdate()}
           disabled={update.status === 'checking' || update.status === 'downloading' || !appVersion}
         >
-          {update.status === 'checking' ? '检查中…' : update.status === 'downloading' ? '下载中…' : '检查更新'}
+          {update.status === 'checking' ? t('version.checking') : update.status === 'downloading' ? t('version.downloading') : t('version.check')}
         </button>
       </div>
       {update.status === 'available' ? (
@@ -3551,19 +3674,19 @@ function VersionSetting({
           onClick={() => void downloadAndInstall(update.version, update.url, setUpdate)}
         >
           {caps().inAppUpdate
-            ? `下载并安装 v${update.version}`
-            : `前往官网下载 v${update.version}`}
+            ? t('version.installInApp', { version: update.version })
+            : t('version.goWebsite', { version: update.version })}
         </button>
       ) : null}
       {update.status === 'latest' ? (
-        <div className="sync-status" aria-live="polite">已是最新版本</div>
+        <div className="sync-status" aria-live="polite">{t('version.latest')}</div>
       ) : null}
       {update.status === 'downloading' ? (
-        <div className="sync-status" aria-live="polite">正在下载 v{update.version},完成后将自动打开安装程序…</div>
+        <div className="sync-status" aria-live="polite">{t('version.downloadingLong', { version: update.version })}</div>
       ) : null}
       {update.status === 'installing' ? (
         <div className="sync-status" aria-live="polite">
-          安装程序即将启动,Tacco 会先退出以完成覆盖安装;请在弹出的安装向导中点「安装」,完成后会自动创建桌面快捷方式。
+          {t('version.installing')}
         </div>
       ) : null}
       {update.status === 'error' ? (
@@ -3572,7 +3695,7 @@ function VersionSetting({
           {update.url ? (
             <>
               <div style={{ marginTop: 6 }}>
-                可手动下载安装包,双击运行即可覆盖安装(无需卸载旧版):
+                {t('version.manualDownload')}
               </div>
               <div style={{ marginTop: 4, wordBreak: 'break-all' }}>
                 <a href={update.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
@@ -3592,6 +3715,7 @@ function VersionSetting({
 // 数据默认本地持久化;开启云同步后与云端定时/手动保持一致。
 // ---------------------------------------------------------------------------
 function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
+  const { t } = useI18n()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [current, setCurrent] = useState<string | null>(() => SqliteStore.getDataDir())
@@ -3643,7 +3767,7 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
 
   async function pickDir() {
     if (!isTauriRuntime()) {
-      setMsg({ kind: 'err', text: '仅桌面端支持更改存储位置' })
+      setMsg({ kind: 'err', text: t('dataDir.desktopOnly') })
       return
     }
     setBusy(true)
@@ -3656,9 +3780,9 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
         return
       }
       await applyDataDir(selected)
-      setMsg({ kind: 'ok', text: '存储位置已更改' })
+      setMsg({ kind: 'ok', text: t('dataDir.changed') })
     } catch (e) {
-      setMsg({ kind: 'err', text: `更改失败: ${(e as Error).message}` })
+      setMsg({ kind: 'err', text: t('dataDir.changeFail', { message: (e as Error).message }) })
     } finally {
       setBusy(false)
     }
@@ -3666,16 +3790,16 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
 
   async function resetDir() {
     if (!isTauriRuntime()) {
-      setMsg({ kind: 'err', text: '仅桌面端支持' })
+      setMsg({ kind: 'err', text: t('dataDir.desktopOnlyShort') })
       return
     }
     setBusy(true)
     setMsg(null)
     try {
       await applyDataDir(null)
-      setMsg({ kind: 'ok', text: '已恢复默认存储位置' })
+      setMsg({ kind: 'ok', text: t('dataDir.resetDone') })
     } catch (e) {
-      setMsg({ kind: 'err', text: `恢复失败: ${(e as Error).message}` })
+      setMsg({ kind: 'err', text: t('dataDir.resetFail', { message: (e as Error).message }) })
     } finally {
       setBusy(false)
     }
@@ -3683,20 +3807,20 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
 
   async function openFolder() {
     if (!isTauriRuntime()) {
-      setMsg({ kind: 'err', text: '仅桌面端支持' })
+      setMsg({ kind: 'err', text: t('dataDir.desktopOnlyShort') })
       return
     }
     try {
       await invoke('reveal_path', { path: current ?? null })
     } catch (e) {
-      setMsg({ kind: 'err', text: `打开失败: ${(e as Error).message}` })
+      setMsg({ kind: 'err', text: t('dataDir.openFail', { message: (e as Error).message }) })
     }
   }
 
   /** 扫描常见位置,找回误丢失的本地数据库目录。 */
   async function scan() {
     if (!isTauriRuntime()) {
-      setMsg({ kind: 'err', text: '仅桌面端支持' })
+      setMsg({ kind: 'err', text: t('dataDir.desktopOnlyShort') })
       return
     }
     setScanning(true)
@@ -3708,13 +3832,13 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
       // 过滤掉当前默认位置(todobar_data 内)
       const filtered = list.filter((p) => !p.endsWith('todobar_data'))
       if (filtered.length === 0) {
-        setMsg({ kind: 'err', text: '未在常见位置找到本地数据库' })
+        setMsg({ kind: 'err', text: t('dataDir.notFound') })
       } else {
         setScanResults(filtered)
-        setMsg({ kind: 'ok', text: `找到 ${filtered.length} 个含数据的目录,点击即可恢复` })
+        setMsg({ kind: 'ok', text: t('dataDir.found', { count: filtered.length }) })
       }
     } catch (e) {
-      setMsg({ kind: 'err', text: `扫描失败: ${(e as Error).message}` })
+      setMsg({ kind: 'err', text: t('dataDir.scanFail', { message: (e as Error).message }) })
     } finally {
       setScanning(false)
     }
@@ -3726,9 +3850,9 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
     try {
       await applyDataDir(dir)
       setScanResults([])
-      setMsg({ kind: 'ok', text: '已从该目录恢复本地数据' })
+      setMsg({ kind: 'ok', text: t('dataDir.adopted') })
     } catch (e) {
-      setMsg({ kind: 'err', text: `恢复失败: ${(e as Error).message}` })
+      setMsg({ kind: 'err', text: t('dataDir.resetFail', { message: (e as Error).message }) })
     } finally {
       setBusy(false)
     }
@@ -3736,37 +3860,37 @@ function DataDirSetting({ store }: { store: ReturnType<typeof useTaskStore> }) {
 
   return (
     <div className="settings-group">
-      <div className="settings-group-title">本地数据存储</div>
+      <div className="settings-group-title">{t('settings.group.dataDir')}</div>
       <div className="sync-status" style={{ fontSize: 12, marginBottom: 8 }}>
-        待办与节日数据默认保存在本机,不删除该文件夹即不丢失;开启云同步后与云端定时/手动同步保持一致。
+        {t('dataDir.hint')}
       </div>
       <div className="labeled-input" style={{ marginBottom: 10 }}>
         <span>
-          <strong>当前位置</strong>
+          <strong>{t('dataDir.current')}</strong>
         </span>
         <div style={{ fontSize: 12, opacity: 0.85, wordBreak: 'break-all' }}>
-          {current || '默认(应用数据目录)'}
+          {current || t('dataDir.default')}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" className="sync-now-button" onClick={() => void pickDir()} disabled={busy}>
-          {busy ? '处理中…' : '更改存储位置'}
+          {busy ? t('dataDir.busy') : t('dataDir.change')}
         </button>
         <button type="button" className="account-link" onClick={() => void openFolder()}>
-          打开数据文件夹
+          {t('dataDir.openFolder')}
         </button>
         <button type="button" className="account-link" onClick={() => void scan()} disabled={scanning}>
-          {scanning ? '扫描中…' : '查找本地数据'}
+          {scanning ? t('dataDir.scanning') : t('dataDir.scan')}
         </button>
         {current ? (
           <button type="button" className="account-link" onClick={() => void resetDir()}>
-            恢复默认
+            {t('dataDir.reset')}
           </button>
         ) : null}
       </div>
       {scanResults.length > 0 ? (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>点击以下目录以恢复其中的数据:</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{t('dataDir.pickHint')}</div>
           {scanResults.map((dir) => (
             <button
               key={dir}
@@ -3811,18 +3935,18 @@ const WINDOW_SHORTCUT_RESERVED = [
 ]
 
 function toggleWindowShortcutConflict(draft: string, current: string): string | null {
-  if (!draft.trim()) return '快捷键不能为空'
+  if (!draft.trim()) return t('shortcut.empty')
   const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
   // 与自身当前值相同:允许(视为未改)。
   if (norm(draft) === norm(current)) return null
   if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
-    return '该快捷键被系统 / 托盘占用,请换一个'
+    return t('shortcut.reserved')
   }
   // 与截图 / 贴图快捷键重复。
   try {
     const shot = getScreenshotSettings()
     for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
-      if (norm(s) === norm(draft)) return '与截图 / 贴图快捷键重复'
+      if (norm(s) === norm(draft)) return t('shortcut.dupScreenshot')
     }
   } catch {
     /* 读取失败忽略 */
@@ -3834,7 +3958,7 @@ function toggleWindowShortcutConflict(draft: string, current: string): string | 
       main.toLowerCase(),
     )
   ) {
-    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键'
+    return t('shortcut.needMainKey')
   }
   return null
 }
@@ -3848,7 +3972,7 @@ async function commitToggleWindowShortcut(
   try {
     await invoke('set_toggle_window_shortcut', { shortcut: v })
     onChange({ toggleWindowShortcut: v })
-    onToast?.('ok', '窗口快捷键已更新')
+    onToast?.('ok', t('toast.shortcut.updatedWindow'))
   } catch (e) {
     onToast?.('err', e instanceof Error ? e.message : String(e))
   }
@@ -3856,16 +3980,16 @@ async function commitToggleWindowShortcut(
 
 /** 便利签快捷键冲突校验。 */
 function noteShortcutConflict(draft: string, toggleShortcut: string): string | null {
-  if (!draft.trim()) return '快捷键不能为空'
+  if (!draft.trim()) return t('shortcut.empty')
   const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
   if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
-    return '该快捷键被系统 / 托盘占用,请换一个'
+    return t('shortcut.reserved')
   }
-  if (norm(draft) === norm(toggleShortcut)) return '与「打开 / 关闭窗口」快捷键重复'
+  if (norm(draft) === norm(toggleShortcut)) return t('shortcut.dupToggle')
   try {
     const shot = getScreenshotSettings()
     for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
-      if (norm(s) === norm(draft)) return '与截图 / 贴图快捷键重复'
+      if (norm(s) === norm(draft)) return t('shortcut.dupScreenshot')
     }
   } catch {
     /* 读取失败忽略 */
@@ -3877,7 +4001,7 @@ function noteShortcutConflict(draft: string, toggleShortcut: string): string | n
       main.toLowerCase(),
     )
   ) {
-    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键'
+    return t('shortcut.needMainKey')
   }
   return null
 }
@@ -3894,11 +4018,11 @@ async function commitNoteShortcut(
 ) {
   const r = await applyNoteShortcut(v)
   if (!r.ok) {
-    onToast?.('err', r.error || '便利签快捷键注册失败')
+    onToast?.('err', r.error || t('toast.shortcut.noteFail'))
     return
   }
   onChange({ noteShortcut: v })
-  onToast?.('ok', '便利签快捷键已更新')
+  onToast?.('ok', t('toast.shortcut.noteUpdated'))
 }
 
 /** 剪贴板浮窗快捷键冲突校验(与打开窗口、便利签、截图/贴图、系统保留冲突则拦截)。 */
@@ -3907,17 +4031,17 @@ function clipboardShortcutConflict(
   toggleShortcut: string,
   noteShortcut: string,
 ): string | null {
-  if (!draft.trim()) return '快捷键不能为空'
+  if (!draft.trim()) return t('shortcut.empty')
   const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
   if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
-    return '该快捷键被系统 / 托盘占用,请换一个'
+    return t('shortcut.reserved')
   }
-  if (norm(draft) === norm(toggleShortcut)) return '与「打开 / 关闭窗口」快捷键重复'
-  if (norm(draft) === norm(noteShortcut)) return '与「新建便利签」快捷键重复'
+  if (norm(draft) === norm(toggleShortcut)) return t('shortcut.dupToggle')
+  if (norm(draft) === norm(noteShortcut)) return t('shortcut.dupNote')
   try {
     const shot = getScreenshotSettings()
     for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
-      if (norm(s) === norm(draft)) return '与截图 / 贴图快捷键重复'
+      if (norm(s) === norm(draft)) return t('shortcut.dupScreenshot')
     }
   } catch {
     /* 读取失败忽略 */
@@ -3929,7 +4053,7 @@ function clipboardShortcutConflict(
       main.toLowerCase(),
     )
   ) {
-    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键'
+    return t('shortcut.needMainKey')
   }
   return null
 }
@@ -3944,11 +4068,11 @@ async function commitClipboardShortcut(
 ) {
   const r = await applyClipboardShortcut(v)
   if (!r.ok) {
-    onToast?.('err', r.error || '剪贴板快捷键注册失败')
+    onToast?.('err', r.error || t('toast.shortcut.clipboardFail'))
     return
   }
   onChange({ clipboardShortcut: v })
-  onToast?.('ok', '剪贴板快捷键已更新')
+  onToast?.('ok', t('toast.shortcut.clipboardUpdated'))
 }
 
 /** 归档快捷键冲突校验（与打开窗口 / 新建便利签 / 剪贴板 / 截图贴图 / 系统保留冲突则拦截）。 */
@@ -3958,18 +4082,18 @@ function archiveShortcutConflict(
   noteShortcut: string,
   clipboardShortcut: string,
 ): string | null {
-  if (!draft.trim()) return '快捷键不能为空'
+  if (!draft.trim()) return t('shortcut.empty')
   const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
   if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
-    return '该快捷键被系统 / 托盘占用,请换一个'
+    return t('shortcut.reserved')
   }
-  if (norm(draft) === norm(toggleShortcut)) return '与「打开 / 关闭窗口」快捷键重复'
-  if (norm(draft) === norm(noteShortcut)) return '与「新建便利签」快捷键重复'
-  if (norm(draft) === norm(clipboardShortcut)) return '与「打开剪贴板」快捷键重复'
+  if (norm(draft) === norm(toggleShortcut)) return t('shortcut.dupToggle')
+  if (norm(draft) === norm(noteShortcut)) return t('shortcut.dupNote')
+  if (norm(draft) === norm(clipboardShortcut)) return t('shortcut.dupClipboard')
   try {
     const shot = getScreenshotSettings()
     for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
-      if (norm(s) === norm(draft)) return '与截图 / 贴图快捷键重复'
+      if (norm(s) === norm(draft)) return t('shortcut.dupScreenshot')
     }
   } catch {
     /* 读取失败忽略 */
@@ -3981,7 +4105,7 @@ function archiveShortcutConflict(
       main.toLowerCase(),
     )
   ) {
-    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键'
+    return t('shortcut.needMainKey')
   }
   return null
 }
@@ -3996,11 +4120,18 @@ async function commitArchiveShortcut(
 ) {
   const r = await applyArchiveShortcut(v)
   if (!r.ok) {
-    onToast?.('err', r.error || '归档快捷键注册失败')
+    onToast?.('err', r.error || t('toast.shortcut.archiveFail'))
     return
   }
   onChange({ archiveShortcut: v })
-  onToast?.('ok', '归档快捷键已更新')
+  onToast?.('ok', t('toast.shortcut.archiveUpdated'))
+}
+
+/** 同步间隔选项的显示文案(值 → 词条 key;label 存库的是纯数值)。 */
+const SYNC_INTERVAL_LABEL: Record<number, LocaleKey> = {
+  1800: 'sync.interval.1800',
+  3600: 'sync.interval.3600',
+  7200: 'sync.interval.7200',
 }
 
 function SidebarSettingsPanel({
@@ -4043,15 +4174,16 @@ function SidebarSettingsPanel({
   onToast?: (kind: 'ok' | 'err', text: string) => void
   store: ReturnType<typeof useTaskStore>
 }) {
+  const { t } = useI18n()
   const statusLabel =
     syncState.status === 'idle'
       ? syncState.pending > 0
-        ? `待同步 ${syncState.pending} 项`
-        : '已同步'
+        ? t('sync.status.pending', { count: syncState.pending })
+        : t('sync.status.synced')
       : syncState.status === 'syncing'
-        ? '正在同步…'
+        ? t('sync.status.syncing')
         : syncState.status === 'error'
-          ? `同步失败: ${syncState.lastError ?? ''}`
+          ? t('sync.status.error', { message: syncState.lastError ?? '' })
           : syncState.status
   const [supportOpen, setSupportOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -4070,6 +4202,8 @@ function SidebarSettingsPanel({
     // 嵌套在外层 .settings-scroll 内:底部 76px 预留由外层承担,内层清零。
     <div className="settings-scroll settings-scroll-nested">
       <AccountSetting onSyncChange={onSyncChange} onSwitchProfile={onSwitchProfile} />
+      {/* 通用区块(语言/地区切换):独立 i18n 体系,不进 SidebarSettings,插在账号与版本之间 */}
+      <GeneralSetting />
       <VersionSetting appVersion={appVersion} update={updateState} setUpdate={setUpdateState} />
       <TopbarToolsSetting
         pref={settings.topbarTools}
@@ -4084,27 +4218,27 @@ function SidebarSettingsPanel({
         onChange={onChange}
       />
       <div className="settings-group settings-appearance">
-        <div className="settings-group-title">外观</div>
-        <div className="segmented-control" aria-label="外观">
+        <div className="settings-group-title">{t('settings.group.appearance')}</div>
+        <div className="segmented-control" aria-label={t('settings.group.appearance')}>
           <button
             type="button"
             className={settings.theme === 'light' ? 'is-selected' : ''}
             onClick={() => onChange({ theme: 'light' })}
           >
-            浅色
+            {t('settings.appearance.light')}
           </button>
           <button
             type="button"
             className={settings.theme === 'dark' ? 'is-selected' : ''}
             onClick={() => onChange({ theme: 'dark' })}
           >
-            深色
+            {t('settings.appearance.dark')}
           </button>
         </div>
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">背景</div>
+        <div className="settings-group-title">{t('settings.group.background')}</div>
         <div className="bg-grid">
           {BACKGROUND_OPTIONS.map((b) => (
             <button
@@ -4112,28 +4246,28 @@ function SidebarSettingsPanel({
               key={b.key}
               className={`bg-swatch bg-${b.key} ${settings.background === b.key ? 'is-selected' : ''}`}
               onClick={() => onChange({ background: b.key })}
-              aria-label={b.label}
-              title={b.label}
+              aria-label={backgroundLabel(b.key)}
+              title={backgroundLabel(b.key)}
             >
-              <span>{b.label}</span>
+              <span>{backgroundLabel(b.key)}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">桌面</div>
+        <div className="settings-group-title">{t('settings.group.desktop')}</div>
         <ToggleSetting
-          label="开机自动登录"
+          label={t('settings.launchAtLogin')}
           checked={settings.launchAtLogin}
           onChange={(launchAtLogin) => onChange({ launchAtLogin })}
         />
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">窗口</div>
+        <div className="settings-group-title">{t('settings.group.window')}</div>
         <SliderSetting
-          label="面板宽度"
+          label={t('settings.panelWidth')}
           value={settings.panelWidth}
           min={300}
           max={500}
@@ -4142,7 +4276,7 @@ function SidebarSettingsPanel({
           onChange={(panelWidth) => onChange({ panelWidth })}
         />
         <SliderSetting
-          label="可见把手宽度"
+          label={t('settings.tabWidth')}
           value={settings.tabWidth}
           min={34}
           max={62}
@@ -4153,9 +4287,14 @@ function SidebarSettingsPanel({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">边缘把手</div>
+        <div className="settings-group-title">{t('settings.group.handle')}</div>
+        <ToggleSetting
+          label={t('settings.hoverAutoExpand')}
+          checked={settings.hoverAutoExpand}
+          onChange={(hoverAutoExpand) => onChange({ hoverAutoExpand })}
+        />
         <SliderSetting
-          label="把手高度"
+          label={t('settings.handleHeight')}
           value={settings.handleHeight}
           min={72}
           max={132}
@@ -4164,7 +4303,7 @@ function SidebarSettingsPanel({
           onChange={(handleHeight) => onChange({ handleHeight })}
         />
         <SliderSetting
-          label="垂直位置"
+          label={t('settings.handleY')}
           value={settings.handleY}
           min={0}
           max={100}
@@ -4175,14 +4314,14 @@ function SidebarSettingsPanel({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">任务</div>
+        <div className="settings-group-title">{t('settings.group.task')}</div>
         <ToggleSetting
-          label="显示已完成"
+          label={t('settings.showCompleted')}
           checked={settings.showCompleted}
           onChange={(showCompleted) => onChange({ showCompleted })}
         />
         <SliderSetting
-          label="行高"
+          label={t('settings.rowHeight')}
           value={settings.taskRowHeight}
           min={40}
           max={62}
@@ -4191,7 +4330,7 @@ function SidebarSettingsPanel({
           onChange={(taskRowHeight) => onChange({ taskRowHeight })}
         />
         <SliderSetting
-          label="行间距"
+          label={t('settings.rowGap')}
           value={settings.taskGap}
           min={4}
           max={14}
@@ -4200,7 +4339,7 @@ function SidebarSettingsPanel({
           onChange={(taskGap) => onChange({ taskGap })}
         />
         <SliderSetting
-          label="文字大小"
+          label={t('settings.textSize')}
           value={settings.taskTextSize}
           min={11}
           max={14}
@@ -4209,15 +4348,15 @@ function SidebarSettingsPanel({
           onChange={(taskTextSize) => onChange({ taskTextSize })}
         />
         <div className="labeled-select">
-          <span>字体</span>
+          <span>{t('settings.font')}</span>
           <select
             value={settings.taskFont}
             onChange={(e) => onChange({ taskFont: e.target.value })}
-            aria-label="待办事项字体"
+            aria-label={t('settings.fontAria')}
           >
             {FONT_OPTIONS.map((f) => (
               <option key={f.key} value={f.key}>
-                {f.label}
+                {fontLabel(f.key)}
               </option>
             ))}
           </select>
@@ -4225,22 +4364,25 @@ function SidebarSettingsPanel({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">同步</div>
+        <div className="settings-group-title">{t('settings.group.sync')}</div>
         <ToggleSetting
-          label="自动同步"
+          label={t('settings.sync.auto')}
           checked={autoSyncOn}
-          onLocked={syncLocked ? () => onLocked?.('云端同步') : undefined}
+          onLocked={syncLocked ? () => onLocked?.(t('feature.cloudSync')) : undefined}
           onChange={(autoSync) => onSyncChange({ autoSync })}
         />
         {autoSyncOn ? (
           <OptionSetting
-            label="自动间隔"
+            label={t('settings.sync.interval')}
             value={
               SYNC_INTERVAL_OPTIONS.some((o) => o.value === syncConfig.intervalSec)
                 ? syncConfig.intervalSec
                 : DEFAULT_SYNC_INTERVAL_SEC
             }
-            options={SYNC_INTERVAL_OPTIONS}
+            options={SYNC_INTERVAL_OPTIONS.map((o) => ({
+              value: o.value,
+              label: t(SYNC_INTERVAL_LABEL[o.value]),
+            }))}
             onChange={(intervalSec) => onSyncChange({ intervalSec })}
           />
         ) : null}
@@ -4248,32 +4390,34 @@ function SidebarSettingsPanel({
           <button
             type="button"
             className="sync-now-button"
-            onClick={() => (syncLocked ? onLocked?.('云端同步') : onSyncNow())}
+            onClick={() => (syncLocked ? onLocked?.(t('feature.cloudSync')) : onSyncNow())}
             disabled={syncState.status === 'syncing' || !syncConfig.enabled}
           >
-            {syncState.status === 'syncing' ? '同步中…' : '立即同步'}
+            {syncState.status === 'syncing' ? t('sync.syncing') : t('sync.now')}
           </button>
           <button
             type="button"
             className="sync-now-button sync-restore-button"
-            onClick={() => (syncLocked ? onLocked?.('恢复云端数据') : onOpenRestore())}
+            onClick={() => (syncLocked ? onLocked?.(t('feature.restoreCloud')) : onOpenRestore())}
             disabled={!syncConfig.enabled}
-            aria-label="恢复云端数据"
+            aria-label={t('sync.restore')}
           >
-            恢复云端数据
+            {t('sync.restore')}
           </button>
         </div>
         {syncLocked ? (
-          <div className="sheet-hint">云端同步(上传 / 恢复)为会员功能,开通会员后可无限制使用</div>
+          <div className="sheet-hint">{t('sync.memberHint')}</div>
         ) : null}
         <div className="sync-status" aria-live="polite">
           {statusLabel}
           {syncState.status === 'error'
             ? ''
             : syncState.lastPushAt
-              ? ` · 上次推送 ${new Date(syncState.lastPushAt).toLocaleTimeString('zh-CN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
+              ? ` · ${t('sync.lastPush', {
+                  time: new Date(syncState.lastPushAt).toLocaleTimeString(getLocale(), {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
                 })}`
               : ''}
         </div>
@@ -4282,9 +4426,9 @@ function SidebarSettingsPanel({
       <DataDirSetting store={store} />
 
       <div className="settings-group">
-        <div className="settings-group-title">观感</div>
+        <div className="settings-group-title">{t('settings.group.look')}</div>
         <SliderSetting
-          label="动画时长"
+          label={t('settings.motion')}
           value={settings.motionMs}
           min={140}
           max={360}
@@ -4293,7 +4437,7 @@ function SidebarSettingsPanel({
           onChange={(motionMs) => onChange({ motionMs })}
         />
         <SliderSetting
-          label="面板圆角"
+          label={t('settings.radius')}
           value={settings.panelRadius}
           min={12}
           max={28}
@@ -4302,7 +4446,7 @@ function SidebarSettingsPanel({
           onChange={(panelRadius) => onChange({ panelRadius })}
         />
         <SliderSetting
-          label="不透明度"
+          label={t('settings.opacity')}
           value={settings.surfaceAlpha}
           min={86}
           max={100}
@@ -4314,36 +4458,36 @@ function SidebarSettingsPanel({
 
       {/* 三个全局快捷键与紧随其后的「截图 / 贴图」快捷键归在同一区块(0.4.62 用户反馈)。 */}
       <div className="settings-group">
-        <div className="settings-group-title">快捷键</div>
+        <div className="settings-group-title">{t('settings.group.shortcuts')}</div>
         <ShortcutField
-          label="打开窗口"
+          label={t('shortcut.openWindow')}
           value={settings.toggleWindowShortcut}
           conflictFor={(draft) => toggleWindowShortcutConflict(draft, settings.toggleWindowShortcut)}
           onCommit={(v) => void commitToggleWindowShortcut(v, onChange, onToast)}
         />
         <ShortcutField
-          label="新建便利签"
+          label={t('shortcut.newNote')}
           value={settings.noteShortcut}
           conflictFor={(draft) => noteShortcutConflict(draft, settings.toggleWindowShortcut)}
           onCommit={(v) => void commitNoteShortcut(v, onChange, onToast)}
           locked={!fullAccess}
-          onLocked={() => onLocked?.('便利签')}
+          onLocked={() => onLocked?.(t('feature.note'))}
           vip={showVip}
         />
         <ShortcutField
-          label="打开剪贴板"
+          label={t('shortcut.openClipboard')}
           value={settings.clipboardShortcut}
           conflictFor={(draft) =>
             clipboardShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut)
           }
           onCommit={(v) => void commitClipboardShortcut(v, onChange, onToast)}
           locked={!fullAccess}
-          onLocked={() => onLocked?.('剪贴板')}
+          onLocked={() => onLocked?.(t('feature.clipboard'))}
           vip={showVip}
         />
         {/* ★2026-11-18 归档：归档页全局快捷键（非会员功能,无闸门）。 */}
         <ShortcutField
-          label="打开归档"
+          label={t('shortcut.openArchive')}
           value={settings.archiveShortcut}
           conflictFor={(draft) =>
             archiveShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut, settings.clipboardShortcut)
@@ -4351,7 +4495,7 @@ function SidebarSettingsPanel({
           onCommit={(v) => void commitArchiveShortcut(v, onChange, onToast)}
         />
         <p className="settings-hint">
-          双击编辑框即可修改{caps().screenshot ? '；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合' : ''}。
+          {caps().screenshot ? t('shortcut.hintGlobal') : t('shortcut.hint')}
         </p>
       </div>
 
@@ -4361,19 +4505,19 @@ function SidebarSettingsPanel({
           type="button"
           className="fab-support fab-secondary"
           onClick={() => setChangelogOpen(true)}
-          aria-label="版本记录"
+          aria-label={t('changelog.title')}
         >
           <History size={14} />
-          版本记录
+          {t('changelog.title')}
         </button>
         <button
           type="button"
           className="fab-support"
           onClick={() => setSupportOpen(true)}
-          aria-label="联系客服"
+          aria-label={t('support.title')}
         >
           <MessageCircle size={14} />
-          联系客服
+          {t('support.title')}
         </button>
       </div>
 
@@ -4646,7 +4790,7 @@ function TaskNode({
           {children.length > 0 ? (
             <button
               type="button"
-              aria-label={expanded ? '收起下级' : '展开下级'}
+              aria-label={expanded ? t('task.collapseChildren') : t('task.expandChildren')}
               aria-expanded={expanded}
               onClick={(e) => {
                 e.stopPropagation()
@@ -4660,7 +4804,7 @@ function TaskNode({
         <button
           type="button"
           className="check-button"
-          aria-label={effDone ? `将 ${task.title} 标记为未完成` : `完成 ${task.title}`}
+          aria-label={effDone ? t('task.markUndone', { title: task.title }) : t('task.markDone', { title: task.title })}
           onClick={(e) => {
             e.stopPropagation()
             if (perDate) ctx.onToggleSeriesSub(task.id, occDate!)
@@ -4703,7 +4847,7 @@ function TaskNode({
                       <i className="recur-tag">↻</i>
                     ))}
                   {task.remindAt ? `⏰ ${formatDueShort(task.remindAt)}` : ''}
-                  {task.isPinned && <i className="pinned-tag">置顶</i>}
+                  {task.isPinned && <i className="pinned-tag">{t('task.pinned')}</i>}
                 </span>
               )}
             </>
@@ -4711,7 +4855,7 @@ function TaskNode({
         </div>
         <span className="tree-actions" onClick={(e) => e.stopPropagation()}>
           {editing ? (
-            <button type="button" className="icon-button" aria-label="保存" onClick={commitEdit}>
+            <button type="button" className="icon-button" aria-label={t('common.save')} onClick={commitEdit}>
               <Check size={13} />
             </button>
           ) : (
@@ -4720,7 +4864,7 @@ function TaskNode({
                 <button
                   type="button"
                   className={`icon-button ${addingChild ? 'is-active' : ''}`}
-                  aria-label={`为 ${task.title} 添加下级`}
+                  aria-label={t('task.addChildAria', { title: task.title })}
                   onClick={() => {
                     setAddingChild((v) => !v)
                     setExpanded(true)
@@ -4732,7 +4876,7 @@ function TaskNode({
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`${task.title} 设置`}
+                aria-label={t('task.settingsAria', { title: task.title })}
                 onClick={() => {
                   // 重复事项的虚拟实例没有独立记录,设置入口应打开其模板(整组规则)。
                   if (task.seriesId) {
@@ -4771,7 +4915,7 @@ function TaskNode({
         <div className="tree-child-add">
           <input
             autoFocus
-            placeholder="输入下级标题,回车保存,Esc 取消"
+            placeholder={t('task.childInputPlaceholder')}
             value={childDraft}
             onChange={(e) => setChildDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -4813,10 +4957,11 @@ function AddTaskSheet({
   const keyRef = useRef(1)
   // 会员闸门:入口照常展示(不隐藏、不置灰),点击时才提示「子任务为会员功能」。
   const { fullAccess } = useAccount()
+  const { t } = useI18n()
 
   const addSub = () => {
     if (!fullAccess) {
-      onLocked?.('添加子任务')
+      onLocked?.(t('feature.addSubtask'))
       return
     }
     setSubs((list) => [...list, { key: (keyRef.current += 1), title: '', children: [] }])
@@ -4829,7 +4974,7 @@ function AddTaskSheet({
 
   const addGrand = (parentKey: number) => {
     if (!fullAccess) {
-      onLocked?.('添加下级')
+      onLocked?.(t('task.addChild'))
       return
     }
     setSubs((list) =>
@@ -4877,19 +5022,19 @@ function AddTaskSheet({
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="添加事项"
+        aria-label={t('add.task')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">添加事项</div>
+        <div className="sheet-title">{t('add.task')}</div>
         <div className="sheet-subtitle">
           {fullAccess
-            ? `日期:${dateLabel} · 支持主任务 / 子任务 / 下级,最多三层`
-            : `日期:${dateLabel} · 单日上限 ${FREE_DAILY_TASK_LIMIT} 条,子任务为会员功能`}
+            ? t('addSheet.subtitleFull', { date: dateLabel })
+            : t('addSheet.subtitleLimited', { date: dateLabel, count: FREE_DAILY_TASK_LIMIT })}
         </div>
         <input
           className="sheet-main-input"
-          placeholder="输入主任务标题…"
+          placeholder={t('addSheet.mainPlaceholder')}
           value={mainTitle}
           autoFocus
           onChange={(e) => setMainTitle(e.target.value)}
@@ -4899,14 +5044,14 @@ function AddTaskSheet({
           <div className="sheet-l2" key={sub.key}>
             <div className="sheet-l2-row">
               <input
-                placeholder="子任务…"
+                placeholder={t('addSheet.subPlaceholder')}
                 value={sub.title}
                 onChange={(e) => updateSub(sub.key, e.target.value)}
               />
               <button
                 type="button"
                 className="sheet-remove"
-                aria-label="移除该子任务"
+                aria-label={t('addSheet.removeSubAria')}
                 onClick={() => removeSub(sub.key)}
               >
                 <X size={13} />
@@ -4915,14 +5060,14 @@ function AddTaskSheet({
             {sub.children.map((grand) => (
               <div className="sheet-l3-row" key={grand.key}>
                 <input
-                  placeholder="子任务的子任务…"
+                  placeholder={t('addSheet.grandPlaceholder')}
                   value={grand.title}
                   onChange={(e) => updateGrand(sub.key, grand.key, e.target.value)}
                 />
                 <button
                   type="button"
                   className="sheet-remove"
-                  aria-label="移除该下级"
+                  aria-label={t('addSheet.removeGrandAria')}
                   onClick={() => removeGrand(sub.key, grand.key)}
                 >
                   <X size={12} />
@@ -4930,14 +5075,14 @@ function AddTaskSheet({
               </div>
             ))}
             <button type="button" className="sheet-add-link" onClick={() => addGrand(sub.key)}>
-              + 子任务的子任务
+              {t('addSheet.addGrand')}
             </button>
           </div>
         ))}
         <button type="button" className="sheet-add-link sheet-add-main" onClick={addSub}>
-          + 子任务
+          {t('addSheet.addSub')}
         </button>
-        <div className="sheet-section">重复</div>
+        <div className="sheet-section">{t('recur.label')}</div>
         <div className="recur-row">
           {(['none', 'daily', 'weekly', 'monthly'] as const).map((m) => (
             <button
@@ -4946,7 +5091,13 @@ function AddTaskSheet({
               className={`recur-chip ${recMode === m ? 'is-active' : ''}`}
               onClick={() => setRecMode(m)}
             >
-              {m === 'none' ? '不重复' : m === 'daily' ? '每天' : m === 'weekly' ? '每周' : '每月'}
+              {m === 'none'
+                ? t('recur.none')
+                : m === 'daily'
+                  ? t('recur.daily')
+                  : m === 'weekly'
+                    ? t('recur.weekly')
+                    : t('recur.monthly')}
             </button>
           ))}
         </div>
@@ -4959,14 +5110,14 @@ function AddTaskSheet({
                 className={`recur-chip ${weekday === wd ? 'is-active' : ''}`}
                 onClick={() => setWeekday(wd)}
               >
-                {WEEKDAY_CN[(wd % 7)]}
+                {t(WEEKDAY_KEYS[(wd % 7)])}
               </button>
             ))}
           </div>
         )}
         {recMode === 'monthly' && (
           <div className="recur-row">
-            <span className="recur-hint">每月</span>
+            <span className="recur-hint">{t('recur.monthly')}</span>
             <input
               className="recur-day-input"
               type="number"
@@ -4978,14 +5129,14 @@ function AddTaskSheet({
                 setMonthDay(v)
               }}
             />
-            <span className="recur-hint">号</span>
+            <span className="recur-hint">{t('recur.daySuffix')}</span>
           </div>
         )}
         {recMode !== 'none' && (
           <label className="toggle-setting sheet-toggle recur-skip">
             <span>
-              <strong>跳过法定节假日</strong>
-              <span className="recur-skip-hint">节假日当天不生成待办</span>
+              <strong>{t('recur.skipHolidays')}</strong>
+              <span className="recur-skip-hint">{t('recur.skipHolidaysHint')}</span>
             </span>
             <input
               type="checkbox"
@@ -4997,10 +5148,10 @@ function AddTaskSheet({
         )}
         <div className="sheet-actions">
           <button type="button" onClick={requestClose}>
-            取消
+            {t('common.cancel')}
           </button>
           <button type="button" className="is-primary" onClick={submit}>
-            保存
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -5099,7 +5250,9 @@ function SheetDatePicker({
         aria-label={ariaLabel}
         data-open={open || undefined}
       >
-        <span className={value ? undefined : 'is-placeholder'}>{value ? value.replaceAll('-', '/') : '选择日期'}</span>
+        <span className={value ? undefined : 'is-placeholder'}>
+          {value ? value.replaceAll('-', '/') : t('datePick.placeholder')}
+        </span>
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <rect x="3" y="4.5" width="14" height="12.5" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M3 8.4h14" stroke="currentColor" strokeWidth="1.6" />
@@ -5108,30 +5261,30 @@ function SheetDatePicker({
       </button>
       {open &&
         createPortal(
-          <div className="sheet-dpop" ref={popRef} style={{ left: pos.left, top: pos.top }} role="dialog" aria-label="选择日期">
+          <div className="sheet-dpop" ref={popRef} style={{ left: pos.left, top: pos.top }} role="dialog" aria-label={t('datePick.placeholder')}>
             <div className="sheet-dpop-head">
               <button
                 type="button"
                 onClick={() => setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { ...v, m: v.m - 1 }))}
-                aria-label="上一月"
+                aria-label={t('month.prevAria')}
               >
                 ‹
               </button>
               <span className="sheet-dpop-title">
-                {view.y}年{view.m + 1}月
+                {t('date.monthYear', { year: view.y, month: view.m + 1 })}
               </span>
               <button
                 type="button"
                 onClick={() => setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { ...v, m: v.m + 1 }))}
-                aria-label="下一月"
+                aria-label={t('month.nextAria')}
               >
                 ›
               </button>
             </div>
             <div className="sheet-dpop-grid">
-              {['一', '二', '三', '四', '五', '六', '日'].map((w) => (
+              {WEEKDAY_SHORT_KEYS.map((w) => (
                 <span key={w} className="sheet-dpop-wd">
-                  {w}
+                  {t(w)}
                 </span>
               ))}
               {cells.map((d) => {
@@ -5276,7 +5429,7 @@ function SheetDateTimePicker({
         data-open={open || undefined}
       >
         <span className={value ? undefined : 'is-placeholder'}>
-          {value ? formatDueShort(value) : '选择提醒时间'}
+          {value ? formatDueShort(value) : t('remind.placeholder')}
         </span>
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <circle cx="10" cy="10" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -5297,31 +5450,31 @@ function SheetDateTimePicker({
             ref={popRef}
             style={{ left: pos.left, top: pos.top }}
             role="dialog"
-            aria-label="选择提醒时间"
+            aria-label={t('remind.placeholder')}
           >
             <div className="sheet-dpop-head">
               <button
                 type="button"
                 onClick={() => setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { ...v, m: v.m - 1 }))}
-                aria-label="上一月"
+                aria-label={t('month.prevAria')}
               >
                 ‹
               </button>
               <span className="sheet-dpop-title">
-                {view.y}年{view.m + 1}月
+                {t('date.monthYear', { year: view.y, month: view.m + 1 })}
               </span>
               <button
                 type="button"
                 onClick={() => setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { ...v, m: v.m + 1 }))}
-                aria-label="下一月"
+                aria-label={t('month.nextAria')}
               >
                 ›
               </button>
             </div>
             <div className="sheet-dpop-grid">
-              {['一', '二', '三', '四', '五', '六', '日'].map((w) => (
+              {WEEKDAY_SHORT_KEYS.map((w) => (
                 <span key={w} className="sheet-dpop-wd">
-                  {w}
+                  {t(w)}
                 </span>
               ))}
               {cells.map((d) => {
@@ -5353,7 +5506,7 @@ function SheetDateTimePicker({
             </div>
             <div className="sheet-dpop-time">
               <div className="sheet-dpop-time-col">
-                <span className="sheet-dpop-time-label">时</span>
+                <span className="sheet-dpop-time-label">{t('datePick.hour')}</span>
                 <div className="sheet-dpop-time-scroll">
                   {Array.from({ length: 24 }, (_, h) => (
                     <button
@@ -5371,7 +5524,7 @@ function SheetDateTimePicker({
                 </div>
               </div>
               <div className="sheet-dpop-time-col">
-                <span className="sheet-dpop-time-label">分</span>
+                <span className="sheet-dpop-time-label">{t('datePick.minute')}</span>
                 <div className="sheet-dpop-time-scroll">
                   {Array.from({ length: 60 }, (_, m) => (
                     <button
@@ -5449,30 +5602,30 @@ function TaskSettingsSheet({
         const d = new Date(seriesRemindAt)
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
       })()
-    : '所选时刻'
+    : t('remind.pickedTime')
   const occurrenceLabel = occurrenceKey
-    ? `${occurrenceKey.slice(5)} ${WEEKDAY_CN[parseDayKey(occurrenceKey).getDay()]}`
+    ? `${occurrenceKey.slice(5)} ${t(WEEKDAY_KEYS[parseDayKey(occurrenceKey).getDay()])}`
     : ''
   return (
     <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onClick={requestClose}>
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="任务设置"
+        aria-label={t('taskSettings.aria')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
         <div className="sheet-title">{task.title}</div>
-        <div className="sheet-section">提醒</div>
+        <div className="sheet-section">{t('taskSettings.remind')}</div>
         {isSeriesInstance ? (
           <div className="sheet-hint" style={{ marginTop: 0 }}>
-            将对所有重复日生效:每个发生日都在「自己的日期 + {seriesRemindTimeText}」提醒
+            {t('taskSettings.seriesRemindHint', { time: seriesRemindTimeText })}
           </div>
         ) : null}
         <SheetDateTimePicker
-          ariaLabel="提醒时间"
+          ariaLabel={t('remind.timeAria')}
           value={(seriesRemindAt ?? task.remindAt) ?? ''}
-          onLocked={fullAccess ? undefined : () => onLocked?.('设置待办提醒')}
+          onLocked={fullAccess ? undefined : () => onLocked?.(t('feature.setRemind'))}
           onChange={(v) => onSetRemind(v)}
         />
         <div className="date-picker-quick">
@@ -5481,18 +5634,18 @@ function TaskSettingsSheet({
               <button
                 type="button"
                 onClick={() =>
-                  fullAccess ? onSetRemind(quickSeriesAt(20)) : onLocked?.('设置待办提醒')
+                  fullAccess ? onSetRemind(quickSeriesAt(20)) : onLocked?.(t('feature.setRemind'))
                 }
               >
-                当天 20:00
+                {t('remind.seriesQuick20')}
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  fullAccess ? onSetRemind(quickSeriesAt(9)) : onLocked?.('设置待办提醒')
+                  fullAccess ? onSetRemind(quickSeriesAt(9)) : onLocked?.(t('feature.setRemind'))
                 }
               >
-                当天 09:00
+                {t('remind.seriesQuick09')}
               </button>
             </>
           ) : (
@@ -5500,32 +5653,30 @@ function TaskSettingsSheet({
               <button
                 type="button"
                 onClick={() =>
-                  fullAccess ? onSetRemind(atHourOffset(0, 20)) : onLocked?.('设置待办提醒')
+                  fullAccess ? onSetRemind(atHourOffset(0, 20)) : onLocked?.(t('feature.setRemind'))
                 }
               >
-                今晚 20:00
+                {t('remind.tonight')}
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  fullAccess ? onSetRemind(atHourOffset(1, 9)) : onLocked?.('设置待办提醒')
+                  fullAccess ? onSetRemind(atHourOffset(1, 9)) : onLocked?.(t('feature.setRemind'))
                 }
               >
-                明早 09:00
+                {t('remind.tomorrowMorning')}
               </button>
             </>
           )}
           <button type="button" className="is-danger" onClick={() => onSetRemind(null)}>
-            清除
+            {t('common.clear')}
           </button>
         </div>
-        {fullAccess ? null : (
-          <div className="sheet-hint">设置待办提醒为会员功能,开通后可设置;已有提醒可清除</div>
-        )}
-        <div className="sheet-section">处理日期</div>
+        {fullAccess ? null : <div className="sheet-hint">{t('remind.memberHint')}</div>}
+        <div className="sheet-section">{t('taskSettings.dueRange')}</div>
         <div className="sheet-date-row">
           <SheetDatePicker
-            ariaLabel="开始日期"
+            ariaLabel={t('due.startAria')}
             value={task.dueDate ? dayKeyOfIso(task.dueDate) ?? '' : ''}
             onChange={(v) => {
               if (!v) {
@@ -5539,9 +5690,9 @@ function TaskSettingsSheet({
               onSetDueRange(startIso, new Date(`${effEnd}T23:59:00`).toISOString())
             }}
           />
-          <span className="sheet-date-sep" aria-hidden="true">至</span>
+          <span className="sheet-date-sep" aria-hidden="true">{t('due.to')}</span>
           <SheetDatePicker
-            ariaLabel="结束日期"
+            ariaLabel={t('due.endAria')}
             value={
               task.dueEndDate
                 ? dayKeyOfIso(task.dueEndDate) ?? ''
@@ -5566,17 +5717,17 @@ function TaskSettingsSheet({
           />
         </div>
         <div className="date-picker-quick">
-          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(0), endOfDayOffset(0))}>今天</button>
-          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(1), endOfDayOffset(1))}>明天</button>
-          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(7), endOfDayOffset(7))}>一周后</button>
+          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(0), endOfDayOffset(0))}>{t('date.today')}</button>
+          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(1), endOfDayOffset(1))}>{t('date.tomorrow')}</button>
+          <button type="button" onClick={() => onSetDueRange(startOfDayOffset(7), endOfDayOffset(7))}>{t('due.inWeek')}</button>
           <button type="button" className="is-danger" onClick={() => onSetDueRange(null, null)}>
-            清除
+            {t('common.clear')}
           </button>
         </div>
-        <div className="sheet-hint">起止日期区间内的每天都显示该事项;今天没做完,把结束日改到明天即可顺延</div>
+        <div className="sheet-hint">{t('due.rangeHint')}</div>
         <label className="toggle-setting sheet-toggle">
           <span>
-            <strong>置顶显示</strong>
+            <strong>{t('taskSettings.pin')}</strong>
           </span>
           <input
             type="checkbox"
@@ -5594,11 +5745,11 @@ function TaskSettingsSheet({
             else onDeleteSeries()
           }}
         >
-          删除事项
+          {t('taskSettings.deleteTask')}
         </button>
         <div className="sheet-actions">
           <button type="button" onClick={requestClose}>
-            关闭
+            {t('common.close')}
           </button>
         </div>
       </div>
@@ -5613,25 +5764,25 @@ function TaskSettingsSheet({
           <div
             className="sheet confirm-sheet"
             role="dialog"
-            aria-label={confirmScope === 'subtask' ? '删除子任务' : '删除重复事项'}
+            aria-label={confirmScope === 'subtask' ? t('deleteConfirm.subtaskTitle') : t('deleteConfirm.seriesTitle')}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sheet-grip" aria-hidden="true" />
             <div className="sheet-title">
-              {confirmScope === 'subtask' ? '删除子任务' : '删除重复事项'}
+              {confirmScope === 'subtask' ? t('deleteConfirm.subtaskTitle') : t('deleteConfirm.seriesTitle')}
             </div>
             <p className="confirm-desc">
               {confirmScope === 'subtask'
-                ? '该子任务属于重复事项,请选择本次删除的范围:'
-                : '该事项在多个日期重复出现,请选择本次删除的范围:'}
+                ? t('recur.subScopeDesc')
+                : t('recur.scopeDesc', { action: t('recur.actionDelete') })}
             </p>
             {confirmScope === 'subtask' ? (
               <>
                 <button type="button" className="sheet-danger" onClick={onDeleteSubThis}>
-                  仅本次（{occurrenceLabel}）不显示该子任务
+                  {t('deleteConfirm.hideSubThisOnce', { label: occurrenceLabel })}
                 </button>
                 <button type="button" className="sheet-danger is-strong" onClick={onDeleteSeries}>
-                  删除所有重复日的该子任务
+                  {t('deleteConfirm.deleteSubAll')}
                 </button>
               </>
             ) : (
@@ -5641,16 +5792,16 @@ function TaskSettingsSheet({
                   className="sheet-danger"
                   onClick={() => onDeleteOccurrence(occurrenceKey as string)}
                 >
-                  仅删除 {occurrenceLabel} 的这一条
+                  {t('deleteConfirm.deleteThisOnce', { label: occurrenceLabel })}
                 </button>
                 <button type="button" className="sheet-danger is-strong" onClick={onDeleteSeries}>
-                  删除全部日期的该重复事项
+                  {t('deleteConfirm.deleteSeriesAll')}
                 </button>
               </>
             )}
             <div className="sheet-actions">
               <button type="button" onClick={() => setConfirmScope(null)}>
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -5710,7 +5861,7 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
     if (tab === 'developer') return
     const content = text.trim()
     if (!content) {
-      setStatus({ ok: false, text: '请先填写内容' })
+      setStatus({ ok: false, text: t('feedback.emptyContent') })
       return
     }
     setSubmitting(true)
@@ -5718,14 +5869,14 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
     void (async () => {
       try {
         await submitFeedback(tab, content, contact.trim() || undefined)
-        setStatus({ ok: true, text: '已提交,感谢你的反馈!' })
+        setStatus({ ok: true, text: t('feedback.submitted') })
         setUnread(false)
         window.setTimeout(() => {
           requestClose()
         }, 900)
       } catch (e) {
         setSubmitting(false)
-        setStatus({ ok: false, text: e instanceof Error ? e.message : '提交失败,请稍后再试' })
+        setStatus({ ok: false, text: e instanceof Error ? e.message : t('feedback.submitFail') })
       }
     })()
   }
@@ -5735,11 +5886,11 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="联系客服"
+        aria-label={t('support.title')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">联系客服</div>
+        <div className="sheet-title">{t('support.title')}</div>
         <div className="fb-tabs" role="tablist">
           <button
             type="button"
@@ -5748,7 +5899,7 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
             className={tab === 'issue' ? 'is-active' : ''}
             onClick={() => setTab('issue')}
           >
-            问题反馈
+            {t('feedback.tabIssue')}
           </button>
           <button
             type="button"
@@ -5757,7 +5908,7 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
             className={tab === 'demand' ? 'is-active' : ''}
             onClick={() => setTab('demand')}
           >
-            需求提报
+            {t('feedback.tabDemand')}
           </button>
           <button
             type="button"
@@ -5766,16 +5917,16 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
             className={tab === 'developer' ? 'is-active' : ''}
             onClick={() => setTab('developer')}
           >
-            加入反馈群
+            {t('feedback.tabGroup')}
           </button>
         </div>
         {tab === 'developer' ? (
           /* 扫码加开发者微信:无提交动作,表单整体让位给二维码 */
           <div className="fb-developer">
             <div className="fb-dev-qr-wrap">
-              <img className="fb-dev-qr" src={devWechatQr} alt="开发者微信二维码" draggable={false} />
+              <img className="fb-dev-qr" src={devWechatQr} alt={t('feedback.devQrAlt')} draggable={false} />
             </div>
-            <div className="fb-dev-tip">加开发者个人微信，备注“加入反馈群”</div>
+            <div className="fb-dev-tip">{t('feedback.devTip')}</div>
           </div>
         ) : (
           <>
@@ -5785,8 +5936,8 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
                 className="fb-textarea"
                 placeholder={
                   tab === 'issue'
-                    ? '请描述你遇到的问题,例如:同步失败、提醒不生效、界面显示异常…'
-                    : '说出你想要的功能,例如:待办导出、日历订阅、数据统计…'
+                    ? t('feedback.issuePlaceholder')
+                    : t('feedback.demandPlaceholder')
                 }
                 rows={5}
                 maxLength={1000}
@@ -5799,7 +5950,7 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
             <input
               className="fb-contact"
               type="text"
-              placeholder="请填写你的微信,以便详细沟通(选填)"
+              placeholder={t('feedback.contactPlaceholder')}
               maxLength={60}
               value={contact}
               onChange={(e) => setContact(e.target.value)}
@@ -5816,12 +5967,12 @@ function SupportSheet({ onClose, onOpenHistory }: { onClose: () => void; onOpenH
         <div className="fb-foot">
           <button type="button" className="fb-history-btn" onClick={onOpenHistory}>
             <History size={14} />
-            历史记录
-            {unread ? <span className="fb-dot" aria-label="有未读回复" /> : null}
+            {t('feedback.history')}
+            {unread ? <span className="fb-dot" aria-label={t('feedback.unreadAria')} /> : null}
           </button>
           {tab === 'developer' ? null : (
             <button type="button" className="fb-submit" onClick={submit} disabled={submitting}>
-              {submitting ? '提交中…' : '提交'}
+              {submitting ? t('feedback.submitting') : t('feedback.submit')}
             </button>
           )}
         </div>
@@ -5875,7 +6026,7 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
         // 打开即视为已读,清除红点
         await markFeedbackRead()
       } catch (e) {
-        if (alive && !hasCacheRef.current) setErr(e instanceof Error ? e.message : '加载失败')
+        if (alive && !hasCacheRef.current) setErr(e instanceof Error ? e.message : t('common.loadFail'))
       }
     })()
     return () => {
@@ -5893,25 +6044,25 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
   }
 
   const statusLabel = (s: FeedbackItem['status']) =>
-    s === 'done' ? '已处理' : s === 'replied' ? '已回复' : '待反馈'
+    s === 'done' ? t('feedback.statusDone') : s === 'replied' ? t('feedback.statusReplied') : t('feedback.statusWaiting')
 
   return (
     <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onClick={requestClose}>
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="历史记录"
+        aria-label={t('feedback.history')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">历史记录</div>
+        <div className="sheet-title">{t('feedback.history')}</div>
         <div className="fbh-body">
           {items === null && !err ? (
-            <div className="fbh-loading">加载中…</div>
+            <div className="fbh-loading">{t('common.loading')}</div>
           ) : err ? (
             <div className="fbh-empty">{err}</div>
           ) : (items ?? []).length === 0 ? (
-            <div className="fbh-empty">暂无反馈记录</div>
+            <div className="fbh-empty">{t('feedback.emptyHistory')}</div>
           ) : (
             (items ?? []).map((f) => {
               const isExpanded = expanded.has(f.id)
@@ -5920,7 +6071,7 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
                 <div className={`fbh-item ${f.unread ? 'is-unread' : ''}`} key={f.id}>
                   <div className="fbh-head">
                     <span className={`fbh-kind ${f.kind === 'demand' ? 'is-demand' : ''}`}>
-                      {f.kind === 'demand' ? '需求提报' : '问题反馈'}
+                      {f.kind === 'demand' ? t('feedback.tabDemand') : t('feedback.tabIssue')}
                     </span>
                     <span className={`fbh-status fbh-status-${f.status}`}>{statusLabel(f.status)}</span>
                     <span className="fbh-time">{fmtTimeShort(f.created_at)}</span>
@@ -5931,7 +6082,7 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
                       {shownReplies.map((r) => (
                         <div className="fbh-reply" key={r.id}>
                           <div className="fbh-reply-head">
-                            <span className="fbh-reply-tag">平台回复</span>
+                            <span className="fbh-reply-tag">{t('feedback.replyTag')}</span>
                             <span className="fbh-reply-time">{fmtTimeShort(r.created_at)}</span>
                           </div>
                           <div className="fbh-reply-body">{r.body}</div>
@@ -5939,7 +6090,7 @@ function SupportHistorySheet({ onClose }: { onClose: () => void }) {
                       ))}
                       {f.replies.length > 1 ? (
                         <button type="button" className="fbh-toggle" onClick={() => toggleExpand(f.id)}>
-                          {isExpanded ? '收起' : `展开全部 ${f.replies.length} 条回复`}
+                          {isExpanded ? t('common.collapse') : t('feedback.expandReplies', { count: f.replies.length })}
                         </button>
                       ) : null}
                     </div>
@@ -5982,7 +6133,7 @@ function ChangelogSheet({
         if (alive) setList(data)
       } catch (e) {
         if (alive && !hasCacheRef.current) {
-          setErr(e instanceof Error ? e.message : '加载失败')
+          setErr(e instanceof Error ? e.message : t('common.loadFail'))
         }
       }
     })()
@@ -5998,18 +6149,18 @@ function ChangelogSheet({
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label="版本记录"
+        aria-label={t('changelog.title')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">版本记录</div>
+        <div className="sheet-title">{t('changelog.title')}</div>
         <div className="cl-body">
           {rows.length === 0 && !err ? (
-            <div className="cl-empty">加载中…</div>
+            <div className="cl-empty">{t('common.loading')}</div>
           ) : err ? (
             <div className="cl-empty">{err}</div>
           ) : rows.length === 0 ? (
-            <div className="cl-empty">暂无版本记录</div>
+            <div className="cl-empty">{t('changelog.empty')}</div>
           ) : (
             rows.map((r) => {
               const isCurrent = !!current && r.version === current
@@ -6022,12 +6173,12 @@ function ChangelogSheet({
                 >
                   <div className="cl-card-head">
                     <span className="cl-version">v{r.version}</span>
-                    {isCurrent ? <span className="cl-current-tag">当前版本</span> : null}
+                    {isCurrent ? <span className="cl-current-tag">{t('changelog.currentTag')}</span> : null}
                     <span className="cl-date">{r.release_date || '—'}</span>
                   </div>
-                  <div className="cl-title">{r.title || '版本更新'}</div>
+                  <div className="cl-title">{r.title || t('changelog.fallbackTitle')}</div>
                   {r.items.length > 0 ? (
-                    <div className="cl-count">{r.items.length} 项更新</div>
+                    <div className="cl-count">{t('changelog.itemCount', { count: r.items.length })}</div>
                   ) : null}
                 </button>
               )
@@ -6048,25 +6199,25 @@ function ChangelogDetailSheet({ item, onClose }: { item: ReleaseRecord; onClose:
       <div
         className={`sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
-        aria-label={`版本 ${item.version} 详情`}
+        aria-label={t('changelog.detailAria', { version: item.version })}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <div className="sheet-title">版本详情</div>
+        <div className="sheet-title">{t('changelog.detailTitle')}</div>
         <div className="cl-body">
           <div className="cl-detail-head">
             <span className="cl-version is-lg">v{item.version}</span>
             <span className="cl-date">{item.release_date || '—'}</span>
           </div>
-          <div className="cl-detail-title">{item.title || '版本更新'}</div>
+          <div className="cl-detail-title">{item.title || t('changelog.fallbackTitle')}</div>
           {item.items.length > 0 ? (
             <ul className="cl-items">
-              {item.items.map((t, i) => (
-                <li key={i}>{t}</li>
+              {item.items.map((note, i) => (
+                <li key={i}>{note}</li>
               ))}
             </ul>
           ) : (
-            <div className="cl-empty">暂无更新说明</div>
+            <div className="cl-empty">{t('changelog.noItems')}</div>
           )}
         </div>
       </div>
@@ -6137,8 +6288,8 @@ function OccasionRow({ item, onOpen }: { item: Birthday; onOpen: (id: string) =>
   const next = nextBirthdayDate(item.calendar, item.month, item.day, item.isLeapMonth)
   const dateText =
     item.calendar === 'lunar'
-      ? `农历${formatLunar(item.month, item.day, item.isLeapMonth)}`
-      : `${item.month} 月 ${item.day} 日`
+      ? t('birthday.lunarDate', { date: formatLunar(item.month, item.day, item.isLeapMonth) })
+      : t('birthday.solarDate', { m: item.month, d: item.day })
   const isToday = days === 0
   const isSoon = days !== null && days > 0 && days <= 7
   const avatarSrc = AVATARS[item.avatar ?? '']
@@ -6157,10 +6308,10 @@ function OccasionRow({ item, onOpen }: { item: Birthday; onOpen: (id: string) =>
       </div>
       <div className="birthday-main">
         <div className="birthday-name-line">
-          <span className="birthday-name">{item.name || '未命名'}</span>
+          <span className="birthday-name">{item.name || t('birthday.unnamed')}</span>
           {item.relation && <span className="birthday-relation">{item.relation}</span>}
           {item.remindEnabled ? (
-            <span className="birthday-bell" title="已开启年度提醒">
+            <span className="birthday-bell" title={t('birthday.remindOnAria')}>
               🔔
             </span>
           ) : null}
@@ -6170,19 +6321,23 @@ function OccasionRow({ item, onOpen }: { item: Birthday; onOpen: (id: string) =>
           <span className="birthday-dot">·</span>
           <span>
             {next
-              ? `${next.getMonth() + 1}/${next.getDate()} 周${CN_WEEKDAY_SHORT[next.getDay()]}`
+              ? t('birthday.nextDate', {
+                  m: next.getMonth() + 1,
+                  d: next.getDate(),
+                  w: t(WEEKDAY_KEYS[next.getDay()]),
+                })
               : '—'}
           </span>
           <span className="birthday-dot">·</span>
           <span className="birthday-calendar-tag">
-            {item.calendar === 'lunar' ? '农历' : '公历'}
+            {item.calendar === 'lunar' ? t('birthday.calendarLunar') : t('birthday.calendarSolar')}
           </span>
         </div>
       </div>
       <div className={`birthday-countdown ${isToday ? 'is-today' : isSoon ? 'is-soon' : ''}`}>
         <span className="birthday-countdown-value">{countdownLabel(days)}</span>
         {days !== null && days > 1 && (
-          <span className="birthday-countdown-unit">{days} 天</span>
+          <span className="birthday-countdown-unit">{t('date.nDays', { n: days })}</span>
         )}
       </div>
     </div>
@@ -6207,16 +6362,17 @@ function BirthdaySheet({
   onDelete?: () => void
 }) {
   const { closing, requestClose } = useSheetClose(onClose)
+  const { t, locale } = useI18n()
   const kind = birthday?.kind ?? createKind
   const isBirthday = kind === 'birthday'
   const isEdit = Boolean(birthday)
   const title = isEdit
     ? isBirthday
-      ? '编辑生日'
-      : '编辑纪念日'
+      ? t('birthday.editTitle')
+      : t('anniversary.editTitle')
     : isBirthday
-      ? '添加生日'
-      : '添加纪念日'
+      ? t('birthday.addTitle')
+      : t('anniversary.addTitle')
 
   const [name, setName] = useState(birthday?.name ?? '')
   const [relation, setRelation] = useState(birthday?.relation ?? '')
@@ -6246,11 +6402,18 @@ function BirthdaySheet({
     const next = nextBirthdayDate(calendar, month, day, isLeapMonth)
     if (!next) return null
     const days = daysUntilBirthday(calendar, month, day, isLeapMonth)
-    const solarText = `${next.getFullYear()} 年 ${next.getMonth() + 1} 月 ${next.getDate()} 日 周${CN_WEEKDAY_SHORT[next.getDay()]}`
+    const solarText = t('birthday.solarFull', {
+      y: next.getFullYear(),
+      m: next.getMonth() + 1,
+      d: next.getDate(),
+      w: t(WEEKDAY_KEYS[next.getDay()]),
+    })
     const lunarText =
-      calendar === 'lunar' ? `农历${formatLunar(month, day, isLeapMonth)}` : `公历 ${month} 月 ${day} 日`
+      calendar === 'lunar'
+        ? t('birthday.lunarDate', { date: formatLunar(month, day, isLeapMonth) })
+        : t('birthday.solarLabeled', { m: month, d: day })
     return { solarText, lunarText, days }
-  }, [calendar, month, day, isLeapMonth])
+  }, [calendar, month, day, isLeapMonth, locale])
 
   const submit = () => {
     if (!name.trim()) return
@@ -6288,20 +6451,20 @@ function BirthdaySheet({
           {preview
             ? `${preview.lunarText} → ${preview.solarText}${
                 preview.days === 0
-                  ? ' · 就是今天'
+                  ? t('birthday.suffixToday')
                   : preview.days === 1
-                    ? ' · 明天'
-                    : ` · 还有 ${preview.days} 天`
+                    ? t('birthday.suffixTomorrow')
+                    : t('birthday.suffixDaysLater', { days: preview.days ?? 0 })
               }`
             : isBirthday
-              ? '请填写名称与生日日期'
-              : '请填写纪念日名称与日期'}
+              ? t('birthday.hintBirthday')
+              : t('birthday.hintAnniversary')}
         </div>
 
-        <div className="sheet-section">{isBirthday ? '名称' : '纪念日名称'}</div>
+        <div className="sheet-section">{isBirthday ? t('birthday.nameLabel') : t('birthday.annivNameLabel')}</div>
         <input
           className="sheet-field"
-          placeholder={isBirthday ? '好友或家人的名字' : '如:结婚纪念日、相识纪念日'}
+          placeholder={isBirthday ? t('birthday.namePlaceholder') : t('birthday.annivNamePlaceholder')}
           value={name}
           autoFocus
           onChange={(e) => setName(e.target.value)}
@@ -6309,8 +6472,8 @@ function BirthdaySheet({
 
         {isBirthday && (
           <>
-            <div className="sheet-section">头像</div>
-            <div className="avatar-picker" role="radiogroup" aria-label="选择头像">
+            <div className="sheet-section">{t('birthday.avatarLabel')}</div>
+            <div className="avatar-picker" role="radiogroup" aria-label={t('birthday.avatarAria')}>
               {AVATAR_KEYS.map((key) => (
                 <button
                   key={key}
@@ -6325,58 +6488,61 @@ function BirthdaySheet({
               ))}
             </div>
 
-            <div className="sheet-section">关系（可选）</div>
+            <div className="sheet-section">{t('birthday.relationLabel')}</div>
             <div className="date-picker-quick">
-              {['本人', '家人', '好友', '同事', '同学'].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  className={relation === r ? 'is-active' : ''}
-                  onClick={() => setRelation(relation === r ? '' : r)}
-                >
-                  {r}
-                </button>
-              ))}
+              {BIRTHDAY_RELATION_KEYS.map((k) => {
+                const label = t(k)
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    className={relation === label ? 'is-active' : ''}
+                    onClick={() => setRelation(relation === label ? '' : label)}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </>
         )}
 
-        <div className="sheet-section">历法</div>
+        <div className="sheet-section">{t('birthday.calendarLabel')}</div>
         <div className="date-picker-quick">
           <button
             type="button"
             className={calendar === 'solar' ? 'is-active' : ''}
             onClick={() => setCalendar('solar')}
           >
-            公历
+            {t('birthday.calendarSolar')}
           </button>
           <button
             type="button"
             className={calendar === 'lunar' ? 'is-active' : ''}
             onClick={() => setCalendar('lunar')}
           >
-            农历
+            {t('birthday.calendarLunar')}
           </button>
         </div>
 
-        <div className="sheet-section">日期</div>
+        <div className="sheet-section">{t('birthday.dateLabel')}</div>
         <div className="birthday-picker">
           <label className="birthday-picker-field">
-            <span>月</span>
+            <span>{t('datePick.month')}</span>
             <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>
-                  {calendar === 'lunar' ? CN_MONTHS[m - 1] : `${m} 月`}
+                  {calendar === 'lunar' ? CN_MONTHS[m - 1] : t('birthday.monthOption', { m })}
                 </option>
               ))}
             </select>
           </label>
           <label className="birthday-picker-field">
-            <span>日</span>
+            <span>{t('datePick.day')}</span>
             <select value={day} onChange={(e) => setDay(Number(e.target.value))}>
               {Array.from({ length: maxDay }, (_, i) => i + 1).map((d) => (
                 <option key={d} value={d}>
-                  {calendar === 'lunar' ? CN_DAYS[d - 1] : `${d} 日`}
+                  {calendar === 'lunar' ? CN_DAYS[d - 1] : t('birthday.dayOption', { d })}
                 </option>
               ))}
             </select>
@@ -6386,11 +6552,11 @@ function BirthdaySheet({
         {calendar === 'lunar' && (
           <label className="toggle-setting sheet-toggle">
             <span>
-              <strong>按闰月计</strong>
+              <strong>{t('birthday.leapToggle')}</strong>
               <small>
                 {leapMonth(new Date().getFullYear()) === month
-                  ? `今年确有闰${CN_MONTHS[month - 1]}，将按闰月换算`
-                  : `无闰月的年份自动按平月换算`}
+                  ? t('birthday.leapThisYear', { month: CN_MONTHS[month - 1] })
+                  : t('birthday.leapFallback')}
               </small>
             </span>
             <input
@@ -6402,11 +6568,11 @@ function BirthdaySheet({
           </label>
         )}
 
-        <div className="sheet-section">年度提醒</div>
+        <div className="sheet-section">{t('birthday.remindSection')}</div>
         <label className="toggle-setting sheet-toggle">
           <span>
-            <strong>开启提醒</strong>
-            <small>每年到这一天自动提醒</small>
+            <strong>{t('birthday.remindToggle')}</strong>
+            <small>{t('birthday.remindHint')}</small>
           </span>
           <input
             type="checkbox"
@@ -6420,21 +6586,21 @@ function BirthdaySheet({
           <>
             <div className="birthday-picker">
               <label className="birthday-picker-field">
-                <span>时</span>
+                <span>{t('datePick.hour')}</span>
                 <select value={remindHour} onChange={(e) => setRemindHour(Number(e.target.value))}>
                   {Array.from({ length: 24 }, (_, i) => i).map((h) => (
-                    <option key={h} value={h}>{`${pad2(h)} 时`}</option>
+                    <option key={h} value={h}>{t('birthday.hourOption', { n: pad2(h) })}</option>
                   ))}
                 </select>
               </label>
               <label className="birthday-picker-field">
-                <span>分</span>
+                <span>{t('datePick.minute')}</span>
                 <select
                   value={remindMinute}
                   onChange={(e) => setRemindMinute(Number(e.target.value))}
                 >
                   {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                    <option key={m} value={m}>{`${pad2(m)} 分`}</option>
+                    <option key={m} value={m}>{t('birthday.minuteOption', { n: pad2(m) })}</option>
                   ))}
                 </select>
               </label>
@@ -6447,33 +6613,33 @@ function BirthdaySheet({
                   className={remindDaysBefore === d ? 'is-active' : ''}
                   onClick={() => setRemindDaysBefore(d)}
                 >
-                  {d === 0 ? '当天提醒' : `提前 ${d} 天`}
+                  {d === 0 ? t('birthday.remindSameDay') : t('birthday.remindDaysBefore', { n: d })}
                 </button>
               ))}
             </div>
           </>
         )}
 
-        <div className="sheet-section">备注（可选）</div>
+        <div className="sheet-section">{t('birthday.noteLabel')}</div>
         <input
           className="sheet-field"
-          placeholder={isBirthday ? '想送什么、喜欢什么…' : '这一天的意义、想怎么过…'}
+          placeholder={isBirthday ? t('birthday.notePlaceholderBirthday') : t('birthday.notePlaceholderAnniv')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
 
         {onDelete && (
           <button type="button" className="sheet-danger" onClick={onDelete}>
-            删除记录
+            {t('birthday.deleteRecord')}
           </button>
         )}
 
         <div className="sheet-actions">
           <button type="button" onClick={requestClose}>
-            取消
+            {t('common.cancel')}
           </button>
           <button type="button" className="is-primary" disabled={!name.trim()} onClick={submit}>
-            保存
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -6503,6 +6669,7 @@ function UpdateNoticeSheet({
   onInstall: () => void
 }) {
   const [showAll, setShowAll] = useState(false)
+  const { t } = useI18n()
   // 弹窗真正渲染成功才消耗「每版本最多一次」额度(幂等,StrictMode 双跑无副作用)。
   useEffect(() => {
     markUpdateShown(notice.version)
@@ -6534,17 +6701,17 @@ function UpdateNoticeSheet({
         className="account-modal update-notice"
         role="dialog"
         aria-modal="true"
-        aria-label="发现新版本"
+        aria-label={t('updateNotice.aria')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="account-modal-head">
-          <strong>发现新版本 v{notice.version}</strong>
+          <strong>{t('updateNotice.title', { version: notice.version })}</strong>
           <button
             type="button"
             className="account-modal-close"
             onClick={onClose}
             disabled={busy}
-            aria-label="关闭"
+            aria-label={t('common.close')}
           >
             ✕
           </button>
@@ -6559,10 +6726,10 @@ function UpdateNoticeSheet({
           {showAll ? (
             <div className="update-notice-all">
               <button type="button" className="account-link" onClick={() => setShowAll(false)}>
-                ← 返回新版本介绍
+                {t('updateNotice.back')}
               </button>
               {allNew.length === 0 ? (
-                <div className="cl-empty">暂无版本记录</div>
+                <div className="cl-empty">{t('changelog.empty')}</div>
               ) : (
                 allNew.map((r) => (
                   <div className="update-notice-group" key={r.version}>
@@ -6570,10 +6737,10 @@ function UpdateNoticeSheet({
                       <span className="cl-version">v{r.version}</span>
                       <span className="cl-date">{r.release_date || '—'}</span>
                     </div>
-                    <div className="update-notice-group-title">{r.title || '版本更新'}</div>
+                    <div className="update-notice-group-title">{r.title || t('changelog.fallbackTitle')}</div>
                     {r.items.length > 0 ? (
                       <ul className="update-notice-list">
-                        {r.items.map((t, i) => <li key={i}>{t}</li>)}
+                        {r.items.map((item, i) => <li key={i}>{item}</li>)}
                       </ul>
                     ) : null}
                   </div>
@@ -6585,21 +6752,21 @@ function UpdateNoticeSheet({
               {notice.title ? <div className="update-notice-title">{notice.title}</div> : null}
               {items.length > 0 ? (
                 <ul className="update-notice-list">
-                  {items.map((t, i) => <li key={i}>{t}</li>)}
+                  {items.map((item, i) => <li key={i}>{item}</li>)}
                 </ul>
               ) : (
                 <p className="update-notice-notes">
-                  {notice.notes || '本次为稳定性优化与问题修复。'}
+                  {notice.notes || t('updateNotice.fallbackNotes')}
                 </p>
               )}
               {extraCount > 0 ? (
                 <div className="update-notice-extra">
-                  还有 {extraCount} 项更新，可在完整版本记录中查看
+                  {t('updateNotice.moreItems', { count: extraCount })}
                 </div>
               ) : null}
               {missed.length > 0 ? (
                 <div className="update-notice-missed">
-                  期间还发布了 {missed.length} 个版本（{missedLabel}）
+                  {t('updateNotice.missedVersions', { count: missed.length, versions: missedLabel })}
                 </div>
               ) : null}
               <button
@@ -6607,7 +6774,7 @@ function UpdateNoticeSheet({
                 className="account-link update-notice-all-link"
                 onClick={() => setShowAll(true)}
               >
-                查看完整版本记录 →
+                {t('updateNotice.viewAll')}
               </button>
             </>
           )}
@@ -6617,23 +6784,23 @@ function UpdateNoticeSheet({
           ) : null}
           {update.status === 'installing' ? (
             <div className="update-notice-error is-ok">
-              安装程序即将启动，Tacco 会先退出以完成覆盖安装；请在安装向导中点「安装」。
+              {t('updateNotice.installing')}
             </div>
           ) : null}
         </div>
 
         <div className="login-guide-actions">
           <button type="button" className="account-link" onClick={onClose} disabled={busy}>
-            稍后再说
+            {t('updateNotice.later')}
           </button>
           <button type="button" className="vip-buy-btn" onClick={onInstall} disabled={busy}>
             {update.status === 'downloading'
-              ? '下载中…'
+              ? t('version.downloading')
               : update.status === 'installing'
-                ? '即将安装…'
+                ? t('updateNotice.installingSoon')
                 : caps().inAppUpdate
-                  ? '立即更新'
-                  : '前往官网下载'}
+                  ? t('updateNotice.updateNow')
+                  : t('updateNotice.goWebsite')}
           </button>
         </div>
       </div>
@@ -6650,6 +6817,7 @@ function LoginGuideSheet({
   onGoLogin: () => void
   onClose: () => void
 }) {
+  const { t } = useI18n()
   if (!open) return null
   return (
     <div className="account-modal-overlay" onClick={onClose} role="presentation">
@@ -6657,26 +6825,26 @@ function LoginGuideSheet({
         className="account-modal login-guide"
         role="dialog"
         aria-modal="true"
-        aria-label="登录"
+        aria-label={t('login.title')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="account-modal-head">
-          <strong>登录</strong>
-          <button type="button" className="account-modal-close" onClick={onClose} aria-label="关闭">
+          <strong>{t('login.title')}</strong>
+          <button type="button" className="account-modal-close" onClick={onClose} aria-label={t('common.close')}>
             ✕
           </button>
         </div>
         {/* ⚠️ 不再写「登录后即可使用 XX、解锁全部会员能力」:会员能力还要看账号
             是否在试用期 / 已激活,登录本身不构成可用承诺。 */}
         <div className="login-guide-body">
-          <p>登录后可解锁更多功能的使用，支持数据同步云端</p>
+          <p>{t('login.guideBody')}</p>
         </div>
         <div className="login-guide-actions">
           <button type="button" className="account-link" onClick={onClose}>
-            暂不
+            {t('login.notNow')}
           </button>
           <button type="button" className="vip-buy-btn" onClick={onGoLogin}>
-            去登录
+            {t('login.goLogin')}
           </button>
         </div>
       </div>

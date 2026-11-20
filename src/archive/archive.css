@@ -239,6 +239,145 @@
   color: var(--muted);
 }
 
+/* 截图条目：缩略图（宽幅限高，点击开独立全屏预览窗） */
+.arch-shot-thumb {
+  position: relative;
+  margin-top: 6px;
+  max-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  cursor: pointer;
+}
+
+.arch-shot-thumb img {
+  display: block;
+  width: 100%;
+  max-height: 130px;
+  object-fit: cover;
+}
+
+.arch-shot-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.arch-shot-open {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.arch-shot-thumb:hover .arch-shot-open {
+  opacity: 1;
+}
+
+/* ——★2026-11-19 截图全屏预览覆盖层（主窗内 + 主窗临时全屏）——
+   apv-root 经 createPortal 挂在 document.body（escape .dock-layer 的
+   will-change:transform 包含块陷阱），fixed inset:0 = 真实视口；
+   主窗 setFullscreen(true) 后 = 整屏。遮罩与晾衣绳 .cl-preview 一致的
+   轻薄半透明（桌面透得出来；绝不用 backdrop-filter，透明 WebView2 里
+   blur 会强制重建整层合成）。点击空白 / ✕ / Esc 关闭并还原窗口。
+   z-index 盖过主窗一切层级。 */
+.apv-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(18, 22, 30, 0.32);
+  animation: apv-fade 0.18s ease;
+  cursor: zoom-out;
+}
+
+@keyframes apv-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 关闭钮 = 绳窗 .cl-pv-close 同款：白色圆钮 + 深色 ✕（半透明遮罩下任何桌面背景都可读）。
+   位于列布局流内（预览图正下方，2026-11-19 用户定稿：去掉「关闭」文案、不放右上角）。 */
+.apv-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3b404a;
+  font: 600 14px/1 Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.apv-close:hover {
+  background: #fff;
+}
+
+.apv-img {
+  max-width: 94vw;
+  max-height: 94vh;
+  object-fit: contain;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+
+.apv-tip {
+  color: #fff;
+  font:
+    13px/1.6 Inter,
+    'Segoe UI',
+    'Microsoft YaHei',
+    sans-serif;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+/* 提示胶囊 = 绳窗信息条同款深色底（浅色桌面下可读） */
+.apv-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ——★2026-11-19 v4：截图预览 = 独立整屏透明覆盖窗（ShotPreviewWindow）——
+   六轮实测定论：主窗是小条带窗口，setFullscreen（tao 改窗口样式=系统框闪现）
+   与 setSize/setPosition 几何改造（跳变=闪屏/黑幕）都无法做到「窗口完全静止」；
+   而晾衣绳预览完美是因为绳窗本身恒为整屏、预览零几何变化。所以预览必须在
+   「本来就在整屏的表面」上进行：Rust 按绳窗同款参数建/复用透明覆盖窗，
+   主窗彻底零改动。本组 .apv-* 样式同时用于：① 覆盖窗（窗口恒为整屏，
+   apv-root fixed inset:0 自然铺满，与晾衣绳 .cl-preview 同构）；
+   ② 主窗内回退覆盖层（覆盖窗不可用时，限主窗范围）。 */
+
 .arch-item-detail-tip {
   margin-top: 5px;
   font-size: 10.5px;

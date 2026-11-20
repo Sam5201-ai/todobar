@@ -28,56 +28,59 @@
     ]
   }
   </script>
+  <script src="./assets/i18n/common.js"></script>
+  <script src="./assets/i18n/faq.js"></script>
+  <script src="./assets/site-i18n.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="wrap">
       <a class="tbrand" href="./index.html"><img src="./assets/logo.webp?v=0.4.60" alt="Tacco 图标" /><span>Tacco</span></a>
       <nav class="tnav" aria-label="子站导航">
-        <a href="./index.html">首页</a>
-        <a href="./features.html">功能</a>
-        <a href="./compare.html">对比</a>
-        <a href="./faq.html" class="active">常见问题</a>
-        <a href="./changelog.html">更新日志</a>
+        <a href="./index.html" data-i18n="common.nav.home">首页</a>
+        <a href="./features.html" data-i18n="common.nav.features">功能</a>
+        <a href="./compare.html" data-i18n="common.nav.compare">对比</a>
+        <a href="./faq.html" class="active" data-i18n="common.nav.faq">常见问题</a>
+        <a href="./changelog.html" data-i18n="common.nav.changelog">更新日志</a>
       </nav>
-      <a class="tcta" href="./index.html#install">免费下载</a>
+      <a class="tcta" href="./index.html#install" data-i18n="common.tcta">免费下载</a>
     </div>
   </header>
 
   <main class="wrap">
     <section class="head">
-      <span class="kicker">常见问题</span>
-      <h1>关于 Tacco，你大概想问这些</h1>
-      <p class="lede">从收费、系统支持到数据安全，把高频疑问一次说清。</p>
-      <p class="breadcrumb"><a href="./index.html">首页</a> › 常见问题</p>
+      <span class="kicker" data-i18n="faq.head.kicker">常见问题</span>
+      <h1 data-i18n="faq.head.h1">关于 Tacco，你大概想问这些</h1>
+      <p class="lede" data-i18n="faq.head.lede">从收费、系统支持到数据安全，把高频疑问一次说清。</p>
+      <p class="breadcrumb"><a href="./index.html" data-i18n="common.nav.home">首页</a> <span data-i18n="faq.crumb.rest">› 常见问题</span></p>
     </section>
 
     <section class="faq">
-      <details open><summary>Tacco 是免费的吗？</summary><div class="ans">Windows 安装包可免费下载，核心的贴边待办、截图钉屏、剪贴板历史、便利签、录音等功能均可免费使用。部分增值能力（如更大云同步空间、专属功能）以会员形式提供，但基础使用不收费。</div></details>
-      <details><summary>Tacco 支持哪些操作系统？</summary><div class="ans">提供 Windows 版（支持 Windows 10 / 11）与 macOS 版（支持 macOS 12+，Apple 芯片与 Intel 均可），在官网下载页按设备选择对应安装包即可。</div></details>
-      <details><summary>我的待办和数据会不会丢？</summary><div class="ans">本地数据保存在本机，开启账号云同步后会在登录的电脑之间同步备份。建议开启云同步以在多设备保持一致，并降低单机故障导致丢失的风险。</div></details>
-      <details><summary>Tacco 和 TickTask 是什么关系？</summary><div class="ans">Tacco 是产品的对外品牌名（原 TickTask）。出于商店重名等原因，2026 年正式更名为 Tacco；内部数据目录与账号体系保持兼容，老用户升级后数据不丢失。</div></details>
-      <details><summary>怎么更新到新版本？</summary><div class="ans">Windows 端支持应用内检查更新，检测到新版本后可按提示下载安装；macOS 端暂不支持应用内自动更新，需到官网下载页下载最新安装包覆盖安装。两端也可随时在下载页获取最新安装包。</div></details>
-      <details><summary>会员是什么？</summary><div class="ans">会员是可选的增值服务，提供更大的云同步空间与部分专属能力，通过激活码兑换开通，基础功能不受会员限制。</div></details>
-      <details><summary>截图钉屏和剪贴板历史会侵犯隐私吗？</summary><div class="ans">截图、剪贴板与录音默认仅保存在本机或你的账号云空间，用于你自己的桌面效率提升。处理涉及敏感内容的剪贴板或截图时，建议按需清理。</div></details>
+      <details open><summary data-i18n="faq.q1">Tacco 是免费的吗？</summary><div class="ans" data-i18n="faq.a1">Windows 安装包可免费下载，核心的贴边待办、截图钉屏、剪贴板历史、便利签、录音等功能均可免费使用。部分增值能力（如更大云同步空间、专属功能）以会员形式提供，但基础使用不收费。</div></details>
+      <details><summary data-i18n="faq.q2">Tacco 支持哪些操作系统？</summary><div class="ans" data-i18n="faq.a2">提供 Windows 版（支持 Windows 10 / 11）与 macOS 版（支持 macOS 12+，Apple 芯片与 Intel 均可），在官网下载页按设备选择对应安装包即可。</div></details>
+      <details><summary data-i18n="faq.q3">我的待办和数据会不会丢？</summary><div class="ans" data-i18n="faq.a3">本地数据保存在本机，开启账号云同步后会在登录的电脑之间同步备份。建议开启云同步以在多设备保持一致，并降低单机故障导致丢失的风险。</div></details>
+      <details><summary data-i18n="faq.q4">Tacco 和 TickTask 是什么关系？</summary><div class="ans" data-i18n="faq.a4">Tacco 是产品的对外品牌名（原 TickTask）。出于商店重名等原因，2026 年正式更名为 Tacco；内部数据目录与账号体系保持兼容，老用户升级后数据不丢失。</div></details>
+      <details><summary data-i18n="faq.q5">怎么更新到新版本？</summary><div class="ans" data-i18n="faq.a5">Windows 端支持应用内检查更新，检测到新版本后可按提示下载安装；macOS 端暂不支持应用内自动更新，需到官网下载页下载最新安装包覆盖安装。两端也可随时在下载页获取最新安装包。</div></details>
+      <details><summary data-i18n="faq.q6">会员是什么？</summary><div class="ans" data-i18n="faq.a6">会员是可选的增值服务，提供更大的云同步空间与部分专属能力，通过激活码兑换开通，基础功能不受会员限制。</div></details>
+      <details><summary data-i18n="faq.q7">截图钉屏和剪贴板历史会侵犯隐私吗？</summary><div class="ans" data-i18n="faq.a7">截图、剪贴板与录音默认仅保存在本机或你的账号云空间，用于你自己的桌面效率提升。处理涉及敏感内容的剪贴板或截图时，建议按需清理。</div></details>
     </section>
 
     <section class="cta">
-      <h2>还有疑问？</h2>
-      <p>装一个试试最直观——免费、覆盖安装即可使用。</p>
-      <a class="btn-dl" href="./index.html#install">下载 Tacco（Windows）</a>
+      <h2 data-i18n="faq.cta.h2">还有疑问？</h2>
+      <p data-i18n="faq.cta.p">装一个试试最直观——免费、覆盖安装即可使用。</p>
+      <a class="btn-dl" href="./index.html#install" data-i18n="faq.cta.btn">下载 Tacco（Windows）</a>
     </section>
   </main>
 
   <footer class="foot">
     <div class="wrap">
-      <span class="fl">© <span>2026</span> Tacco · 贴在屏幕边缘的桌面效率工具</span>
+      <span class="fl" data-i18n="faq.foot.copyright">© <span>2026</span> Tacco · 贴在屏幕边缘的桌面效率工具</span>
       <nav class="fnav">
-        <a href="./index.html">首页</a>
-        <a href="./features.html">功能</a>
-        <a href="./compare.html">对比</a>
-        <a href="./faq.html">常见问题</a>
-        <a href="./changelog.html">更新日志</a>
+        <a href="./index.html" data-i18n="common.nav.home">首页</a>
+        <a href="./features.html" data-i18n="common.nav.features">功能</a>
+        <a href="./compare.html" data-i18n="common.nav.compare">对比</a>
+        <a href="./faq.html" data-i18n="common.nav.faq">常见问题</a>
+        <a href="./changelog.html" data-i18n="common.nav.changelog">更新日志</a>
       </nav>
     </div>
   </footer>

@@ -1,5 +1,6 @@
 import type { Recurrence, Task } from './types'
 import { isLegalHoliday } from './holidays'
+import { t } from './i18n'
 
 /** YYYY-MM-DD(本地日)。与 App 的 dayKey 约定一致。 */
 export function ymd(d: Date): string {
@@ -131,22 +132,22 @@ export function parseInstanceId(id: string): { templateId: string; dateKey: stri
   return { templateId: id.slice(0, at), dateKey: id.slice(at + 1) }
 }
 
-/** 周几短名(索引 0=日 … 6=六),用于规则文案。 */
-const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六']
+/** ISO 周几(索引 0=日 … 6=六)到 weekday.* 词条 key 后缀的映射,用于规则文案。 */
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 /** 重复规则的人类可读文案,如「每天」「每周三、周五」「每月15号」。 */
 export function recurrenceLabel(rec: Recurrence): string {
   let base = ''
-  if (rec.freq === 'daily') base = '每天'
+  if (rec.freq === 'daily') base = t('recur.daily')
   else if (rec.freq === 'weekly') {
     const days = (rec.weekdays ?? [])
       .slice()
       .sort((a, b) => a - b)
-      .map((w) => `周${WEEKDAY_SHORT[w % 7]}`)
-    base = `每周${days.join('、')}`
-  } else if (rec.freq === 'monthly') base = `每月${rec.monthDay ?? 1}号`
+      .map((w) => t(`weekday.${WEEKDAY_KEYS[w % 7]}`))
+    base = t('recur.weeklyDays', { days: days.join(t('recur.listSep')) })
+  } else if (rec.freq === 'monthly') base = t('recur.monthlyDay', { day: rec.monthDay ?? 1 })
   else return ''
-  return rec.skipHolidays ? `${base}(节假日除外)` : base
+  return rec.skipHolidays ? `${base}${t('recur.exceptHolidays')}` : base
 }
 
 /** 从 from 起(含)最近的第一个发生日 key(YYYY-MM-DD),找不到返回 null。 */

@@ -24,6 +24,7 @@ import {
 } from './clipboard'
 import { clAddCard, clMakeCard } from './clothesline/bridge'
 import { isFullAccess, loadAccount } from './account'
+import { t, useI18n } from './i18n'
 
 const WIN_W = 468
 const WIN_H = 600
@@ -51,9 +52,9 @@ function readTheme(): 'light' | 'dark' {
 
 function relTime(tsMs: number): string {
   const diff = Date.now() - tsMs
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  if (diff < 60_000) return t('clip.time.now')
+  if (diff < 3_600_000) return t('clip.time.minAgo', { n: Math.floor(diff / 60_000) })
+  if (diff < 86_400_000) return t('clip.time.hourAgo', { n: Math.floor(diff / 3_600_000) })
   const d = new Date(tsMs)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
@@ -80,6 +81,7 @@ export function ClipboardView() {
   const positionedRef = useRef(false)
   /** 最近一次「显示」的时刻,用于忽略 show 之后紧随的伪失焦事件。 */
   const shownAtRef = useRef(0)
+  const { t } = useI18n()
 
   const flash = useCallback((msg: string) => {
     setToast(msg)
@@ -202,11 +204,11 @@ export function ClipboardView() {
   const doCopy = useCallback(
     async (item: ClipItem) => {
       const pasted = await clipboardCopyBack(item.id)
-      flash(pasted ? '已粘贴到上一个窗口' : '已复制，去粘贴吧')
+      flash(pasted ? t('clip.pasted') : t('clip.copied'))
       // 复制后停留约 700ms 让提示可见,再收起(自动粘贴时 Rust 已先收起,此处 no-op)。
       window.setTimeout(() => void clipboardHideWindow(), 700)
     },
-    [flash],
+    [flash, t],
   )
 
   const doDelete = useCallback(async (item: ClipItem) => {
@@ -220,16 +222,16 @@ export function ClipboardView() {
       await clAddCard(
         clMakeCard('clipboard', {
           clip_id: item.id,
-          title: '剪贴板',
+          title: t('tool.clipboard'),
           text: item.text,
         }),
         isFullAccess(loadAccount()),
       )
-      flash('已挂到晾衣绳')
+      flash(t('clip.hangDone'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
-  }, [flash])
+  }, [flash, t])
 
   const doPin = useCallback(async (item: ClipItem) => {
     const next = !item.pinned
@@ -286,16 +288,16 @@ export function ClipboardView() {
           ref={inputRef}
           className="cb-input"
           value={query}
-          placeholder="搜索剪贴板…  ↑↓ 选择 · Enter 复制 · 1-9 快选 · Esc 收起"
+          placeholder={t('clip.searchPlaceholder')}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
 
-      <div className="cb-hint">单击任意一条文案即可复制 · 悬停显示 复制 / 置顶 / 删除</div>
+      <div className="cb-hint">{t('clip.hint')}</div>
 
       <div className="cb-list" ref={listRef}>
         {filtered.length === 0 ? (
-          <div className="cb-empty">还没有记录。复制点什么试试 —— 最多保留 50 条纯文本。</div>
+          <div className="cb-empty">{t('clip.empty')}</div>
         ) : (
           filtered.map((it, idx) => (
             <div
@@ -307,16 +309,16 @@ export function ClipboardView() {
             >
               <div className="cb-item-text">{it.preview || it.text}</div>
               <div className="cb-item-meta">
-                {it.pinned ? <span className="cb-tag cb-tag-pin">置顶</span> : null}
+                {it.pinned ? <span className="cb-tag cb-tag-pin">{t('task.pinned')}</span> : null}
                 {it.source ? <span className="cb-tag">{it.source.replace(/\.exe$/i, '')}</span> : null}
                 <span className="cb-time">{relTime(it.created_at)}</span>
-                <span className="cb-len">{it.len} 字</span>
+                <span className="cb-len">{t('clip.chars', { n: it.len })}</span>
               </div>
               <div className="cb-item-ops">
                 <button
                   type="button"
                   className="cb-op"
-                  title="挂到晾衣绳"
+                  title={t('clip.hangTitle')}
                   onClick={(e) => {
                     e.stopPropagation()
                     void doHang(it)
@@ -327,7 +329,7 @@ export function ClipboardView() {
                 <button
                   type="button"
                   className="cb-op cb-op-copy"
-                  title="复制"
+                  title={t('clip.copyTitle')}
                   onClick={(e) => {
                     e.stopPropagation()
                     void doCopy(it)
@@ -338,7 +340,7 @@ export function ClipboardView() {
                 <button
                   type="button"
                   className="cb-op"
-                  title={it.pinned ? '取消置顶' : '置顶'}
+                  title={it.pinned ? t('clip.unpin') : t('task.pinned')}
                   onClick={(e) => {
                     e.stopPropagation()
                     void doPin(it)
@@ -349,7 +351,7 @@ export function ClipboardView() {
                 <button
                   type="button"
                   className="cb-op cb-op-del"
-                  title="删除"
+                  title={t('clip.deleteTitle')}
                   onClick={(e) => {
                     e.stopPropagation()
                     void doDelete(it)
@@ -373,24 +375,24 @@ export function ClipboardView() {
             void clipboardSetPaused(next)
           }}
         >
-          {paused ? '已暂停记录' : '记录中'}
+          {paused ? t('clip.paused') : t('clip.recording')}
         </button>
-        <span className="cb-count">共 {items.length} 条</span>
+        <span className="cb-count">{t('clip.count', { n: items.length })}</span>
         <button
           type="button"
           className="cb-foot-btn cb-foot-danger"
           onClick={() => {
             void clipboardClear()
             setItems([])
-            flash('已清空')
+            flash(t('clip.cleared'))
           }}
         >
-          清空全部
+          {t('clip.clearAll')}
         </button>
         <button
           type="button"
           className="cb-foot-btn"
-          title="收起"
+          title={t('common.collapse')}
           onClick={() => void clipboardHideWindow()}
         >
           <X size={13} />

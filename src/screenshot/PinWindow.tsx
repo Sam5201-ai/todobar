@@ -33,8 +33,9 @@ import {
   setPinState,
   type PinState,
 } from './store';
-import { clAddCard, clMakeCard, clSavePreview } from '../clothesline/bridge';
+import { clAddCard, clMakeCard, clSaveOriginal, clSavePreview } from '../clothesline/bridge';
 import { isFullAccess, loadAccount } from '../account';
+import { useI18n } from '../i18n';
 import { cropRegionPng } from './ocr/prepare';
 import { filterNoiseLines, OCR_INPUT_LIMIT, recognizeRegion } from './ocr/ocrClient';
 import './screenshot.css';
@@ -60,6 +61,7 @@ function measureTextWidth(text: string, fontPx: number): number {
 export default function PinWindow() {
   const win = getCurrentWindow();
   const label = win.label;
+  const { t } = useI18n();
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [pinId, setPinId] = useState<string | null>(null);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export default function PinWindow() {
       // 识别期间提示:PP-OCRv4 神经网络推理约 0.3~1.5s,期间文字层尚未生成,
       // 此刻划选必然无反应 —— 明确告知「正在识别」,避免用户误判功能失效。
       // 缓存命中时毫秒级返回,提示一闪而过基本无感。
-      setToast('正在识别文字…');
+      setToast(t('shot.pinOcrRunning'));
       const r = await recognizeRegion(png);
       setToast('');
       if (ocrRunRef.current !== run) return; // 悬挂结果(换图/关闭)丢弃
@@ -428,7 +430,7 @@ export default function PinWindow() {
       } else if (e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setPenetrated((v) => !v);
-        showToast(penetrated ? '已取消穿透' : '已开启穿透(点击穿透桌面)');
+        showToast(penetrated ? t('shot.passOff') : t('shot.passOn'));
       } else if (e.key === '=' || e.key === '+') {
         e.preventDefault();
         setOpacity((o) => Math.min(1, Math.round((o + OPACITY_STEP) * 10) / 10));
@@ -511,9 +513,9 @@ export default function PinWindow() {
     if (!dataUrl) return;
     try {
       await writeClipboardImage(dataUrl.split(',')[1] ?? '');
-      showToast('已复制图片');
+      showToast(t('shot.copiedImage'));
     } catch (e) {
-      showToast(`复制失败: ${String(e)}`);
+      showToast(t('shot.copyFailed', { err: String(e) }));
     }
   };
 
@@ -532,14 +534,18 @@ export default function PinWindow() {
       const seed = clMakeCard('pin', {
         pin_id: pinIdRef.current,
       });
+      // ★2026-11-19 反馈2：落盘全分辨率原图（dataUrl 是贴图裁剪的原始数据），
+      // 预览覆盖层优先显示它；缩略图只做卡片挂绳小图。
+      const pngMime = dataUrl.startsWith('data:') ? dataUrl.slice(5, dataUrl.indexOf(';')) : 'image/png';
+      void clSaveOriginal(seed.id, pngMime, dataUrl).catch(() => undefined);
       const path = await clSavePreview(seed.id, canvas.toDataURL('image/png'));
       await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()));
-      showToast('已挂到晾衣绳');
+      showToast(t('clothesline.toast.hung'));
       // 问题6：挂绳成功后桌面上的这张贴图要自动关闭，否则桌面 + 晾衣绳同时存在两张。
       // 走 closeToHistory（进历史、不销毁数据），而不是 destroy（会删掉贴图记录）。
       closeToHistory();
     } catch (e) {
-      showToast(`挂绳失败: ${String(e)}`);
+      showToast(t('shot.ropeFailed', { err: String(e) }));
     }
   };
 
@@ -557,34 +563,34 @@ export default function PinWindow() {
   const showContextMenu = async () => {
     const items: (MenuItemOptions | CheckMenuItemOptions | PredefinedMenuItemOptions)[] = [
       {
-        text: '锁定贴图',
+        text: t('shot.menuLock'),
         checked: locked,
         action: () => setLocked((v) => !v),
       },
       {
-        text: '鼠标穿透',
+        text: t('shot.menuPenetrate'),
         checked: penetrated,
         action: () => {
           setPenetrated((v) => !v);
-          showToast(penetrated ? '已取消穿透' : '已开启穿透(点击穿透桌面)');
+          showToast(penetrated ? t('shot.passOff') : t('shot.passOn'));
         },
       },
       { item: 'Separator' },
       {
-        text: '降低不透明度',
+        text: t('shot.menuOpacityDown'),
         action: () =>
           setOpacity((o) => Math.max(MIN_OPACITY, Math.round((o - OPACITY_STEP) * 10) / 10)),
       },
       {
-        text: '提高不透明度',
+        text: t('shot.menuOpacityUp'),
         action: () => setOpacity((o) => Math.min(1, Math.round((o + OPACITY_STEP) * 10) / 10)),
       },
       { item: 'Separator' },
-      { text: '复制图片', action: () => void copyPinImage() },
-      { text: '挂到晾衣绳', action: () => void hangPinOnRope() },
+      { text: t('shot.menuCopyImage'), action: () => void copyPinImage() },
+      { text: t('shot.menuHang'), action: () => void hangPinOnRope() },
       { item: 'Separator' },
-      { text: '关闭(进历史)', action: () => closeToHistory() },
-      { text: '销毁(移出历史)', action: () => destroy() },
+      { text: t('shot.menuCloseHist'), action: () => closeToHistory() },
+      { text: t('shot.menuDestroy'), action: () => destroy() },
     ];
     let menu: Menu;
     try {
@@ -663,7 +669,7 @@ export default function PinWindow() {
       <img
         className="pin-image"
         src={dataUrl}
-        alt="贴图"
+        alt={t('shot.pinAlt')}
         draggable={false}
         style={{ opacity }}
         onMouseDown={onImageMouseDown}
@@ -695,7 +701,7 @@ export default function PinWindow() {
       )}
 
       {!locked && !penetrated && (
-        <div className="pin-resize-handle" onMouseDown={onResizeDown} title="拖拽缩放" />
+        <div className="pin-resize-handle" onMouseDown={onResizeDown} title={t('shot.resizeTip')} />
       )}
 
       {toast && <div className="pin-toast">{toast}</div>}

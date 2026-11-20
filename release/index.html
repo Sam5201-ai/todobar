@@ -459,13 +459,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 .fx-pill.active .p-ico { opacity: .95; }
 
-.fx-hint { text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--faint); }
-.fx-hint kbd {
-  font-family: inherit; font-size: 11px; font-weight: 800; padding: 2px 7px;
-  border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--muted);
-  box-shadow: 0 2px 0 var(--border);
-}
-
 /* 轮播响应式 */
 @media (max-width: 1020px) {
   .fx-stage { height: 640px; }
@@ -553,6 +546,9 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   .float-chip { animation: none; }
 }
 </style>
+<script src="./assets/i18n/common.js"></script>
+<script src="./assets/i18n/index.js"></script>
+<script src="./assets/site-i18n.js"></script>
 </head>
 <body>
 
@@ -560,17 +556,17 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <header class="nav">
   <div class="wrap nav-inner">
     <a href="#top" class="brand">
-      <img src="./assets/logo.webp?v=0.4.82" alt="Tacco 图标" />
+      <img src="./assets/logo.webp?v=0.4.82" alt="Tacco 图标" data-i18n-alt="index.brand.imgAlt" />
       <span>Tacco</span>
     </a>
     <nav class="nav-links" aria-label="主导航">
-      <a href="#features">功能亮点</a>
-      <a href="#install">安装指南</a>
-      <a href="#faq">常见问题</a>
+      <a href="#features" data-i18n="index.nav.features">功能亮点</a>
+      <a href="#install" data-i18n="index.nav.install">安装指南</a>
+      <a href="#faq" data-i18n="index.nav.faq">常见问题</a>
     </nav>
     <div class="nav-right">
       <button class="theme-btn" id="themeToggle" aria-label="切换深浅色">🌙</button>
-      <a href="#install" class="btn-primary">免费下载</a>
+      <a href="#install" class="btn-primary" data-i18n="common.tcta">免费下载</a>
     </div>
   </div>
 </header>
@@ -580,10 +576,10 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
   <div class="wrap hero-grid">
     <div>
       <span class="hero-badge"><span class="dot"></span><span id="osBadge">v0.4.82 · Windows 版</span></span>
-      <h1><span class="h1-kicker">Tacco · Windows 贴边待办栏</span>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
-      <p class="lead">
+      <h1 data-i18n-html="index.hero.h1"><span class="h1-kicker">Tacco · Windows 贴边待办栏</span>待办事项，<br />就该<span class="grad">贴在屏幕边缘</span>。</h1>
+      <p class="lead" data-i18n-html="index.hero.lead">
         Tacco 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，<b>几乎不占任何桌面空间</b>，
-        鼠标一划即出、用完自动收回。而且它不止是待办——<b>8 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
+        鼠标一划即出、用完自动收回。而且它不止是待办——<b>9 大功能一件不落</b>，记录、提醒、换算、截图，全都有了。
       </p>
       <div class="hero-cta">
         <a href="#install" class="btn-download" id="mainDownload">
@@ -593,10 +589,10 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
       </div>
       <p class="hero-meta" id="heroMeta">正在识别你的系统…</p>
       <div class="alt-dl" id="altDl">
-        <span class="alt-label">不是这台电脑？</span>
-        <a data-dl="win">Windows 版</a>
-        <a data-dl="mac-arm">macOS · Apple 芯片</a>
-        <a data-dl="mac-intel">macOS · Intel</a>
+        <span class="alt-label" data-i18n="index.hero.altLabel">不是这台电脑？</span>
+        <a data-dl="win" data-i18n="index.plat.win">Windows 版</a>
+        <a data-dl="mac-arm" data-i18n="index.plat.macArm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel" data-i18n="index.plat.macIntel">macOS · Intel</a>
       </div>
     </div>
 
@@ -607,7 +603,7 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
           <div class="desktop-icon"><img src="./assets/logo.webp?v=0.4.82" alt="" /><span>Tacco</span></div>
           <div class="demo-panel">
             <span class="panel-handle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-6 7 6 7"/></svg></span>
-            <img src="./assets/panel-crop.webp?v=0.4.82" alt="Tacco 待办栏贴边展开演示" />
+            <img src="./assets/panel-crop.webp?v=0.4.82" alt="Tacco 待办栏贴边展开演示" data-i18n-alt="index.hero.demoAlt" />
           </div>
           <div class="taskbar">
             <div class="ticons">
@@ -628,14 +624,25 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <section class="fx-section" id="features">
   <div class="wrap">
     <div class="fx-head">
-      <span class="fx-kicker-line">Features</span>
-      <h2>Tacco 的 8 大功能：截图钉屏、剪贴板历史、便利签、录音等</h2>
-      <p>每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
+      <span class="fx-kicker-line" data-i18n="index.fx.kicker">Features</span>
+      <h2 data-i18n="index.fx.h2">Tacco 的 9 大功能</h2>
+      <div class="fx-pills" id="fxPills">
+        <button class="fx-pill active" data-goto="0" aria-label="待办事项" data-i18n-aria-label="index.pill1"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h6"/><path d="M3 5l1.6 1.6L7.4 3.7"/><path d="M3 12l1.6 1.6L7.4 10.7"/><path d="M3 19l1.6 1.6L7.4 17.7"/></svg><span data-i18n="index.pill1">待办事项</span></button>
+        <button class="fx-pill" data-goto="1" aria-label="生日纪念日" data-i18n-aria-label="index.pill2"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M4 20v-6.5a2 2 0 012-2h12a2 2 0 012 2V20"/><path d="M8 11.5V9m4 2.5V7.5m4 4V9"/><path d="M8 6.2a1 1 0 100-2 1 1 0 000 2zm4-2a1 1 0 100-2 1 1 0 000 2zm4 2a1 1 0 100-2 1 1 0 000 2z"/></svg><span data-i18n="index.pill2">生日纪念日</span></button>
+        <button class="fx-pill" data-goto="2" aria-label="晾衣绳" data-i18n-aria-label="index.pill9"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18"/><path d="M7 8v1.5M17 8v1.5"/><rect x="6" y="9.5" width="5" height="6" rx="1.2"/><rect x="13.5" y="9.5" width="5" height="7.5" rx="1.2"/></svg><span data-i18n="index.pill9">晾衣绳</span></button>
+        <button class="fx-pill" data-goto="3" aria-label="计算器" data-i18n-aria-label="index.pill3"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h.01M9 18.5h6"/></svg><span data-i18n="index.pill3">计算器</span></button>
+        <button class="fx-pill" data-goto="4" aria-label="万年历" data-i18n-aria-label="index.pill4"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg><span data-i18n="index.pill4">万年历</span></button>
+        <button class="fx-pill" data-goto="5" aria-label="牛马计薪器" data-i18n-aria-label="index.pill5"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.3"/><path d="M6.5 7V5.6A1.6 1.6 0 018.1 4H16"/></svg><span data-i18n="index.pill5">牛马计薪器</span></button>
+        <button class="fx-pill" data-goto="6" aria-label="截图贴图" data-i18n-aria-label="index.pill6"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14a1 1 0 001 1h13"/><path d="M17 21V7a1 1 0 00-1-1H3"/><circle cx="13.5" cy="10.5" r="1.5"/></svg><span data-i18n="index.pill6">截图贴图</span></button>
+        <button class="fx-pill" data-goto="7" aria-label="便利签" data-i18n-aria-label="index.pill7"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h7.5"/><path d="M20 13.5l-6.5 6.5v-4.5a2 2 0 012-2H20z"/><path d="M8 9h8M8 12.5h5"/></svg><span data-i18n="index.pill7">便利签</span></button>
+        <button class="fx-pill" data-goto="8" aria-label="剪贴板" data-i18n-aria-label="index.pill8"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9.5 4.5V3.6A1.6 1.6 0 0111.1 2h1.8a1.6 1.6 0 011.6 1.6v.9z"/><path d="M9 11h6M9 15h6"/></svg><span data-i18n="index.pill8">剪贴板</span></button>
+      </div>
+      <p data-i18n="index.fx.p">每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。</p>
     </div>
 
     <div class="fx-stage-wrap">
-      <button class="fx-arrow prev" id="fxPrev" aria-label="上一个功能">‹</button>
-      <button class="fx-arrow next" id="fxNext" aria-label="下一个功能">›</button>
+      <button class="fx-arrow prev" id="fxPrev" aria-label="上一个功能" data-i18n-aria-label="index.fx.prev">‹</button>
+      <button class="fx-arrow next" id="fxNext" aria-label="下一个功能" data-i18n-aria-label="index.fx.next">›</button>
 
       <div class="fx-stage" id="fxStage">
 
@@ -643,27 +650,27 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
         <article class="fx-slide" style="--accent-strong:#1d7ef0;--accent-strong-2:#38bdf8;--accent-soft:rgba(29,126,240,.10);--p:#1d7ef0">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">01 / 08</span>
+              <div class="fx-tag"><span class="num">01 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
-                待办事项
+                <span data-i18n="index.s1.tag">待办事项</span>
               </div>
-              <h3 class="fx-title">贴在屏幕边缘的待办清单</h3>
-              <p class="fx-slogan">一划即出，用完自动收回，抬眼就能看见今天该做什么</p>
-              <p class="fx-desc">Tacco 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。</p>
+              <h3 class="fx-title" data-i18n="index.s1.title">贴在屏幕边缘的待办清单</h3>
+              <p class="fx-slogan" data-i18n="index.s1.slogan">一划即出，用完自动收回，抬眼就能看见今天该做什么</p>
+              <p class="fx-desc" data-i18n="index.s1.desc">Tacco 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。</p>
               <ul class="fx-points">
-                <li>日 / 周 / 月三视图，置顶、子任务自由组合</li>
-                <li>重复事项一键跳过法定节假日（数据自动更新）</li>
-                <li>提醒精确到分钟，弹窗 + 声音，再忙也不错过</li>
-                <li>勾选即完成，今日进度条一目了然</li>
+                <li data-i18n="index.s1.p1">日 / 周 / 月三视图，置顶、子任务自由组合</li>
+                <li data-i18n="index.s1.p2">重复事项一键跳过法定节假日（数据自动更新）</li>
+                <li data-i18n="index.s1.p3">提醒精确到分钟，弹窗 + 声音，再忙也不错过</li>
+                <li data-i18n="index.s1.p4">勾选即完成，今日进度条一目了然</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。</p>
+              <p class="fx-tip" data-i18n-html="index.s1.tip.html"><b>适合场景：</b>写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame crop">
-                <img src="./assets/shot-01-todo.webp?v=0.4.82" alt="待办事项首页截图" loading="lazy" />
+                <img src="./assets/shot-01-todo.webp?v=0.4.82" alt="待办事项首页截图" loading="lazy" data-i18n-alt="index.s1.imgAlt" />
               </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>⏰ 到点提醒弹窗</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>今日进度条</span>
+              <span class="float-chip fc1"><span class="fc-dot"></span><span data-i18n="index.s1.chip1">⏰ 到点提醒弹窗</span></span>
+              <span class="float-chip fc2"><span class="fc-dot"></span><span data-i18n="index.s1.chip2">今日进度条</span></span>
             </div>
           </div>
         </article>
@@ -672,194 +679,221 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
         <article class="fx-slide" style="--accent-strong:#ec4899;--accent-strong-2:#f472b6;--accent-soft:rgba(236,72,153,.10);--p:#ec4899">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">02 / 08</span>
+              <div class="fx-tag"><span class="num">02 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v8m-4-4h8M20 12a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
-                生日 / 纪念日
+                <span data-i18n="index.s2.tag">生日 / 纪念日</span>
               </div>
-              <h3 class="fx-title">重要的人，一天都不会忘</h3>
-              <p class="fx-slogan">公历农历都能记，提前提醒，倒计时高亮</p>
-              <p class="fx-desc">把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。</p>
+              <h3 class="fx-title" data-i18n="index.s2.title">重要的人，一天都不会忘</h3>
+              <p class="fx-slogan" data-i18n="index.s2.slogan">公历农历都能记，提前提醒，倒计时高亮</p>
+              <p class="fx-desc" data-i18n="index.s2.desc">把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。</p>
               <ul class="fx-points">
-                <li>公历 / 农历双历记录，农历生日自动算</li>
-                <li>提前 N 天开始提醒，当天只提醒一次不打扰</li>
-                <li>「还有 X 天」倒计时高亮，最近的日子置顶</li>
-                <li>与待办栏同屏显示，不用来回切换应用</li>
+                <li data-i18n="index.s2.p1">公历 / 农历双历记录，农历生日自动算</li>
+                <li data-i18n="index.s2.p2">提前 N 天开始提醒，当天只提醒一次不打扰</li>
+                <li data-i18n="index.s2.p3">「还有 X 天」倒计时高亮，最近的日子置顶</li>
+                <li data-i18n="index.s2.p4">与待办栏同屏显示，不用来回切换应用</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。</p>
+              <p class="fx-tip" data-i18n-html="index.s2.tip.html"><b>适合场景：</b>爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame crop">
-                <img src="./assets/shot-02-birthday.webp?v=0.4.82" alt="生日与纪念日记录截图" loading="lazy" />
+                <img src="./assets/shot-02-birthday.webp?v=0.4.82" alt="生日与纪念日记录截图" loading="lazy" data-i18n-alt="index.s2.imgAlt" />
               </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>🎂 倒计时高亮</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>农历 / 公历切换</span>
+              <span class="float-chip fc1"><span class="fc-dot"></span><span data-i18n="index.s2.chip1">🎂 倒计时高亮</span></span>
+              <span class="float-chip fc2"><span class="fc-dot"></span><span data-i18n="index.s2.chip2">农历 / 公历切换</span></span>
             </div>
           </div>
         </article>
 
-        <!-- 03 计算器 -->
+        <!-- 03 晾衣绳 -->
+        <article class="fx-slide" style="--accent-strong:#ea580c;--accent-strong-2:#fb923c;--accent-soft:rgba(234,88,12,.10);--p:#ea580c">
+          <div class="fx-card">
+            <div class="fx-info">
+              <div class="fx-tag"><span class="num">03 / 09</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5h18"/><path d="M7.5 7.5v1.6M16.5 7.5v1.6"/><rect x="5.5" y="9.1" width="5.5" height="6.5" rx="1.4"/><rect x="13" y="9.1" width="5.5" height="8.4" rx="1.4"/><path d="M7.2 12h2.1M14.7 12h2.1"/></svg>
+                <span data-i18n="index.s9.tag">晾衣绳</span>
+              </div>
+              <h3 class="fx-title" data-i18n="index.s9.title">重要的事，夹在眼前</h3>
+              <p class="fx-slogan" data-i18n="index.s9.slogan">桌面顶上一根绳，便签、截图、计时器随手挂上去</p>
+              <p class="fx-desc" data-i18n="index.s9.desc">屏幕顶部横着一条木质晾衣绳，把便利签、灵感随笔、截图、倒计时、番茄钟、万年历像晾衣服一样夹在上面：抬眼就看到，做完取下来。卡片可拖动排序、可置顶显示，把桌面变成一面任务展示墙。</p>
+              <ul class="fx-points">
+                <li data-i18n="index.s9.p1">一根绳挂多种卡片：便签、截图、倒计时、番茄钟、万年历</li>
+                <li data-i18n="index.s9.p2">截图或复制的内容，可一键挂上晾衣绳</li>
+                <li data-i18n="index.s9.p3">卡片自由拖动排序，做完一件取下一件</li>
+                <li data-i18n="index.s9.p4">支持置顶显示，常驻桌面抬眼可见</li>
+              </ul>
+              <p class="fx-tip" data-i18n-html="index.s9.tip.html"><b>适合场景：</b>把今天最重要的几件事挂在屏幕顶上，配着卡片与照片，既是效率也是心情。</p>
+            </div>
+            <div class="fx-shot">
+              <div class="fx-shot-frame full" style="--shot-w:504px;--ar:1024/550">
+                <img src="./assets/shot-09-clothesline.jpg?v=0.4.82" alt="Tacco 晾衣绳：屏幕顶部的木绳夹着便签、灵感随笔、截图、倒计时、万年历与番茄钟卡片" loading="lazy" data-i18n-alt="index.s9.imgAlt" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 04 计算器 -->
         <article class="fx-slide" style="--accent-strong:#8b5cf6;--accent-strong-2:#a78bfa;--accent-soft:rgba(139,92,246,.10);--p:#8b5cf6">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">03 / 08</span>
+              <div class="fx-tag"><span class="num">04 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h6"/></svg>
-                计算器
+                <span data-i18n="index.s3.tag">计算器</span>
               </div>
-              <h3 class="fx-title">顺手一按，什么都能算</h3>
-              <p class="fx-slogan">四则运算、日期差、汇率换算，一页全搞定</p>
-              <p class="fx-desc">不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。</p>
+              <h3 class="fx-title" data-i18n="index.s3.title">顺手一按，什么都能算</h3>
+              <p class="fx-slogan" data-i18n="index.s3.slogan">四则运算、日期差、汇率换算，一页全搞定</p>
+              <p class="fx-desc" data-i18n="index.s3.desc">不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。</p>
               <ul class="fx-points">
-                <li>基础四则运算，支持键盘连续输入</li>
-                <li>日期差 / 工作日 / 年龄计算</li>
-                <li>长度、重量、温度等单位换算</li>
-                <li>多币种实时汇率换算（联网自动更新）</li>
+                <li data-i18n="index.s3.p1">基础四则运算，支持键盘连续输入</li>
+                <li data-i18n="index.s3.p2">日期差 / 工作日 / 年龄计算</li>
+                <li data-i18n="index.s3.p3">长度、重量、温度等单位换算</li>
+                <li data-i18n="index.s3.p4">多币种实时汇率换算（联网自动更新）</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>算年假还剩几天、倒推项目工期、海外购物折算人民币。</p>
+              <p class="fx-tip" data-i18n-html="index.s3.tip.html"><b>适合场景：</b>算年假还剩几天、倒推项目工期、海外购物折算人民币。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame crop">
-                <img src="./assets/shot-03-calculator.webp?v=0.4.82" alt="内置计算器截图" loading="lazy" />
+                <img src="./assets/shot-03-calculator.webp?v=0.4.82" alt="内置计算器截图" loading="lazy" data-i18n-alt="index.s3.imgAlt" />
               </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>💱 实时汇率</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>键盘直达</span>
+              <span class="float-chip fc1"><span class="fc-dot"></span><span data-i18n="index.s3.chip1">💱 实时汇率</span></span>
+              <span class="float-chip fc2"><span class="fc-dot"></span><span data-i18n="index.s3.chip2">键盘直达</span></span>
             </div>
           </div>
         </article>
 
-        <!-- 04 万年历 -->
+        <!-- 05 万年历 -->
         <article class="fx-slide" style="--accent-strong:#f59e0b;--accent-strong-2:#fbbf24;--accent-soft:rgba(245,158,11,.11);--p:#f59e0b">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">04 / 08</span>
+              <div class="fx-tag"><span class="num">05 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg>
-                万年历
+                <span data-i18n="index.s4.tag">万年历</span>
               </div>
-              <h3 class="fx-title">农历、节气、宜忌，一查便知</h3>
-              <p class="fx-slogan">法定节假日休/班标记清晰，安排假期不踩坑</p>
-              <p class="fx-desc">内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。</p>
+              <h3 class="fx-title" data-i18n="index.s4.title">农历、节气、宜忌，一查便知</h3>
+              <p class="fx-slogan" data-i18n="index.s4.slogan">法定节假日休/班标记清晰，安排假期不踩坑</p>
+              <p class="fx-desc" data-i18n="index.s4.desc">内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。</p>
               <ul class="fx-points">
-                <li>农历、节气、传统节日完整显示</li>
-                <li>法定节假日「休 / 班」角标，调休不搞混</li>
-                <li>每日宜忌详情，选日子有依据</li>
-                <li>「回到今天」一键返回，任意年月快速跳转</li>
+                <li data-i18n="index.s4.p1">农历、节气、传统节日完整显示</li>
+                <li data-i18n="index.s4.p2">法定节假日「休 / 班」角标，调休不搞混</li>
+                <li data-i18n="index.s4.p3">每日宜忌详情，选日子有依据</li>
+                <li data-i18n="index.s4.p4">「回到今天」一键返回，任意年月快速跳转</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>安排小长假出行、查农历生日、看黄历挑好日子。</p>
+              <p class="fx-tip" data-i18n-html="index.s4.tip.html"><b>适合场景：</b>安排小长假出行、查农历生日、看黄历挑好日子。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame crop">
-                <img src="./assets/shot-04-huangli.webp?v=0.4.82" alt="万年历截图" loading="lazy" />
+                <img src="./assets/shot-04-huangli.webp?v=0.4.82" alt="万年历截图" loading="lazy" data-i18n-alt="index.s4.imgAlt" />
               </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>🗓 休/班角标</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>每日宜忌</span>
+              <span class="float-chip fc1"><span class="fc-dot"></span><span data-i18n="index.s4.chip1">🗓 休/班角标</span></span>
+              <span class="float-chip fc2"><span class="fc-dot"></span><span data-i18n="index.s4.chip2">每日宜忌</span></span>
             </div>
           </div>
         </article>
 
-        <!-- 05 牛马计薪器 -->
+        <!-- 06 牛马计薪器 -->
         <article class="fx-slide" style="--accent-strong:#10b981;--accent-strong-2:#34d399;--accent-soft:rgba(16,185,129,.10);--p:#10b981">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">05 / 08</span>
+              <div class="fx-tag"><span class="num">06 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7.5c0-1.5 1.8-2.5 4-2.5s4 1 4 2.5-1.8 2.5-4 2.5-4 1-4 2.5 1.8 2.5 4 2.5 4-1 4-2.5"/></svg>
-                牛马计薪器
+                <span data-i18n="index.s5.tag">牛马计薪器</span>
               </div>
-              <h3 class="fx-title">每一秒搬砖，都看得见钱</h3>
-              <p class="fx-slogan">今日已赚实时滚动，下班倒计时精确到秒</p>
-              <p class="fx-desc">填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。</p>
+              <h3 class="fx-title" data-i18n="index.s5.title">每一秒搬砖，都看得见钱</h3>
+              <p class="fx-slogan" data-i18n="index.s5.slogan">今日已赚实时滚动，下班倒计时精确到秒</p>
+              <p class="fx-desc" data-i18n="index.s5.desc">填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。</p>
               <ul class="fx-points">
-                <li>今日已赚 / 日薪 / 时薪实时更新</li>
-                <li>下班 + 发薪双倒计时，精确到秒</li>
-                <li>8 种今日状态按时段自动轮换，可手动切换</li>
-                <li>专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置</li>
+                <li data-i18n="index.s5.p1">今日已赚 / 日薪 / 时薪实时更新</li>
+                <li data-i18n="index.s5.p2">下班 + 发薪双倒计时，精确到秒</li>
+                <li data-i18n="index.s5.p3">8 种今日状态按时段自动轮换，可手动切换</li>
+                <li data-i18n="index.s5.p4">专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>工作再苦，看着「已赚」数字往上跳，也能笑出声。</p>
+              <p class="fx-tip" data-i18n-html="index.s5.tip.html"><b>适合场景：</b>工作再苦，看着「已赚」数字往上跳，也能笑出声。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame crop">
-                <img src="./assets/shot-05-salary.webp?v=0.4.82" alt="牛马计薪器截图" loading="lazy" />
+                <img src="./assets/shot-05-salary.webp?v=0.4.82" alt="牛马计薪器截图" loading="lazy" data-i18n-alt="index.s5.imgAlt" />
               </div>
-              <span class="float-chip fc1"><span class="fc-dot"></span>💰 今日已赚实时滚动</span>
-              <span class="float-chip fc2"><span class="fc-dot"></span>🖥 桌面组件</span>
+              <span class="float-chip fc1"><span class="fc-dot"></span><span data-i18n="index.s5.chip1">💰 今日已赚实时滚动</span></span>
+              <span class="float-chip fc2"><span class="fc-dot"></span><span data-i18n="index.s5.chip2">🖥 桌面组件</span></span>
             </div>
           </div>
         </article>
 
-        <!-- 06 截图/贴图 -->
+        <!-- 07 截图/贴图 -->
         <article class="fx-slide" style="--accent-strong:#f43f5e;--accent-strong-2:#fb7185;--accent-soft:rgba(244,63,94,.10);--p:#f43f5e">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">06 / 08</span>
+              <div class="fx-tag"><span class="num">07 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 012-2h.9a2 2 0 001.7-.94l.54-.9A2 2 0 019.8 4.2h4.4a2 2 0 011.66.94l.54.9A2 2 0 0018.1 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13.5" r="3.6"/></svg>
-                截图 / 贴图
+                <span data-i18n="index.s6.tag">截图 / 贴图</span>
               </div>
-              <h3 class="fx-title">截完就贴，钉在桌面上</h3>
-              <p class="fx-slogan">参考图钉在屏幕一角，写文档对资料不再来回切窗口</p>
-              <p class="fx-desc">快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。</p>
+              <h3 class="fx-title" data-i18n="index.s6.title">截完就贴，钉在桌面上</h3>
+              <p class="fx-slogan" data-i18n="index.s6.slogan">参考图钉在屏幕一角，写文档对资料不再来回切窗口</p>
+              <p class="fx-desc" data-i18n="index.s6.desc">快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。</p>
               <ul class="fx-points">
-                <li>窗口 / 区域截图，选区可拖动微调</li>
-                <li>标注工具栏：箭头、画笔、矩形、文字、马赛克等</li>
-                <li>一键贴图钉在桌面：滚轮缩放、透明度可调</li>
-                <li>鼠标穿透模式：贴图不挡下面的操作</li>
+                <li data-i18n="index.s6.p1">窗口 / 区域截图，选区可拖动微调</li>
+                <li data-i18n="index.s6.p2">标注工具栏：箭头、画笔、矩形、文字、马赛克等</li>
+                <li data-i18n="index.s6.p3">一键贴图钉在桌面：滚轮缩放、透明度可调</li>
+                <li data-i18n="index.s6.p4">鼠标穿透模式：贴图不挡下面的操作</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。</p>
+              <p class="fx-tip" data-i18n-html="index.s6.tip.html"><b>适合场景：</b>把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame full" style="--shot-w:504px;--ar:1020/913">
-                <img src="./assets/shot-06-screenshot.webp?v=0.4.82" alt="Tacco 截图：圈选区域后带标注工具条，可直接贴图或保存" loading="lazy" />
+                <img src="./assets/shot-06-screenshot.webp?v=0.4.82" alt="Tacco 截图：圈选区域后带标注工具条，可直接贴图或保存" loading="lazy" data-i18n-alt="index.s6.imgAlt" />
               </div>
             </div>
           </div>
         </article>
 
-        <!-- 07 便利签 -->
+        <!-- 08 便利签 -->
         <article class="fx-slide" style="--accent-strong:#eab308;--accent-strong-2:#facc15;--accent-soft:rgba(234,179,8,.12);--p:#eab308">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">07 / 08</span>
+              <div class="fx-tag"><span class="num">08 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4A5.5 5.5 0 0121 9.5c0 1.33-.47 2.55-1.26 3.5H21l-4.3 4.3a2.4 2.4 0 01-3.4-3.4L16 12h-1.26A5.5 5.5 0 0115.5 4z"/><path d="M4 14a2 2 0 012-2h7a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6z"/></svg>
-                便利签
+                <span data-i18n="index.s7.tag">便利签</span>
               </div>
-              <h3 class="fx-title">灵感随手贴，关机也不丢</h3>
-              <p class="fx-slogan">Alt+N 一键贴一张便签到桌面，重启自动贴回原位</p>
-              <p class="fx-desc">想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。</p>
+              <h3 class="fx-title" data-i18n="index.s7.title">灵感随手贴，关机也不丢</h3>
+              <p class="fx-slogan" data-i18n="index.s7.slogan">Alt+N 一键贴一张便签到桌面，重启自动贴回原位</p>
+              <p class="fx-desc" data-i18n="index.s7.desc">想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。</p>
               <ul class="fx-points">
-                <li>快捷键一键新建（默认 Alt+N），最多同屏 12 张</li>
-                <li>6 色换肤 + 透明度滑条自定义</li>
-                <li>勾选划线、一键「转待办」进今日清单</li>
-                <li>重启自动恢复原位，多显示器也能回到原屏</li>
+                <li data-i18n="index.s7.p1">快捷键一键新建（默认 Alt+N），最多同屏 12 张</li>
+                <li data-i18n="index.s7.p2">6 色换肤 + 透明度滑条自定义</li>
+                <li data-i18n="index.s7.p3">勾选划线、一键「转待办」进今日清单</li>
+                <li data-i18n="index.s7.p4">重启自动恢复原位，多显示器也能回到原屏</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。</p>
+              <p class="fx-tip" data-i18n-html="index.s7.tip.html"><b>适合场景：</b>开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame full" style="--shot-w:504px;--ar:714/603">
-                <img src="./assets/shot-07-notes.webp?v=0.4.82" alt="Tacco 便利签：桌面上并排贴着的黄色与绿色便签" loading="lazy" />
+                <img src="./assets/shot-07-notes.webp?v=0.4.82" alt="Tacco 便利签：桌面上并排贴着的黄色与绿色便签" loading="lazy" data-i18n-alt="index.s7.imgAlt" />
               </div>
             </div>
           </div>
         </article>
 
-        <!-- 08 剪贴板 -->
+        <!-- 09 剪贴板 -->
         <article class="fx-slide" style="--accent-strong:#06b6d4;--accent-strong-2:#22d3ee;--accent-soft:rgba(6,182,212,.10);--p:#06b6d4">
           <div class="fx-card">
             <div class="fx-info">
-              <div class="fx-tag"><span class="num">08 / 08</span>
+              <div class="fx-tag"><span class="num">09 / 09</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9.5 4a1.5 1.5 0 013 0M9 11h6M9 14.5h6M9 18h3"/></svg>
-                剪贴板
+                <span data-i18n="index.s8.tag">剪贴板</span>
               </div>
-              <h3 class="fx-title">复制过的，都帮你留着</h3>
-              <p class="fx-slogan">历史自动记录，键盘选条目，一次带走十几段内容</p>
-              <p class="fx-desc">Tacco 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。</p>
+              <h3 class="fx-title" data-i18n="index.s8.title">复制过的，都帮你留着</h3>
+              <p class="fx-slogan" data-i18n="index.s8.slogan">历史自动记录，键盘选条目，一次带走十几段内容</p>
+              <p class="fx-desc" data-i18n="index.s8.desc">Tacco 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。</p>
               <ul class="fx-points">
-                <li>复制历史自动记录，浮窗快捷键随时唤出</li>
-                <li>↑↓ 选择 · Enter 复制 · 数字键 1-9 快选</li>
-                <li>关键词搜索，秒找三天前复制的内容</li>
-                <li>密码管理器内容自动识别跳过，隐私不落盘</li>
+                <li data-i18n="index.s8.p1">复制历史自动记录，浮窗快捷键随时唤出</li>
+                <li data-i18n="index.s8.p2">↑↓ 选择 · Enter 复制 · 数字键 1-9 快选</li>
+                <li data-i18n="index.s8.p3">关键词搜索，秒找三天前复制的内容</li>
+                <li data-i18n="index.s8.p4">密码管理器内容自动识别跳过，隐私不落盘</li>
               </ul>
-              <p class="fx-tip"><b>适合场景：</b>汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。</p>
+              <p class="fx-tip" data-i18n-html="index.s8.tip.html"><b>适合场景：</b>汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。</p>
             </div>
             <div class="fx-shot">
               <div class="fx-shot-frame full" style="--shot-w:432px;--ar:665/861">
-                <img src="./assets/shot-08-clipboard.webp?v=0.4.82" alt="Tacco 剪贴板历史：搜索框、多条复制记录与快捷回贴编号" loading="lazy" />
+                <img src="./assets/shot-08-clipboard.webp?v=0.4.82" alt="Tacco 剪贴板历史：搜索框、多条复制记录与快捷回贴编号" loading="lazy" data-i18n-alt="index.s8.imgAlt" />
               </div>
             </div>
           </div>
@@ -869,18 +903,6 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 
       <!-- 自动播放进度条 -->
       <div class="fx-progress" id="fxProgress"><span></span></div>
-
-      <div class="fx-pills" id="fxPills">
-        <button class="fx-pill active" data-goto="0" aria-label="待办事项"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h6"/><path d="M3 5l1.6 1.6L7.4 3.7"/><path d="M3 12l1.6 1.6L7.4 10.7"/><path d="M3 19l1.6 1.6L7.4 17.7"/></svg><span>待办事项</span></button>
-        <button class="fx-pill" data-goto="1" aria-label="生日纪念日"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M4 20v-6.5a2 2 0 012-2h12a2 2 0 012 2V20"/><path d="M8 11.5V9m4 2.5V7.5m4 4V9"/><path d="M8 6.2a1 1 0 100-2 1 1 0 000 2zm4-2a1 1 0 100-2 1 1 0 000 2zm4 2a1 1 0 100-2 1 1 0 000 2z"/></svg><span>生日纪念日</span></button>
-        <button class="fx-pill" data-goto="2" aria-label="计算器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 15.5h.01M12 15.5h.01M15 15.5h.01M9 18.5h6"/></svg><span>计算器</span></button>
-        <button class="fx-pill" data-goto="3" aria-label="万年历"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4m8-4v4M3.5 10.5h17M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01"/></svg><span>万年历</span></button>
-        <button class="fx-pill" data-goto="4" aria-label="牛马计薪器"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.3"/><path d="M6.5 7V5.6A1.6 1.6 0 018.1 4H16"/></svg><span>牛马计薪器</span></button>
-        <button class="fx-pill" data-goto="5" aria-label="截图贴图"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v14a1 1 0 001 1h13"/><path d="M17 21V7a1 1 0 00-1-1H3"/><circle cx="13.5" cy="10.5" r="1.5"/></svg><span>截图贴图</span></button>
-        <button class="fx-pill" data-goto="6" aria-label="便利签"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h7.5"/><path d="M20 13.5l-6.5 6.5v-4.5a2 2 0 012-2H20z"/><path d="M8 9h8M8 12.5h5"/></svg><span>便利签</span></button>
-        <button class="fx-pill" data-goto="7" aria-label="剪贴板"><svg class="p-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9.5 4.5V3.6A1.6 1.6 0 0111.1 2h1.8a1.6 1.6 0 011.6 1.6v.9z"/><path d="M9 11h6M9 15h6"/></svg><span>剪贴板</span></button>
-      </div>
-      <p class="fx-hint">点击下方功能名 / 鼠标拖拽 / <kbd>←</kbd><kbd>→</kbd> 方向键 / 点两侧卡片均可切换 · 悬停暂停自动播放</p>
     </div>
   </div>
 </section>
@@ -889,8 +911,8 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <section class="install" id="install">
   <div class="wrap">
     <div class="install-card">
-      <img class="applogo" src="./assets/logo.webp?v=0.4.82" alt="Tacco 图标" />
-      <h2 id="installTitle">下载 Tacco Windows 安装包并安装到电脑</h2>
+      <img class="applogo" src="./assets/logo.webp?v=0.4.82" alt="Tacco 图标" data-i18n-alt="index.brand.imgAlt" />
+      <h2 id="installTitle" data-i18n="index.install.title">下载 Tacco Windows 安装包并安装到电脑</h2>
       <p class="ver" id="installVer">Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.82 · 免费下载</p>
       <div class="hero-cta" style="justify-content:center;margin-top:28px;">
         <a href="./Tacco-setup.exe" class="btn-download" id="installDownload">
@@ -899,10 +921,10 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
         </a>
       </div>
       <div class="alt-dl" style="justify-content:center;margin-top:12px;" id="installAlt">
-        <span class="alt-label">其它平台：</span>
-        <a data-dl="win">Windows 版</a>
-        <a data-dl="mac-arm">macOS · Apple 芯片</a>
-        <a data-dl="mac-intel">macOS · Intel</a>
+        <span class="alt-label" data-i18n="index.install.altLabel">其它平台：</span>
+        <a data-dl="win" data-i18n="index.plat.win">Windows 版</a>
+        <a data-dl="mac-arm" data-i18n="index.plat.macArm">macOS · Apple 芯片</a>
+        <a data-dl="mac-intel" data-i18n="index.plat.macIntel">macOS · Intel</a>
       </div>
       <div class="steps" id="installSteps">
         <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
@@ -920,27 +942,27 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <!-- ================= FAQ ================= -->
 <section class="faq" id="faq">
   <div class="wrap">
-    <h2>常见问题：免费吗、支持哪些系统、数据会不会丢</h2>
+    <h2 data-i18n="index.faq.h2">常见问题：免费吗、支持哪些系统、数据会不会丢</h2>
     <div class="faq-list">
       <details class="faq-item" open>
-        <summary>Tacco 是免费的吗？<span class="chev">▾</span></summary>
-        <p>Tacco 免费下载、免费安装，8 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。</p>
+        <summary><span data-i18n="index.faq.q1">Tacco 是免费的吗？</span><span class="chev">▾</span></summary>
+        <p data-i18n="index.faq.a1">Tacco 免费下载、免费安装，9 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。</p>
       </details>
       <details class="faq-item">
-        <summary>我的数据存在哪里？安全吗？<span class="chev">▾</span></summary>
-        <p>数据默认保存在你自己的电脑上（本地优先）；开启云同步后才会加密传输到你自己的云端服务，不上传给任何第三方。剪贴板历史中的密码内容也会自动识别并跳过记录。</p>
+        <summary><span data-i18n="index.faq.q2">我的数据存在哪里？安全吗？</span><span class="chev">▾</span></summary>
+        <p data-i18n="index.faq.a2">数据默认保存在你自己的电脑上（本地优先）；开启云同步后才会加密传输到你自己的云端服务，不上传给任何第三方。剪贴板历史中的密码内容也会自动识别并跳过记录。</p>
       </details>
       <details class="faq-item">
-        <summary>支持哪些系统？<span class="chev">▾</span></summary>
-        <p>正式支持 <b>Windows 10 / 11（64 位）</b>与 <b>macOS 12+（Apple 芯片 / Intel）</b>，安装包约 17–20 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。</p>
+        <summary><span data-i18n="index.faq.q3">支持哪些系统？</span><span class="chev">▾</span></summary>
+        <p data-i18n-html="index.faq.a3.html">正式支持 <b>Windows 10 / 11（64 位）</b>与 <b>macOS 12+（Apple 芯片 / Intel）</b>，安装包约 17–20 MB。Tacco 采用原生框架打造，平时只渲染一条细边，内存占用极低。</p>
       </details>
       <details class="faq-item">
-        <summary>Mac 版支持哪些功能？<span class="chev">▾</span></summary>
-        <p><b>macOS 版已开放下载</b>，Apple 芯片与 Intel 均可用，涵盖待办、计算器、黄历、纪念日、剪贴板历史、便利签、录音等常用功能。截图贴图、晾衣绳等依赖 Windows 系统接口的能力暂不可用。Mac 版未做开发者签名与公证，首次打开需手动放行（安装步骤里有说明），且暂不支持应用内自动更新，新版本需手动下载覆盖。</p>
+        <summary><span data-i18n="index.faq.q4">Mac 版支持哪些功能？</span><span class="chev">▾</span></summary>
+        <p data-i18n-html="index.faq.a4.html"><b>macOS 版已开放下载</b>，Apple 芯片与 Intel 均可用，涵盖待办、计算器、黄历、纪念日、剪贴板历史、便利签、录音等常用功能。截图贴图、晾衣绳等依赖 Windows 系统接口的能力暂不可用。Mac 版未做开发者签名与公证，首次打开需手动放行（安装步骤里有说明），且暂不支持应用内自动更新，新版本需手动下载覆盖。</p>
       </details>
       <details class="faq-item">
-        <summary>会常驻后台拖慢电脑吗？<span class="chev">▾</span></summary>
-        <p>不会。Tacco 只在需要时渲染一条细边和一个小面板，空闲时几乎不占用 CPU，内存占用也远低于常驻的聊天软件。</p>
+        <summary><span data-i18n="index.faq.q5">会常驻后台拖慢电脑吗？</span><span class="chev">▾</span></summary>
+        <p data-i18n="index.faq.a5">不会。Tacco 只在需要时渲染一条细边和一个小面板，空闲时几乎不占用 CPU，内存占用也远低于常驻的聊天软件。</p>
       </details>
     </div>
   </div>
@@ -950,8 +972,8 @@ footer .f-copy { margin-top: 8px; font-size: 12px; color: var(--faint); }
 <footer>
   <div class="wrap">
     <a href="#top" class="f-brand"><img src="./assets/logo.webp?v=0.4.82" alt="Tacco" /><span>Tacco</span></a>
-    <p class="f-slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
-    <p class="f-nav"><a href="./features.html">功能详解</a> · <a href="./compare.html">横向对比</a> · <a href="./faq.html">常见问题</a> · <a href="./changelog.html">更新日志</a></p>
+    <p class="f-slogan" data-i18n="index.foot.slogan">本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方</p>
+    <p class="f-nav"><a href="./features.html" data-i18n="index.foot.nav1">功能详解</a> · <a href="./compare.html" data-i18n="index.foot.nav2">横向对比</a> · <a href="./faq.html" data-i18n="index.foot.nav3">常见问题</a> · <a href="./changelog.html" data-i18n="index.foot.nav4">更新日志</a></p>
     <p class="f-copy">© <span id="fYear">2026</span> Tacco. All rights reserved.</p>
   </div>
 </footer>
@@ -992,46 +1014,34 @@ document.getElementById('themeToggle').addEventListener('click', () => {
     const dmgX64 = 'Tacco_' + VER + '_x64.dmg';
     return {
       win: {
-        label: '下载 Windows 安装包',
-        btn: '下载 Tacco-setup.exe',
-        meta: 'Windows 10 / 11 · 64 位 · 约 40 MB · 免费下载 · 无需管理员权限',
-        ver: 'Windows 10 / 11 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载',
+        label: SiteI18n.t('index.dl.win.label'),
+        btn: SiteI18n.t('index.dl.win.btn'),
+        meta: SiteI18n.t('index.dl.win.meta'),
+        ver: SiteI18n.t('index.dl.win.ver', { ver: VER }),
         /* ?v= 让每个版本的下载 URL 唯一,避免浏览器/边缘缓存返回旧安装包 */
         href: './Tacco-setup.exe?v=' + VER,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载安装包</h3><p>点击上方按钮下载 <b>Tacco-setup.exe</b>，浏览器下载完成后可直接运行。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>双击运行</h3><p>按安装向导点击「下一步」，默认安装到当前用户目录，<b>无需管理员权限</b>。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>开始使用</h3><p>从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">⚠️</span>
-        <span><b>安装提示：</b>安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 <b>「更多信息」→「仍要运行」</b>即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。</span>`
+        steps: SiteI18n.t('index.dl.win.steps'),
+        note: SiteI18n.t('index.dl.win.note')
       },
       'mac-arm': {
-        label: '下载 macOS 版（Apple 芯片）',
-        btn: '下载 ' + dmgArm,
-        meta: 'macOS 12+ · Apple 芯片（M1/M2/M3/M4）· 约 31 MB · 免费下载',
-        ver: 'macOS 12+ · Apple 芯片 · 约 31 MB · v' + VER + ' · 免费下载',
+        label: SiteI18n.t('index.dl.mac-arm.label'),
+        btn: SiteI18n.t('index.dl.mac-arm.btn', { file: dmgArm }),
+        meta: SiteI18n.t('index.dl.mac-arm.meta'),
+        ver: SiteI18n.t('index.dl.mac-arm.ver', { ver: VER }),
         /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgArm 并放好 dmg */
         href: DMG_BASE + dmgArm,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgArm}</b>（Apple 芯片版）。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
-        <span><b>安装提示：</b>Mac 版暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。遇到问题欢迎反馈，会优先修复。</span>`
+        steps: SiteI18n.t('index.dl.mac-arm.steps', { file: dmgArm }),
+        note: SiteI18n.t('index.dl.mac-arm.note')
       },
       'mac-intel': {
-        label: '下载 macOS 版（Intel）',
-        btn: '下载 ' + dmgX64,
-        meta: 'macOS 12+ · Intel 处理器 · 约 31 MB · 免费下载',
-        ver: 'macOS 12+ · Intel · 约 31 MB · v' + VER + ' · 免费下载',
+        label: SiteI18n.t('index.dl.mac-intel.label'),
+        btn: SiteI18n.t('index.dl.mac-intel.btn', { file: dmgX64 }),
+        meta: SiteI18n.t('index.dl.mac-intel.meta'),
+        ver: SiteI18n.t('index.dl.mac-intel.ver', { ver: VER }),
         /* 走 GitHub Release 直链(文件完整且立即可用);若改自托管请把此处改回 './' + dmgX64 并放好 dmg */
         href: DMG_BASE + dmgX64,
-        steps: `
-        <div class="step"><span class="s-no">1</span><h3>下载 .dmg</h3><p>点击上方按钮下载 <b>${dmgX64}</b>（Intel 版）。</p></div>
-        <div class="step"><span class="s-no">2</span><h3>拖进「应用程序」</h3><p>双击打开 dmg，把 <b>Tacco</b> 图标拖到 Applications 文件夹，完成后推出磁盘映像。</p></div>
-        <div class="step"><span class="s-no">3</span><h3>首次打开放行</h3><p>在「应用程序」里 <b>按住 Control 点按图标 →「打开」→ 再点一次「打开」</b>，之后即可正常双击启动。</p></div>`,
-        note: `<span style="font-size:17px;line-height:1.4;">🧪</span>
-        <span><b>Beta 提示：</b>Mac 版正在测试中，暂未购买 Apple 开发者签名与公证，首次打开需按步骤 3 手动放行（或在终端执行 <code>xattr -cr /Applications/Tacco.app</code>）。另外 Mac 版<b>暂不支持应用内自动更新</b>，新版本需手动下载安装包覆盖。</span>`
+        steps: SiteI18n.t('index.dl.mac-intel.steps', { file: dmgX64 }),
+        note: SiteI18n.t('index.dl.mac-intel.note')
       }
     };
   }
@@ -1051,20 +1061,20 @@ document.getElementById('themeToggle').addEventListener('click', () => {
       md.setAttribute('href', '#faq');
     }
     const t = document.getElementById('mainDownloadText');
-    if (t) t.textContent = 'macOS 版内测中';
+    if (t) t.textContent = SiteI18n.t('index.macClosed.btn');
     const hm = document.getElementById('heroMeta');
     if (hm) {
-      hm.textContent = '检测到你正在使用 macOS：Mac 版正在内测，暂未开放下载，开放后会在本页公布。';
+      hm.textContent = SiteI18n.t('index.macClosed.meta');
     }
     const iv = document.getElementById('installVer');
-    if (iv) iv.textContent = '当前仅提供 Windows 版 · 64 位 · 约 40 MB · v' + VER + ' · 免费下载';
+    if (iv) iv.textContent = SiteI18n.t('index.dl.winOnly.ver', { ver: VER });
   }
 
   function paintBadge() {
     const badge = document.getElementById('osBadge');
     if (badge) {
       badge.textContent =
-        'v' + VER + (MAC_OPEN ? ' · Windows / macOS 已发布' : ' · Windows 版');
+        'v' + VER + SiteI18n.t(MAC_OPEN ? 'index.badge.both' : 'index.badge.win');
     }
   }
 
@@ -1113,6 +1123,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 
   apply(detect());
   paintBadge();
+  window.__siteRepaint = function () { paintBadge(); if (currentKey) apply(currentKey); };
 
   /* version.json 到达后刷新版本号与下载链接(与线上安装包严格一致) */
   fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
@@ -1200,7 +1211,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   function restartProgress() {
     progress.classList.remove('run');
     void progress.offsetWidth; /* 重置动画 */
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) progress.classList.add('run');
+    progress.classList.add('run');
   }
   function restartAuto() {
     clearInterval(autoTimer);
@@ -1262,7 +1273,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => { fitStage(); layout(); });
   }
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) restartAuto();
+  restartAuto();
 })();
 </script>
 <script>

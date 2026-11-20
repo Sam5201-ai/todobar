@@ -20,10 +20,12 @@ import {
   loadSalaryWidgetConfig,
   saveSalaryWidgetConfigLocal,
   normalizeStyle,
+  widgetStyleLabel,
   WIDGET_STYLES,
   type SalaryWidgetConfig,
   type WidgetStyle,
 } from './salaryWidgetConfig'
+import { t, useI18n, type LocaleKey } from './i18n'
 // 三套组件样式的预览截图(构建期由 dist 预览产出,随包内置,选项下方直观展示)
 import previewCandy from './assets/widget-preview/candy.png'
 import previewWide from './assets/widget-preview/wide.png'
@@ -251,14 +253,14 @@ export function getPayDayInfo(cfg: SalaryConfig, now: Date): PayDayInfo {
     const m = now.getMonth()
     let next = new Date(y, m, day, 0, 0, 0)
     if (next.getTime() < startOfDay(now).getTime()) next = new Date(y, m + 1, day, 0, 0, 0)
-    return { label: `每月 ${day} 号发薪`, next }
+    return { label: t('salary.paydayMonthly', { day }), next }
   }
   if (cfg.mode === 'weekly') {
     const target = clampInt(cfg.payDay.weekly, 0, 6, DEFAULT_CONFIG.payDay.weekly)
     const diff = (target - now.getDay() + 7) % 7
     const next = startOfDay(now)
     next.setDate(next.getDate() + diff)
-    return { label: `每周${WEEK_LABELS[target]}发薪`, next }
+    return { label: t('salary.paydayWeekly', { w: t(WEEK_LABELS[target]) }), next }
   }
   // hourly:每天指定时间发薪
   const m = /^(\d{1,2}):(\d{1,2})$/.exec(cfg.payDay.hourly.trim())
@@ -266,115 +268,54 @@ export function getPayDayInfo(cfg: SalaryConfig, now: Date): PayDayInfo {
   const mm = m ? Number(m[2]) : 0
   const todayPay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0)
   const next = now.getTime() < todayPay.getTime() ? todayPay : new Date(todayPay.getTime() + 86400000)
-  return { label: `每天 ${cfg.payDay.hourly} 发薪`, next }
+  return { label: t('salary.paydayHourly', { time: cfg.payDay.hourly }), next }
 }
 
 // ---------------------------------------------------------------------------
 // 今日寄语:按当天日期确定性抽取,一天内不变,次日自动换新。
 // ---------------------------------------------------------------------------
 
-const Q_WORKDAY = [
-  '加班不是生活的全部，但努力会让想要的生活更近一点。今天也辛苦啦，牛马也有闪闪发光的一天！💪',
-  '每一分钟的坚持，都在悄悄垫高你想要的生活。别小看今天的自己，你已经很棒了。🌟',
-  '工作再忙，也别忘了给自己倒杯热水。你认真搬砖的样子，其实挺好看的。☕',
-  '今天的疲惫是真实的，但你的努力也是真实的。允许自己慢一点，但别停下。🍃',
-  '钱是赚不完的，但今天的你是独一无二的。摸摸头，你已经做得很好了。🧸',
-  '每一个准时上班的早晨，都是对生活的一次认真点头。你真的很靠谱。🌅',
-  '工资到账时的快乐很短暂，但你为自己拼过的每一秒都很长情。💸',
-  '别总盯着还没完成的事，回头看看，今天你也扛住了不少。🫶',
-  '打工的日子或许平淡，但认真生活的人自带光芒。今天也辛苦你了。✨',
-  '你可以偶尔喊累，但别否定自己的付出。你的坚持，时间都记着。🌻',
-  '不是每一份努力都会立刻开花，但每一份认真都在扎根。慢慢来，别急。🌱',
-  '今天的你或许疲惫，但也在一点点靠近想要的生活。这就是意义。🚶',
-  '屏幕前的你，值得一句：今天辛苦了，剩下的交给时间就好。🕰️',
-  '工资条上的数字会清零重来，但你积累的能力不会。继续走吧。📈',
-  '忙完这阵就歇歇，别把弦绷得太紧。你不是机器，你是会累的人。🛋️',
+const Q_WORKDAY: LocaleKey[] = [
+  'salary.q.workday.0',
+  'salary.q.workday.1',
+  'salary.q.workday.2',
+  'salary.q.workday.3',
+  'salary.q.workday.4',
+  'salary.q.workday.5',
+  'salary.q.workday.6',
+  'salary.q.workday.7',
+  'salary.q.workday.8',
+  'salary.q.workday.9',
+  'salary.q.workday.10',
+  'salary.q.workday.11',
+  'salary.q.workday.12',
+  'salary.q.workday.13',
+  'salary.q.workday.14',
 ]
-const Q_MONDAY = [
-  '周一确实有点难，但这也是全新一周的入场券。撑过今天，就赢了开头。🎫',
-  '不想上班的心情可以理解，但还是来了，这就是成年人的体面。周一快乐，哪怕一点都不快乐。😮‍💨',
-  '新的一周，新的机会，新的自己。哪怕只是把今天过好，也足够了。🌤️',
-  '周一的闹钟很无情，但你按时起床的样子很有力量。加油，这一周看你的了。⏰',
-  '周一综合症不是病，是被生活召唤的证明。喝杯咖啡，我们慢慢启动。☕',
-]
-const Q_FRIDAY = [
-  '周五的每一分钟，都带着周末的味道。再坚持一下，自由就在门口等你。🚪',
-  '坚持到周五的你，已经打败了周一那个想放弃的自己。太棒了。🏆',
-  '周五不是结束，是给自己的一份交代。辛苦一周，值得好好放松。🍻',
-  '屏幕上的光标还在闪，但你的心已经飞向周末了。没关系，快了。✈️',
-  '周五的班，上得比哪天都值。因为下班的铃声，是本周最动听的歌。🔔',
-]
-const Q_WEEKEND = [
-  '休息不是偷懒，是给下一周的自己充电。今天好好休息，钱包不涨但快乐在涨。🔋',
-  '周末的你，可以什么都不做，只是发呆也很合理。辛苦了一周，该歇歇了。🛏️',
-  '今天不上班，但也没有浪费时间，因为你正在认真恢复元气。🌈',
-  '休息日不必有产出，躺平也是一种自我关怀。舒服就好。🧘',
-  '把工作的自己先放一放，今天只做让自己开心的事。你值得。🍰',
-]
-const Q_OVERTIME = [
-  '加班的夜灯下，你是自己的英雄。别熬太狠，明天还有明天的活。🌙',
-  '加班不是常态，但今晚的坚持值得一句辛苦了。早点忙完，早点回家。🏠',
-  '灯火通明的办公室里，别忘了也照亮一下自己的心情。💡',
-  '每一份加班都有它的意义，但别让它成为全部。累了就歇，天亮再说。🌃',
-  '你熬的夜，终会变成想要的生活里的光。但也记得早点睡。🌠',
-]
-const Q_FISH = [
-  '摸鱼不是不负责，是给紧绷的神经透口气。偷得浮生半刻闲，刚刚好。🐟',
-  '忙里偷闲是门艺术，你画得挺好。笑一下，继续搬砖。😌',
-  '休息是为了走更远的路，摸鱼是为了保持搬砖的手感。开玩笑的，歇会儿吧。😄',
-  '偶尔放空不是罪，大脑也需要中场休息。充好电再出发。🔋',
-  '工作要认真，休息要心安。这一刻属于你自己。🍵',
-]
-const Q_PAYDAY = [
-  '工资到账的那一秒，觉得世界都温柔了一点。辛苦了，这是你应得的。💰',
-  '数字或许不多，但每一分都是你用时间换来的。值得为自己骄傲一下。🧾',
-  '发薪日的快乐很朴素，却很真实。犒劳一下今天的自己吧。🎁',
-  '钱不是万能的，但今天它证明了你的付出有回响。收下这份认可。📬',
-  '看到余额的瞬间，觉得这一个月的疲惫都值了。开心一下，不过分。😊',
-]
-const Q_OFFWORK = [
-  '下班铃一响，今天的工作就圆满交卷。剩下的时间，全部归你。🎒',
-  '关上电脑的那一刻，你完成了今天的使命。回家路上慢一点，也温柔一点。🚶',
-  '工作留在办公室，生活从这里开始。今天辛苦了，好好享受夜晚。🌆',
-  '下班的路是最治愈的路程，因为每一步都离自由更近。🏡',
-  '今天的事今天结，明天的事明天再说。现在，是属于你的时间。🌇',
-]
-const Q_TOOL = [
-  '看着数字一点点跳动，才发现自己的时间这么值钱。你值得被认真计价。⏱️',
-  '每一秒都在增值的你，才是最宝贵的资产。今天也很有价值。📊',
-  '计薪器上的数字会归零，但你今天赚到的经验不会。继续积累吧。🧮',
-  '你的努力看得见，连数字都在替你记录。这就是坚持的证据。🔢',
-  '钱是赚不完的，但每一秒认真对待的自己，都闪闪发光。💎',
-  '工资是努力的回音，今天你听到了吗？辛苦啦，继续发光。📣',
-]
-const Q_LOW = [
-  '有些日子就是很丧，这很正常。允许自己低落，但别忘记明天还会来。🫂',
-  '不是每天都得元气满满，偶尔泄气也是人之常情。抱抱自己。🤗',
-  '日子会难，但你也比想象中更能扛。今天撑住了，就是胜利。🌧️',
-  '累了就停一停，方向还在，路就不会丢。你已经在路上了。🛤️',
-  '低谷不是终点，只是上坡前的一段缓冲。休息够了，继续走。🏔️',
-]
-const Q_MORNING = [
-  '新的一天，新的开始，新的机会去靠近想要的生活。开工大吉。🌞',
-  '早安，打工人。今天的你比昨天又多了一点经验值，很厉害。☀️',
-  '每一个早起的早晨，都是对生活的一次主动选择。今天也要加油呀。🌄',
-  '睁开眼就是新的机会，别辜负这个元气满满的自己。早安。🌷',
-  '今天的你带着昨天的积累出发，这本身就是一种底气。冲吧。🚀',
-]
+const Q_MONDAY: LocaleKey[] = ['salary.q.mon.0', 'salary.q.mon.1', 'salary.q.mon.2', 'salary.q.mon.3', 'salary.q.mon.4']
+const Q_FRIDAY: LocaleKey[] = ['salary.q.fri.0', 'salary.q.fri.1', 'salary.q.fri.2', 'salary.q.fri.3', 'salary.q.fri.4']
+const Q_WEEKEND: LocaleKey[] = ['salary.q.wkend.0', 'salary.q.wkend.1', 'salary.q.wkend.2', 'salary.q.wkend.3', 'salary.q.wkend.4']
+const Q_OVERTIME: LocaleKey[] = ['salary.q.ot.0', 'salary.q.ot.1', 'salary.q.ot.2', 'salary.q.ot.3', 'salary.q.ot.4']
+const Q_FISH: LocaleKey[] = ['salary.q.fish.0', 'salary.q.fish.1', 'salary.q.fish.2', 'salary.q.fish.3', 'salary.q.fish.4']
+const Q_PAYDAY: LocaleKey[] = ['salary.q.payday.0', 'salary.q.payday.1', 'salary.q.payday.2', 'salary.q.payday.3', 'salary.q.payday.4']
+const Q_OFFWORK: LocaleKey[] = ['salary.q.off.0', 'salary.q.off.1', 'salary.q.off.2', 'salary.q.off.3', 'salary.q.off.4']
+const Q_TOOL: LocaleKey[] = ['salary.q.tool.0', 'salary.q.tool.1', 'salary.q.tool.2', 'salary.q.tool.3', 'salary.q.tool.4', 'salary.q.tool.5']
+const Q_LOW: LocaleKey[] = ['salary.q.low.0', 'salary.q.low.1', 'salary.q.low.2', 'salary.q.low.3', 'salary.q.low.4']
+const Q_MORNING: LocaleKey[] = ['salary.q.morn.0', 'salary.q.morn.1', 'salary.q.morn.2', 'salary.q.morn.3', 'salary.q.morn.4']
 
 /** 按日期确定性抽取一条寄语(周一/周五/周末/发薪日使用专属分类,其余工作日混合轮换)。 */
 export function pickDailyQuote(cfg: SalaryConfig, now: Date): string {
   const info = getPayDayInfo(cfg, now)
   const isPayday = startOfDay(info.next).getTime() === startOfDay(now).getTime()
   const dow = now.getDay()
-  let pool: string[]
+  let pool: LocaleKey[]
   if (isPayday) pool = Q_PAYDAY
   else if (dow === 1) pool = Q_MONDAY
   else if (dow === 5) pool = Q_FRIDAY
   else if (dow === 0 || dow === 6) pool = Q_WEEKEND
   else pool = [...Q_WORKDAY, ...Q_OVERTIME, ...Q_FISH, ...Q_OFFWORK, ...Q_TOOL, ...Q_LOW, ...Q_MORNING]
   const dayIndex = Math.floor(now.getTime() / 86400000)
-  return pool[((dayIndex % pool.length) + pool.length) % pool.length]
+  return t(pool[((dayIndex % pool.length) + pool.length) % pool.length])
 }
 
 // ---------------------------------------------------------------------------
@@ -423,16 +364,25 @@ function Sheet({
 // 界面
 // ---------------------------------------------------------------------------
 
-const STATUS_TEXT: Record<SalaryStatus, string> = {
-  invalid: '请检查计薪设置',
-  rest: '休息日,不上班',
-  before: '还没上班',
-  working: '工作中 · 实时计薪',
-  lunch: '摸鱼中（金额冻结）',
-  after: '自由了',
+const STATUS_TEXT: Record<SalaryStatus, LocaleKey> = {
+  invalid: 'salary.status.invalid',
+  rest: 'salary.status.rest',
+  before: 'salary.status.before',
+  working: 'salary.status.working',
+  lunch: 'salary.status.lunch',
+  after: 'salary.status.after',
 }
 
-const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+/** 周次简称词条(索引 = JS getDay(),展示时经 t() 翻译)。 */
+const WEEK_LABELS: LocaleKey[] = [
+  'weekday.short.sun',
+  'weekday.short.mon',
+  'weekday.short.tue',
+  'weekday.short.wed',
+  'weekday.short.thu',
+  'weekday.short.fri',
+  'weekday.short.sat',
+]
 
 type SheetKey = 'settings' | null
 
@@ -440,6 +390,7 @@ export function SalaryView() {
   const [cfg, setCfg] = useState<SalaryConfig>(loadConfig)
   const [draft, setDraft] = useState<SalaryConfig>(cfg)
   const [now, setNow] = useState(() => new Date())
+  const { t, locale } = useI18n()
 
   const [sheet, setSheet] = useState<SheetKey>(null)
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
@@ -522,9 +473,9 @@ export function SalaryView() {
           await new Promise((r) => window.setTimeout(r, 1200))
           const exists = await invoke<boolean>('salary_widget_exists')
           if (exists) {
-            showSalToast('桌面组件已启用', true)
+            showSalToast(t('salary.widgetOn'), true)
           } else {
-            showSalToast('桌面组件窗口创建失败,请重启应用后重试', false)
+            showSalToast(t('salary.widgetCreateFail'), false)
           }
         } else {
           await invoke('close_salary_widget')
@@ -532,10 +483,10 @@ export function SalaryView() {
       } catch (e) {
         // 非 Tauri 环境或窗口命令不可用:给用户可见提示,不再只写 console
         console.warn('[salaryWidget] 窗口命令调用失败:', e)
-        showSalToast(`桌面组件操作失败:${String(e).slice(0, 60)}`, false)
+        showSalToast(t('salary.widgetOpFail', { detail: String(e).slice(0, 60) }), false)
       }
     },
-    [fullAccess],
+    [fullAccess, t],
   )
 
   // 会员降级/受限:开关随会员状态正常关闭(走 applyWidget 完整路径,配置/窗口/UI 一致),
@@ -548,13 +499,13 @@ export function SalaryView() {
   const stat = useMemo(() => computeDay(cfg, now), [cfg, now])
   const monthEarned = useMemo(() => computeMonthEarned(cfg, now), [cfg, now])
   const weekEarned = useMemo(() => computeWeekEarned(cfg, now), [cfg, now])
-  const payInfo = useMemo(() => getPayDayInfo(cfg, now), [cfg, now])
-  const quote = useMemo(() => pickDailyQuote(cfg, now), [cfg, now])
+  const payInfo = useMemo(() => getPayDayInfo(cfg, now), [cfg, now, locale])
+  const quote = useMemo(() => pickDailyQuote(cfg, now), [cfg, now, locale])
   // 距下次发薪的整天数(0 = 今天发薪)
   const payCountdownLabel = useMemo(() => {
     const days = Math.round((startOfDay(payInfo.next).getTime() - startOfDay(now).getTime()) / 86400000)
-    return days <= 0 ? '今天' : `${days} 天`
-  }, [payInfo, now])
+    return days <= 0 ? t('date.today') : t('date.nDays', { n: days })
+  }, [payInfo, now, locale, t])
   const pct = stat.totalSec > 0 ? Math.min(100, (stat.workedSec / stat.totalSec) * 100) : 0
 
   /** 原生 time 输入只在右侧时钟图标处唤起选择面板,这里点击输入框任意位置都调 showPicker。 */
@@ -583,17 +534,17 @@ export function SalaryView() {
       if (ok) setCfg(draft)
       // 先关闭设置弹窗,再在页面顶部弹 toast(与全局提示样式一致,约 2.8s 自动消失)
       setSheet(null)
-      showSalToast(ok ? '保存成功' : '保存失败', ok)
+      showSalToast(ok ? t('salary.saved') : t('salary.saveFailed'), ok)
     })()
   }
 
   const remainLabel =
-    stat.status === 'before' ? '距上班' : stat.status === 'working' || stat.status === 'lunch' ? '距下班' : '下班'
+    stat.status === 'before' ? t('salary.remainBefore') : stat.status === 'working' || stat.status === 'lunch' ? t('salary.remainDuring') : t('salary.remainAfter')
   const remainText =
     stat.status === 'before' || stat.status === 'working' || stat.status === 'lunch'
       ? fmtDur(stat.remainSec)
       : stat.status === 'after'
-        ? '已下班'
+        ? t('salary.offDone')
         : '—'
 
   const draftInvalid = computeDay(draft, now).status === 'invalid'
@@ -602,18 +553,18 @@ export function SalaryView() {
     <div className="sal-view">
       {/* 今日已赚(主数字) */}
       <div className="sal-hero">
-        <div className="sal-hero-label">今日已赚</div>
+        <div className="sal-hero-label">{t('salary.todayEarned')}</div>
         <div className="sal-hero-amount" aria-live="off">
           <em>¥</em>
           {stat.status === 'invalid' ? '--' : fmtMoney(stat.earned)}
         </div>
-        <div className="sal-hero-sub">{STATUS_TEXT[stat.status]}</div>
+        <div className="sal-hero-sub">{t(STATUS_TEXT[stat.status])}</div>
       </div>
 
       {/* 工时 / 倒计时 */}
       <div className="sal-stats">
         <div className="sal-stat">
-          <span>已工作时长</span>
+          <span>{t('salary.workedTime')}</span>
           <strong>{stat.status === 'invalid' ? '--:--:--' : fmtDur(stat.workedSec)}</strong>
         </div>
         <div className="sal-stat">
@@ -628,7 +579,7 @@ export function SalaryView() {
           <div className="sal-progress-fill" style={{ width: `${pct}%` }} />
         </div>
         <div className="sal-progress-meta">
-          <span>今日工作进度</span>
+          <span>{t('salary.progress')}</span>
           <span>{pct.toFixed(1)}%</span>
         </div>
       </div>
@@ -636,19 +587,19 @@ export function SalaryView() {
       {/* 参考单价 + 本周/本月累计已赚 + 发薪日 + 今日寄语 */}
       {stat.status !== 'invalid' ? (
         <div className="sal-rates">
-          <span>日薪 ¥{fmtMoney(stat.dailyPay)}</span>
-          <span>时薪 ¥{fmtMoney(stat.hourlyPay)}</span>
+          <span>{t('salary.daily', { n: fmtMoney(stat.dailyPay) })}</span>
+          <span>{t('salary.hourly', { n: fmtMoney(stat.hourlyPay) })}</span>
         </div>
       ) : null}
       {stat.status !== 'invalid' ? (
         <div className="sal-month">
-          <span>本周已赚</span>
+          <span>{t('salary.weekEarned')}</span>
           <strong>¥{fmtMoney(weekEarned)}</strong>
         </div>
       ) : null}
       {stat.status !== 'invalid' ? (
         <div className="sal-month">
-          <span>本月已赚</span>
+          <span>{t('salary.monthEarned')}</span>
           <strong>¥{fmtMoney(monthEarned)}</strong>
         </div>
       ) : null}
@@ -656,7 +607,7 @@ export function SalaryView() {
         <div className="sal-month sal-payday">
           <div className="sal-payday-left">
             <span>{payInfo.label}</span>
-            <em>下次发薪 {payInfo.next.getMonth() + 1}月{payInfo.next.getDate()}日</em>
+            <em>{t('salary.nextPayday', { m: payInfo.next.getMonth() + 1, d: payInfo.next.getDate() })}</em>
           </div>
           <strong>{payCountdownLabel}</strong>
         </div>
@@ -665,7 +616,7 @@ export function SalaryView() {
       <div className="sal-quote">
         <span className="sal-quote-watermark" aria-hidden="true">”</span>
         <div className="sal-quote-head">
-          牛马寄语
+          {t('salary.quoteTitle')}
           <span className="sal-quote-rule" aria-hidden="true" />
         </div>
         <p>{quote}</p>
@@ -674,14 +625,14 @@ export function SalaryView() {
       {/* 计薪设置(底部弹窗) */}
       <button type="button" className="sal-settings-toggle" onClick={() => setSheet('settings')}>
         <Settings size={13} />
-        计薪设置
+        {t('salary.settings')}
       </button>
 
       {/* 桌面组件(透明悬浮窗):启用开关 + 三风格选择 */}
       <div className="sal-widget">
         <div className="sal-widget-head">
           <span className="sal-widget-title">
-            桌面组件
+            {t('feature.salaryWidget')}
             {showVip ? <VipBadge /> : null}
           </span>
           <button
@@ -690,13 +641,13 @@ export function SalaryView() {
             role="switch"
             aria-checked={widget.enabled}
             aria-disabled={fullAccess ? undefined : true}
-            aria-label="启用桌面组件"
+            aria-label={t('salary.widgetAria')}
             onClick={() => {
               if (!fullAccess) {
                 if (!account) {
-                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '桌面组件' }))
+                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: t('feature.salaryWidget') }))
                 } else {
-                  showSalToast(memberOnly('桌面组件'))
+                  showSalToast(memberOnly(t('feature.salaryWidget')))
                 }
                 return
               }
@@ -715,28 +666,30 @@ export function SalaryView() {
             onClick={() => {
               if (!fullAccess) {
                 if (!account) {
-                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '桌面组件' }))
+                  window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: t('feature.salaryWidget') }))
                 } else {
-                  showSalToast(memberOnly('桌面组件'))
+                  showSalToast(memberOnly(t('feature.salaryWidget')))
                 }
                 return
               }
               void applyWidget({ enabled: true, style: s.value })
             }}
             >
-              <img src={STYLE_PREVIEWS[s.value]} alt={`${s.label}样式预览`} draggable={false} />
-              <span>{s.label}</span>
+              <img
+                src={STYLE_PREVIEWS[s.value]}
+                alt={t('salary.stylePreviewAlt', { name: widgetStyleLabel(s.value) })}
+                draggable={false}
+              />
+              <span>{widgetStyleLabel(s.value)}</span>
             </button>
           ))}
         </div>
         <div className="sal-widget-hint">
-          {fullAccess
-            ? '启用后组件出现在桌面中央,可拖到任意位置;点上方预览即可切换样式,关掉开关即隐藏。'
-            : '桌面组件为会员功能,开通会员后可启用并拖到桌面任意位置。'}
+          {fullAccess ? t('salary.widgetHintOn') : t('salary.widgetHintOff')}
         </div>
       </div>
 
-      <div className="sal-note">估算值,不含税社保 · 配置仅保存在本机</div>
+      <div className="sal-note">{t('salary.note')}</div>
 
       {/* 保存结果 toast(样式与全局 sidebar-toast 一致,固定在页面顶部) */}
       {toast ? (
@@ -748,15 +701,15 @@ export function SalaryView() {
 
       {/* ===== 计薪设置 底部弹窗 ===== */}
       {sheet === 'settings' ? (
-        <Sheet title="计薪设置" onClose={() => setSheet(null)}>
+        <Sheet title={t('salary.settings')} onClose={() => setSheet(null)}>
           <div className="sal-field">
-            <label>计薪方式</label>
+            <label>{t('salary.modeLabel')}</label>
             <div className="sal-seg">
               {(
                 [
-                  ['monthly', '月薪'],
-                  ['weekly', '周薪'],
-                  ['hourly', '时薪'],
+                  ['monthly', 'salary.modeMonthly'],
+                  ['weekly', 'salary.modeWeekly'],
+                  ['hourly', 'salary.modeHourly'],
                 ] as const
               ).map(([v, label]) => (
                 <button
@@ -765,7 +718,7 @@ export function SalaryView() {
                   className={draft.mode === v ? 'is-selected' : ''}
                   onClick={() => setDraft({ ...draft, mode: v })}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
@@ -773,7 +726,7 @@ export function SalaryView() {
 
           {/* 发薪日期:随计薪方式切换输入形态,放在计薪方式下方 */}
           <div className="sal-field">
-            <label>发薪日期</label>
+            <label>{t('salary.paydayLabel')}</label>
             {draft.mode === 'monthly' ? (
               <input
                 type="number"
@@ -796,7 +749,7 @@ export function SalaryView() {
                     className={draft.payDay.weekly === i ? 'is-selected' : ''}
                     onClick={() => setDraft({ ...draft, payDay: { ...draft.payDay, weekly: i } })}
                   >
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
@@ -809,13 +762,13 @@ export function SalaryView() {
               />
             )}
             <span className="sal-field-hint">
-              {draft.mode === 'monthly' ? '每月固定几号发薪' : draft.mode === 'weekly' ? '选择每周几发薪' : '每天几点发薪'}
+              {draft.mode === 'monthly' ? t('salary.hintMonthly') : draft.mode === 'weekly' ? t('salary.hintWeekly') : t('salary.hintHourly')}
             </span>
           </div>
 
           <div className="sal-field">
             <label>
-              {draft.mode === 'monthly' ? '月薪(元)' : draft.mode === 'weekly' ? '周薪(元)' : '时薪(元)'}
+              {draft.mode === 'monthly' ? t('salary.amountMonthly') : draft.mode === 'weekly' ? t('salary.amountWeekly') : t('salary.amountHourly')}
             </label>
             <input
               type="number"
@@ -828,7 +781,7 @@ export function SalaryView() {
 
           <div className="sal-field-row">
             <div className="sal-field">
-              <label>上班时间</label>
+              <label>{t('salary.workStart')}</label>
               <input
                 type="time"
                 value={draft.workStart}
@@ -837,7 +790,7 @@ export function SalaryView() {
               />
             </div>
             <div className="sal-field">
-              <label>下班时间</label>
+              <label>{t('salary.workEnd')}</label>
               <input
                 type="time"
                 value={draft.workEnd}
@@ -849,7 +802,7 @@ export function SalaryView() {
 
           <div className="sal-field-row">
             <div className="sal-field">
-              <label>午休开始</label>
+              <label>{t('salary.lunchStart')}</label>
               <input
                 type="time"
                 value={draft.lunchStart}
@@ -858,7 +811,7 @@ export function SalaryView() {
               />
             </div>
             <div className="sal-field">
-              <label>午休结束</label>
+              <label>{t('salary.lunchEnd')}</label>
               <input
                 type="time"
                 value={draft.lunchEnd}
@@ -869,7 +822,7 @@ export function SalaryView() {
           </div>
 
           <div className="sal-field">
-            <label>每周工作日</label>
+            <label>{t('salary.workdaysLabel')}</label>
             <div className="sal-week">
               {WEEK_LABELS.map((label, i) => (
                 <button
@@ -882,19 +835,19 @@ export function SalaryView() {
                     setDraft({ ...draft, workdays: next })
                   }}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
           </div>
 
           {draftInvalid ? (
-            <div className="sal-hint sal-hint-err">下班时间需晚于上班时间,且至少选择一个工作日</div>
+            <div className="sal-hint sal-hint-err">{t('salary.errInvalid')}</div>
           ) : null}
 
           <div className="sheet-actions">
             <button type="button" className="sheet-primary" onClick={saveDraft} disabled={draftInvalid}>
-              保存设置
+              {t('salary.saveSettings')}
             </button>
           </div>
         </Sheet>

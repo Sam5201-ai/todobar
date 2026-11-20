@@ -13,6 +13,7 @@ import {
   writeClipboardImage,
 } from './bridge';
 import { addPin as addPinStore } from './store';
+import { useI18n, type LocaleKey } from '../i18n';
 
 type Tool =
   | 'select'
@@ -39,6 +40,7 @@ export default function ScreenshotEditor() {
   const [width, setWidth] = useState(4);
   const [toast, setToast] = useState('');
   const [numberSeq, setNumberSeq] = useState(1);
+  const { t } = useI18n();
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -140,7 +142,7 @@ export default function ScreenshotEditor() {
     const p = toCanvas(e);
     if (tool === 'select') return;
     if (tool === 'text') {
-      const text = window.prompt('输入文字');
+      const text = window.prompt(t('shot.promptText'));
       if (text) pushAction({ type: 'text', x: p.x, y: p.y, text, color, size: 24 });
       return;
     }
@@ -225,18 +227,18 @@ export default function ScreenshotEditor() {
   const copy = async () => {
     try {
       await writeClipboardImage(dataUrlToBase64(exportDataUrl()));
-      showToast('已复制到剪贴板');
+      showToast(t('shot.editorCopied'));
     } catch (e) {
-      showToast('复制失败:' + String(e));
+      showToast(t('shot.editorCopyFailed', { err: String(e) }));
     }
   };
 
   const save = async () => {
     try {
       const path = await saveImage(dataUrlToBase64(exportDataUrl()));
-      showToast('已保存:' + path);
+      showToast(t('shot.editorSaved', { path }));
     } catch (e) {
-      showToast('保存失败:' + String(e));
+      showToast(t('shot.editorSaveFailed', { err: String(e) }));
     }
   };
 
@@ -256,25 +258,25 @@ export default function ScreenshotEditor() {
     restoreMain();
   };
 
-  if (!ready) return <div className="shot-loading">正在加载截图…</div>;
+  if (!ready) return <div className="shot-loading">{t('shot.editorLoading')}</div>;
 
   return (
     <div className="editor-root">
       <div className="editor-toolbar">
         <div className="etb-group">
-          {TOOLS.map((t) => (
+          {TOOLS.map((s) => (
             <button
-              key={t.key}
-              className={tool === t.key ? 'is-active' : ''}
-              title={t.label}
-              onClick={() => setTool(t.key as Tool)}
+              key={s.key}
+              className={tool === s.key ? 'is-active' : ''}
+              title={t(s.label)}
+              onClick={() => setTool(s.key as Tool)}
             >
-              {t.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
         <div className="etb-group">
-          <label>颜色</label>
+          <label>{t('shot.colorLabel')}</label>
           <input
             type="color"
             value={color}
@@ -282,7 +284,7 @@ export default function ScreenshotEditor() {
           />
         </div>
         <div className="etb-group">
-          <label>粗细</label>
+          <label>{t('shot.widthLabel')}</label>
           <input
             type="range"
             min={1}
@@ -292,14 +294,14 @@ export default function ScreenshotEditor() {
           />
         </div>
         <div className="etb-group">
-          <button onClick={undo} title="撤销 Ctrl+Z">撤销</button>
-          <button onClick={redo} title="重做 Ctrl+Y">重做</button>
+          <button onClick={undo} title={t('shot.editorUndoTip')}>{t('shot.editorUndo')}</button>
+          <button onClick={redo} title={t('shot.editorRedoTip')}>{t('shot.editorRedo')}</button>
         </div>
         <div className="etb-group etb-actions">
-          <button className="primary" onClick={copy}>复制</button>
-          <button onClick={save}>保存</button>
-          <button onClick={pin}>钉桌面</button>
-          <button onClick={finish}>完成</button>
+          <button className="primary" onClick={copy}>{t('shot.copy')}</button>
+          <button onClick={save}>{t('common.save')}</button>
+          <button onClick={pin}>{t('shot.pinDesktop')}</button>
+          <button onClick={finish}>{t('shot.editorDone')}</button>
         </div>
       </div>
       <div className="editor-canvas-wrap">
@@ -332,16 +334,16 @@ type Action =
   | { type: 'highlight'; x: number; y: number; w: number; h: number; color: string }
   | { type: 'number'; x: number; y: number; n: number; color: string; size: number };
 
-const TOOLS: { key: string; label: string }[] = [
-  { key: 'rect', label: '矩形' },
-  { key: 'ellipse', label: '椭圆' },
-  { key: 'arrow', label: '箭头' },
-  { key: 'pen', label: '画笔' },
-  { key: 'text', label: '文字' },
-  { key: 'mosaic', label: '马赛克' },
-  { key: 'blur', label: '模糊' },
-  { key: 'highlight', label: '高亮' },
-  { key: 'number', label: '序号' },
+const TOOLS: { key: string; label: LocaleKey }[] = [
+  { key: 'rect', label: 'shot.toolRect' },
+  { key: 'ellipse', label: 'shot.toolEllipse' },
+  { key: 'arrow', label: 'shot.toolArrow' },
+  { key: 'pen', label: 'shot.toolPen' },
+  { key: 'text', label: 'shot.toolText' },
+  { key: 'mosaic', label: 'shot.toolMosaic' },
+  { key: 'blur', label: 'shot.toolBlur' },
+  { key: 'highlight', label: 'shot.toolHighlight' },
+  { key: 'number', label: 'shot.toolNumber' },
 ];
 
 function makeBoxOrArrow(

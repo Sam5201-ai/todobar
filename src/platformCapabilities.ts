@@ -64,6 +64,12 @@ let cached: PlatformCapabilities | null = null
 let pending: Promise<PlatformCapabilities> | null = null
 
 function inTauri(): boolean {
+  // ⚠️ 回归修复：只能用 UA 判定，恢复 Windows 的同步回落路径。
+  // 上一版叠加 __TAURI_INTERNALS__ / protocol 等多重判定后，Windows 开发版
+  // 掉进 invoke 异步分支且未及时返回 → cached 恒 null → capsReady() 恒 false
+  // → 顶栏截图图标 / 设置页截图快捷键被 capsReady 守卫隐藏（快捷键因 caps()
+  // 回落 ALL_ON 仍可用）。真正的平台兜底交给 fallbackForCurrentOs()（按 UA 判
+  // OS），Mac 即使不走 invoke 也能拿到 screenshot=false 的能力表。
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Tauri')
 }
 
@@ -72,10 +78,23 @@ export function loadCapabilities(): Promise<PlatformCapabilities> {
   if (cached) return Promise.resolve(cached)
   if (pending) return pending
   if (!inTauri()) {
-    cached = ALL_ON
+    // 非 Tauri（含浏览器预览 / UA 不含 Tauri 的 Mac WebView）不可一律 ALL_ON：
+    // Mac WKWebView 默认 UA 不含 Tauri，会被误判成浏览器 → 截图/贴图入口全部放出。
+    // 按 UA 判 OS 回落：Windows=ALL_ON，macOS=与 Rust 对齐的 Mac 表。同步赋值保证
+    // capsReady() 立即为 true，顶栏 / 设置页的 capsReady 守卫不会误隐藏入口。
+    cached = fallbackForCurrentOs()
     return Promise.resolve(cached)
   }
-  pending = invoke<PlatformCapabilities>('platform_capabilities')
+  // invoke 超时兜底：任何原因（开发预览的 mock 后端 / WebView 未就绪）导致
+  // platform_capabilities 久挂不回时，也必须让 cached 落地、capsReady() 转 true，
+  // 否则顶栏截图图标与设置页截图快捷键会被 capsReady 守卫永久隐藏。
+  const withTimeout = Promise.race<PlatformCapabilities>([
+    invoke<PlatformCapabilities>('platform_capabilities'),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('platform_capabilities timeout')), 2500),
+    ),
+  ])
+  pending = withTimeout
     .then((caps) => {
       cached = caps
       return caps
@@ -90,9 +109,12 @@ export function loadCapabilities(): Promise<PlatformCapabilities> {
   return pending
 }
 
-/** 同步读取已加载的能力表；未加载完成时返回全开（调用方应在加载完成后再渲染受控入口）。 */
+/** 同步读取能力表。未加载完成时按 UA 回落平台正确表：
+ *  Windows→ALL_ON(screenshot=true)、macOS→screenshot=false 的 Mac 表。
+ *  ⚠️ 绝不无条件回落 ALL_ON——那会让 Mac 首帧闪出截图入口。
+ *  由于回落表已按 UA 给出平台正确值，调用方无需再等 capsReady()（该门控已废弃移除）。 */
 export function caps(): PlatformCapabilities {
-  return cached ?? ALL_ON
+  return cached ?? fallbackForCurrentOs()
 }
 
 /** 能力表是否已就绪。 */

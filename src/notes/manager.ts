@@ -22,6 +22,7 @@ import {
   visibleNotes,
   type Note,
 } from './store'
+import { t } from '../i18n'
 
 // 新建默认尺寸统一由 store 提供,此处不再保留第二份定义。
 
@@ -30,11 +31,11 @@ export type FailReason = 'member' | 'total' | 'visible'
 export function failText(reason: FailReason): string {
   switch (reason) {
     case 'member':
-      return '便利签为会员功能,开通会员后可用'
+      return t('note.vipRequired')
     case 'total':
-      return `便利签总数已达上限 ${MAX_NOTES} 个,请先删除一些再新建`
+      return t('note.maxTotal', { n: MAX_NOTES })
     case 'visible':
-      return `同时显示已达上限 ${MAX_VISIBLE_NOTES} 个,请先关闭一些再新建`
+      return t('note.maxVisible', { n: MAX_VISIBLE_NOTES })
   }
 }
 

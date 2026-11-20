@@ -9,6 +9,7 @@
  */
 import type { ReleaseRecord } from './changelog'
 import { caps } from './platformCapabilities'
+import { t } from './i18n'
 
 /** 自有域(Cloudflare Worker 反代),版本检查与安装包下载都走这里;不经平台分享网关,避免被强制 sharecode 拦截返回 403。 */
 export const OFFICIAL_SITE = 'https://sync.tuanzhang.site'
@@ -52,9 +53,9 @@ export interface UpdateNotice {
 
 export async function fetchLatestVersion(): Promise<LatestVersion> {
   const res = await fetch(`${OFFICIAL_SITE}/version.json?t=${Date.now()}`)
-  if (!res.ok) throw new Error(`服务器返回 ${res.status}`)
+  if (!res.ok) throw new Error(t('common.serverStatus', { code: res.status }))
   const data = (await res.json()) as { version?: string; url?: string; notes?: string }
-  if (!data.version || !data.url) throw new Error('版本信息格式错误')
+  if (!data.version || !data.url) throw new Error(t('update.formatError'))
   return {
     version: data.version,
     url: data.url,
@@ -144,7 +145,7 @@ export async function downloadAndInstall(
     try {
       await openDownloadPage()
     } catch {
-      setUpdate({ status: 'error', message: '无法打开下载页,请手动访问官网', url })
+      setUpdate({ status: 'error', message: t('update.downloadPageFail'), url })
     }
     return
   }
@@ -153,12 +154,12 @@ export async function downloadAndInstall(
     const { invoke } = await import('@tauri-apps/api/core')
     // 下载走浏览器(复用用户浏览器网络/代理/证书),避免此前 Rust 直连在特殊网络下失败。
     const resp = await fetch(url)
-    if (!resp.ok) throw new Error(`下载失败: HTTP ${resp.status}`)
+    if (!resp.ok) throw new Error(t('update.downloadFail', { code: resp.status }))
     const b64 = arrayBufferToBase64(await resp.arrayBuffer())
     const path = await invoke<string>('save_update_file', { data: b64 })
     await invoke('install_update', { path })
     setUpdate({ status: 'installing', version })
   } catch (err) {
-    setUpdate({ status: 'error', message: `更新失败: ${(err as Error).message}`, url })
+    setUpdate({ status: 'error', message: t('update.installFail', { message: (err as Error).message }), url })
   }
 }

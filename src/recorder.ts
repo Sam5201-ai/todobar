@@ -25,6 +25,7 @@ import { isTauriRuntime } from './useTaskStore'
 import { saveDiskPref } from './prefs'
 import { trackFeature } from './analytics'
 import { isMac } from './platformCapabilities'
+import { t } from './i18n'
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -269,7 +270,7 @@ async function flush(): Promise<boolean> {
     if (flushFailures >= 2) {
       // 连续两次写盘失败(磁盘满/目录被删等):停止录音,已落盘部分仍保留。
       patch({
-        error: `写入磁盘失败:${String(e)}`,
+        error: t('recorder.errDiskWrite', { detail: String(e) }),
         errorKind: 'disk',
       })
       if (snapshot.status === 'recording' || snapshot.status === 'paused') {
@@ -302,17 +303,17 @@ function classifyMicError(err: unknown): { kind: MicErrorKind; text: string } {
       return {
         kind: 'denied',
         text: isMac()
-          ? '麦克风访问被拒绝,请在「系统设置 → 隐私与安全性 → 麦克风」中允许'
-          : '麦克风访问被拒绝,请检查 Windows 隐私设置',
+          ? t('recorder.errMicDeniedMac')
+          : t('recorder.errMicDeniedWin'),
       }
     case 'NotFoundError':
     case 'OverconstrainedError':
-      return { kind: 'notfound', text: '未检测到麦克风设备,请检查连接' }
+      return { kind: 'notfound', text: t('recorder.errMicNotFound') }
     case 'NotReadableError':
     case 'AbortError':
-      return { kind: 'busy', text: '麦克风正被其他应用占用,请关闭后重试' }
+      return { kind: 'busy', text: t('recorder.errMicBusy') }
     default:
-      return { kind: 'unknown', text: `启动录音失败:${detail}` }
+      return { kind: 'unknown', text: t('recorder.errMicStart', { detail }) }
   }
 }
 
@@ -326,7 +327,7 @@ function classifyMicError(err: unknown): { kind: MicErrorKind; text: string } {
 export async function startRecording(opts?: { title?: string }): Promise<void> {
   if (snapshot.status !== 'idle') return
   if (!isTauriRuntime()) {
-    patch({ error: '请在 Tacco 桌面版中使用录音功能', errorKind: 'nottauri' })
+    patch({ error: t('recorder.errNotTauri'), errorKind: 'nottauri' })
     return
   }
   patch({ status: 'starting', error: null, errorKind: null, lastResult: null, limitWarned: false })
@@ -349,9 +350,11 @@ export async function startRecording(opts?: { title?: string }): Promise<void> {
   // 文件名 = 标题:默认标题在开始录音时即生成(旧版在保存时生成,没法和文件名对上)。
   const pad0 = (n: number) => String(n).padStart(2, '0')
   const startedAt = new Date()
-  const fallbackTitle = `录音 ${startedAt.getMonth() + 1}月${startedAt.getDate()}日 ${pad0(
-    startedAt.getHours(),
-  )}:${pad0(startedAt.getMinutes())}`
+  const fallbackTitle = t('recorder.defaultTitle', {
+    m: startedAt.getMonth() + 1,
+    d: startedAt.getDate(),
+    time: `${pad0(startedAt.getHours())}:${pad0(startedAt.getMinutes())}`,
+  })
   const baseTitle = opts?.title?.trim() ? opts.title.trim() : fallbackTitle
   const dir = loadRecordingsDir()
   // 同目录下文件名查重(基于现有记录;磁盘孤儿文件冲突由 recording_begin 兜底加序号)。
@@ -372,7 +375,7 @@ export async function startRecording(opts?: { title?: string }): Promise<void> {
     file = await invoke<string>('recording_begin', { dir, file })
   } catch (err) {
     teardownAudio()
-    patch({ status: 'idle', error: `录音目录不可用:${String(err)}`, errorKind: 'disk' })
+    patch({ status: 'idle', error: t('recorder.errDir', { detail: String(err) }), errorKind: 'disk' })
     return
   }
 
@@ -574,7 +577,7 @@ function normalize(list: unknown): RecordingMeta[] {
     if (typeof r.id !== 'string' || !r.id) continue
     out.push({
       id: r.id,
-      title: typeof r.title === 'string' && r.title.trim() ? r.title : '新录音',
+      title: typeof r.title === 'string' && r.title.trim() ? r.title : t('recorder.untitled'),
       note: typeof r.note === 'string' ? r.note : '',
       durationMs: Number.isFinite(r.durationMs) && Number(r.durationMs) > 0 ? Number(r.durationMs) : 0,
       bytes: Number.isFinite(r.bytes) && Number(r.bytes) > 0 ? Number(r.bytes) : 0,
@@ -665,5 +668,5 @@ export function sanitizeFileName(title: string): string {
     .trim()
     .replace(/[.\s]+$/, '')
     .slice(0, 60)
-  return cleaned ? `${cleaned}.mp3` : `录音 ${Date.now()}.mp3`
+  return cleaned ? `${cleaned}.mp3` : t('recorder.fallbackFile', { n: Date.now() })
 }

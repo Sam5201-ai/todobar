@@ -47,6 +47,7 @@ import {
 } from './store'
 import { createNoteWithWindow, failText } from './manager'
 import { applyNoteShortcut, initNoteShortcuts } from './shortcuts'
+import { t } from '../i18n'
 
 type Store = ReturnType<typeof useTaskStore>
 
@@ -81,7 +82,7 @@ export function useNotesBridge(params: {
     void hydrateNotes().then(() => {
       if (cancelled) return
       const toOpen = [...getNotes()]
-        .filter((n) => !n.collapsed) // 防御:hydrate 已清 legacy 收起态,这里再挡一道
+        .filter((n) => !n.collapsed && !n.archivedAt) // 归档签不开窗(修复:重启后归档签重回桌面)
         .sort((a, b) => a.createdAt - b.createdAt)
         .slice(0, MAX_VISIBLE_NOTES)
       toOpen.forEach((n, i) => {
@@ -134,9 +135,9 @@ export function useNotesBridge(params: {
         const limited = !fullAccessRef.current
         const reason = limited
           ? readFreeQuotaUsed() >= 3
-            ? '今日免费额度已用完,开通会员可继续'
-            : '当前无法新建待办'
-          : '内容为空,无法转待办'
+            ? t('note.quotaFull')
+            : t('note.noTaskSlot')
+          : t('note.emptyNoTask')
         void emitConvertResult({
           noteId: req.noteId,
           itemId: req.itemId,
@@ -147,7 +148,7 @@ export function useNotesBridge(params: {
       }
 
       void emitConvertResult({ noteId: req.noteId, itemId: req.itemId, ok: true })
-      setToastRef.current('ok', '已转为待办')
+      setToastRef.current('ok', t('note.toTaskDone'))
     }).then((fn) => {
       if (disposed) fn()
       else un = fn
@@ -169,14 +170,14 @@ export function useNotesBridge(params: {
         if (disposed) return
         const note = getNotes().find((n) => n.id === e.payload.id)
         if (!note) {
-          setToastRef.current('err', '这张便利签已删除')
+          setToastRef.current('err', t('note.goneToast'))
           return
         }
         // 2026-11-15 需求:绳卡「打开原内容」时把桌面便利签标记为未折叠,
         // 否则重启后 boot 自动恢复会把它过滤掉(collapsed 的不再弹窗)。
         if (note.collapsed) updateNote(note.id, { collapsed: false })
         void invoke('notes_open_window', { noteId: note.id, pinned: note.pinned }).catch(() => {
-          setToastRef.current('err', '便利签窗口打开失败')
+          setToastRef.current('err', t('note.openFail'))
         })
       }).catch(() => null)
       if (u1) unsubs.push(u1)
@@ -188,7 +189,7 @@ export function useNotesBridge(params: {
           const { noteId, itemId, text } = e.payload
           if (!text?.trim()) return
           updateNoteItem(noteId, itemId, { text: text.trim() })
-          setToastRef.current('ok', '便利签已更新')
+          setToastRef.current('ok', t('note.updated'))
         },
       ).catch(() => null)
       if (u2) unsubs.push(u2)
@@ -217,12 +218,12 @@ export function useNotesBridge(params: {
             // ★2026-11-15 反馈4：绳上便利签行操作「加入待办」→ 主窗任务单一写方建任务。
             const text = p.text?.trim()
             if (!text) break
-            const t = storeRef.current.addTask('today', text)
+            const added = storeRef.current.addTask('today', text)
             // ★批14：结果 toast 弹回绳窗并锚到该便利签卡（用户不会一直开着工具窗，
             //   主窗 toast 等于没提示，会让用户以为没有添加成功）。
             void emit(CL_TOAST, {
-              kind: t ? 'ok' : 'err',
-              msg: t ? '已加入今日待办' : '待办数量已达上限',
+              kind: added ? 'ok' : 'err',
+              msg: added ? t('note.addedToday') : t('note.taskLimit'),
               noteId: p.noteId,
             } satisfies ClToastPayload).catch(() => undefined)
             break
@@ -237,16 +238,16 @@ export function useNotesBridge(params: {
       const uNoteCreate = await listen<unknown>(CL_CREATE_NOTE, () => {
         if (disposed) return
         if (!fullAccessRef.current) {
-          setToastRef.current('err', '新建便利签为会员功能，请先开通会员')
+          setToastRef.current('err', t('note.vipOnly'))
           return
         }
         const note = createNote({ collapsed: true })
         if (!note) {
-          setToastRef.current('err', '便利签数量已达上限')
+          setToastRef.current('err', t('note.countLimit'))
           return
         }
         void clAddCard(clMakeCard('note', { note_id: note.id }), true)
-          .then(() => setToastRef.current('ok', '已新建便利签并挂到晾衣绳'))
+          .then(() => setToastRef.current('ok', t('note.createdHung')))
           .catch((e) => setToastRef.current('err', failText(e)))
       }).catch(() => null)
       if (uNoteCreate) unsubs.push(uNoteCreate)

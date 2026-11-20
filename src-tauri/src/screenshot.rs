@@ -201,6 +201,26 @@ pub fn is_overlay_active(app: tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// ★2026-11-20 覆盖层自愈：覆盖窗是全应用唯一没有看门狗的窗口——页面加载失败
+/// （dev 模式 vite 冷启动竞态 / WebView2 假死）时「截图入口永久无响应」且日志零痕迹。
+/// 主窗有 nav-retry 重建、贴图池窗有 pin_frontend_watchdog 重载自救，本命令把同款
+/// 自救补到覆盖层：窗口存在且仍隐藏（= 前端从未 show 过，重载无副作用）时重载页面，
+/// 前端重新挂载后恢复监听 overlay-show。仅在主窗三轮就绪轮询全失败后调用。
+#[tauri::command]
+pub fn rescue_capture_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    let Some(w) = app.get_webview_window("capture-overlay") else {
+        crate::append_app_log("[shot] overlay rescue: 覆盖层窗口不存在（预热失败），需重启应用");
+        return Err("覆盖层窗口不存在".into());
+    };
+    if w.is_visible().unwrap_or(true) {
+        // 可见 = 前端活着但 show 后置位竞态等软件问题，不该重载打断用户。
+        crate::append_app_log("[shot] overlay rescue: 覆盖层可见，跳过重载");
+        return Ok(());
+    }
+    crate::append_app_log("[shot] overlay rescue: 前端 3 轮未就绪，重载覆盖层 webview 自救");
+    w.eval("location.reload()").map_err(|e| e.to_string())
+}
+
 /// 隐藏指定窗口(覆盖层 / 贴图池窗口用,不销毁,下次直接复用,零冷启动)。
 #[tauri::command]
 pub fn hide_window(app: tauri::AppHandle, label: String) -> Result<(), String> {

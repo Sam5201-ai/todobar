@@ -32,10 +32,12 @@ import { filterNoiseLines, joinLines, recognizeRegion, type OcrLine } from './oc
 import { emitOcrCreateTask } from './ocr/ocrBridge';
 import { copyText } from '../clipboard';
 import { isFullAccess, loadAccount } from '../account';
+import { useI18n } from '../i18n';
 import {
   clAddCard,
   clGetSettings,
   clMakeCard,
+  clSaveOriginal,
   clSavePreview,
 } from '../clothesline/bridge';
 import './screenshot.css';
@@ -77,6 +79,9 @@ async function flyShotToClothesline(png: string): Promise<void> {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const thumb = canvas.toDataURL('image/png');
     const seed = clMakeCard('shot', {});
+    // ★2026-11-19 反馈2：同步落盘全分辨率原图（png 是 capture_screen 原始字节），
+    // 预览覆盖层优先显示它；缩略图只做卡片挂绳小图。
+    void clSaveOriginal(seed.id, 'image/png', `data:image/png;base64,${png}`).catch(() => undefined);
     const path = await clSavePreview(seed.id, thumb);
     await clAddCard({ ...seed, src_path: path }, isFullAccess(loadAccount()), true);
     await shotLog(`clothesline fly ok ${seed.id}`);
@@ -204,6 +209,7 @@ export default function CaptureOverlay() {
   const [barW, setBarW] = useState(264);
   // 每轮流程 +1,驱动 init effect 重跑(预热窗复用时复位全部状态)。
   const [runId, setRunId] = useState(0);
+  const { t } = useI18n();
 
   // 标注工具栏状态。
   const [activeTool, setActiveToolState] = useState<ActiveTool>('move');
@@ -284,7 +290,10 @@ export default function CaptureOverlay() {
   const drawSizeLabel = (ctx: CanvasRenderingContext2D, sel: Sel) => {
     const meta = metaRef.current!;
     const text = `${Math.round(sel.w)} × ${Math.round(sel.h)}`;
-    const coord = `起点 (${Math.round(sel.x + meta.left)}, ${Math.round(sel.y + meta.top)})`;
+    const coord = t('shot.coordStart', {
+      x: Math.round(sel.x + meta.left),
+      y: Math.round(sel.y + meta.top),
+    });
     ctx.font = '13px system-ui, sans-serif';
     const pad = 6;
     const tw =
@@ -627,7 +636,7 @@ export default function CaptureOverlay() {
       const lines = filterNoiseLines(r.lines);
       if (!lines.length) {
         setOcr({ phase: 'idle', lines: [], startedAt: 0 });
-        showToast('未识别到文字');
+        showToast(t('shot.ocr.noText'));
         return;
       }
       setOcr({ phase: 'done', lines, startedAt: 0 });
@@ -636,8 +645,8 @@ export default function CaptureOverlay() {
       setOcr({ phase: 'idle', lines: [], startedAt: 0 });
       showToast(
         String(e).includes('OCR_REGION_TOO_LARGE')
-          ? '识别区域过大,请框选更小范围'
-          : `识别失败: ${String(e)}`,
+          ? t('shot.ocr.tooLarge')
+          : t('shot.ocr.failed', { err: String(e) }),
       );
     }
   }, [busy]);
@@ -653,10 +662,10 @@ export default function CaptureOverlay() {
     setOcrBusyAction('copy');
     try {
       await copyText(joinLines(rows));
-      showToast(rows.length > 1 ? '已复制全部' : '已复制');
+      showToast(rows.length > 1 ? t('shot.copiedAll') : t('shot.copied'));
       if (exit) await finish(); // 复制全部:与转待办一致,完成后立即退出截图模式
     } catch (e) {
-      showToast(`复制失败: ${String(e)}`);
+      showToast(t('shot.copyFailed', { err: String(e) }));
     } finally {
       setOcrBusyAction(null);
     }
@@ -669,13 +678,13 @@ export default function CaptureOverlay() {
       try {
         const ok = await emitOcrCreateTask(rows.map((l) => ({ text: l.text })));
         if (ok) {
-          showToast(all ? '已全部转为待办' : '已转为待办');
+          showToast(all ? t('shot.addedAll') : t('shot.added'));
           if (all) await finish();
         } else {
-          showToast('添加失败,请重试');
+          showToast(t('shot.addFailed'));
         }
       } catch (e) {
-        showToast(`转待办失败: ${String(e)}`);
+        showToast(t('shot.addFailedErr', { err: String(e) }));
       } finally {
         setOcrBusyAction(null);
       }
@@ -747,7 +756,7 @@ export default function CaptureOverlay() {
       void shotLog(`finish fail: ${String(e)}`);
     }
     // 失败提示最后弹，绝不阻断飞入 / 关窗；文案区分「已挂绳但剪贴板失败」。
-    if (copyErr) showToast(`截图已挂到晾衣绳，但复制剪贴板失败：${copyErr}`);
+    if (copyErr) showToast(t('shot.hungCopyFailed', { err: copyErr }));
   }, [busy, finish]);
 
   const onPin = useCallback(async () => {
@@ -770,7 +779,7 @@ export default function CaptureOverlay() {
     } catch (e) {
       setBusy(false);
       void shotLog(`pin fail: ${String(e)}`);
-      showToast(`贴图失败: ${String(e)}`);
+      showToast(t('shot.pinFailed', { err: String(e) }));
     }
   }, [busy, finish]);
 
@@ -784,10 +793,10 @@ export default function CaptureOverlay() {
       // 「另存为」:弹出系统保存对话框,用户自选目录与文件名。
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
-      const name = `Tacco-截屏-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+      const name = `${t('shot.savePrefix')}${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
       const target = await saveFileDialog({
         defaultPath: name,
-        filters: [{ name: 'PNG 图片', extensions: ['png'] }],
+        filters: [{ name: t('shot.filterPng'), extensions: ['png'] }],
       });
       if (!target) {
         // 用户取消对话框:不结束截图,回到操作条可继续调整。
@@ -800,7 +809,7 @@ export default function CaptureOverlay() {
     } catch (e) {
       setBusy(false);
       void shotLog(`save fail: ${String(e)}`);
-      showToast(`保存失败: ${String(e)}`);
+      showToast(t('shot.saveFailed', { err: String(e) }));
     }
   }, [busy, finish]);
 
@@ -1060,9 +1069,9 @@ export default function CaptureOverlay() {
           raw = await takeImage(FULL_KEY);
           if (!raw) await new Promise((r) => setTimeout(r, 60));
         }
-        if (!raw) throw new Error('截图数据不存在');
+        if (!raw) throw new Error(t('shot.errShotMissing'));
         const meta = JSON.parse(raw) as CaptureMeta;
-        if (!meta || !meta.path) throw new Error('截图数据不完整');
+        if (!meta || !meta.path) throw new Error(t('shot.errShotIncomplete'));
         if (disposed) return;
         metaRef.current = meta;
         // 关键时序(0.4.41):**先在隐藏态完成覆盖层定位**,再加载/绘制冻结帧。
@@ -1107,7 +1116,7 @@ export default function CaptureOverlay() {
             clearAnnoCanvas();
             resolve();
           };
-          img.onerror = () => reject(new Error('截图解码失败'));
+          img.onerror = () => reject(new Error(t('shot.errShotDecode')));
           // ⚠️ 必须经 Rust 读回 base64 用 data: URL 加载,不能用 convertFileSrc:
           // asset:// 跨源图会把 canvas 标记为 tainted,extractPng 的 toDataURL()
           // 抛 SecurityError → 复制/贴图/保存全部失败。
@@ -1164,6 +1173,10 @@ export default function CaptureOverlay() {
   // ---- 监听主窗口触发 + 键盘 ----
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    // ★2026-11-20 诊断锚点：覆盖窗此前是全应用唯一没有启动日志的窗口——页面加载失败
+    // （dev 模式 vite 冷启动竞态 / WebView2 假死）时表现为「截图入口无响应」且日志零痕迹。
+    // 挂载即留痕，后续排查只需看有没有这一行。
+    void shotLog('overlay page mounted (standby)');
     void listen('overlay-show', () => {
       // 防抖:主窗口的就绪轮询机制会对同一轮触发多次 emit,800ms 内忽略。
       const now = Date.now();
@@ -1463,26 +1476,26 @@ export default function CaptureOverlay() {
             <div className="capture-toolbar">
               <div className="ctb-group">
                 <button className={mode === 'region' ? 'is-active' : ''} onClick={() => setMode('region')}>
-                  区域
+                  {t('shot.modeRegion')}
                 </button>
                 <button className={mode === 'window' ? 'is-active' : ''} onClick={() => setMode('window')}>
-                  窗口
+                  {t('shot.modeWindow')}
                 </button>
               </div>
               <div className="ctb-group">
-                <label>比例</label>
+                <label>{t('shot.ratioLabel')}</label>
                 <select
                   value={ratio}
                   onChange={(e) => setRatio(e.target.value as Ratio)}
                   disabled={mode !== 'region'}
                 >
-                  <option value="free">自由</option>
+                  <option value="free">{t('shot.ratioFree')}</option>
                   <option value="1:1">1:1</option>
                   <option value="4:3">4:3</option>
                   <option value="16:9">16:9</option>
                 </select>
               </div>
-              <div className="ctb-group ctb-hint">拖拽框选 · 松手确认 · Enter 复制 · 右键/Esc 取消</div>
+              <div className="ctb-group ctb-hint">{t('shot.hintCapture')}</div>
             </div>
           )}
           {confirmed && (
@@ -1491,32 +1504,32 @@ export default function CaptureOverlay() {
                 <button
                   className={`cab-tool-label ${activeTool === 'move' ? 'is-active' : ''}`}
                   onClick={() => selectTool('move')}
-                  title="选择 / 移动 (V)"
+                  title={t('shot.toolCursorTip')}
                 >
-                  指针
+                  {t('shot.toolCursor')}
                 </button>
-                <button className={activeTool === 'arrow' ? 'is-active' : ''} onClick={() => selectTool('arrow')} title="箭头">
+                <button className={activeTool === 'arrow' ? 'is-active' : ''} onClick={() => selectTool('arrow')} title={t('shot.toolArrow')}>
                   ↗
                 </button>
-                <button className={activeTool === 'pencil' ? 'is-active' : ''} onClick={() => selectTool('pencil')} title="画笔">
+                <button className={activeTool === 'pencil' ? 'is-active' : ''} onClick={() => selectTool('pencil')} title={t('shot.toolPen')}>
                   ✎
                 </button>
-                <button className={activeTool === 'rect' ? 'is-active' : ''} onClick={() => selectTool('rect')} title="矩形">
+                <button className={activeTool === 'rect' ? 'is-active' : ''} onClick={() => selectTool('rect')} title={t('shot.toolRect')}>
                   ▭
                 </button>
-                <button className={activeTool === 'ellipse' ? 'is-active' : ''} onClick={() => selectTool('ellipse')} title="椭圆">
+                <button className={activeTool === 'ellipse' ? 'is-active' : ''} onClick={() => selectTool('ellipse')} title={t('shot.toolEllipse')}>
                   ◯
                 </button>
-                <button className={activeTool === 'num' ? 'is-active' : ''} onClick={() => selectTool('num')} title="序号">
+                <button className={activeTool === 'num' ? 'is-active' : ''} onClick={() => selectTool('num')} title={t('shot.toolNumber')}>
                   ①
                 </button>
-                <button className={activeTool === 'text' ? 'is-active' : ''} onClick={() => selectTool('text')} title="文字">
+                <button className={activeTool === 'text' ? 'is-active' : ''} onClick={() => selectTool('text')} title={t('shot.toolText')}>
                   A
                 </button>
-                <button className={activeTool === 'mosaic' ? 'is-active' : ''} onClick={() => selectTool('mosaic')} title="马赛克">
+                <button className={activeTool === 'mosaic' ? 'is-active' : ''} onClick={() => selectTool('mosaic')} title={t('shot.toolMosaic')}>
                   ▦
                 </button>
-                <button className={activeTool === 'eraser' ? 'is-active' : ''} onClick={() => selectTool('eraser')} title="橡皮擦">
+                <button className={activeTool === 'eraser' ? 'is-active' : ''} onClick={() => selectTool('eraser')} title={t('shot.toolEraser')}>
                   <Eraser size={15} />
                 </button>
               </div>
@@ -1542,42 +1555,42 @@ export default function CaptureOverlay() {
                 ))}
               </div>
               <div className="cab-actions2">
-                <button onClick={() => undoShape()} title="撤销 (Ctrl+Z)">
-                  撤销
+                <button onClick={() => undoShape()} title={t('shot.undoTip')}>
+                  {t('shot.undo')}
                 </button>
-                <button onClick={() => clearShapes()} title="清空标注">
-                  清空
+                <button onClick={() => clearShapes()} title={t('shot.clearTip')}>
+                  {t('shot.clear')}
                 </button>
               </div>
             </div>
           )}
           {confirmed && (
             <div ref={barRef} className="capture-actionbar" style={actionBarStyle()}>
-              <button type="button" className="cab-btn" disabled={busy} onClick={onPin} title="钉在桌面原位">
+              <button type="button" className="cab-btn" disabled={busy} onClick={onPin} title={t('shot.pinTip')}>
                 <Pin size={15} />
-                贴图
+                {t('shot.pin')}
               </button>
               <button
                 type="button"
                 className="cab-btn"
                 disabled={busy || ocr.phase === 'running'}
                 onClick={() => void onOcr()}
-                title="识别选区文字(本地离线)"
+                title={t('shot.ocrTip')}
               >
                 <ScanText size={15} />
-                识别文字
+                {t('shot.ocrBtn')}
               </button>
-              <button type="button" className="cab-btn" disabled={busy} onClick={onSave} title="保存为 PNG 文件">
+              <button type="button" className="cab-btn" disabled={busy} onClick={onSave} title={t('shot.saveTip')}>
                 <Save size={15} />
-                保存
+                {t('common.save')}
               </button>
-              <button type="button" className="cab-btn cab-cancel" disabled={busy} onClick={() => void finish()} title="取消(Esc)">
+              <button type="button" className="cab-btn cab-cancel" disabled={busy} onClick={() => void finish()} title={t('shot.cancelTip')}>
                 <X size={15} />
-                取消
+                {t('common.cancel')}
               </button>
-              <button type="button" className="cab-btn" disabled={busy} onClick={onCopy} title="复制到剪贴板(Enter)">
+              <button type="button" className="cab-btn" disabled={busy} onClick={onCopy} title={t('shot.copyTip')}>
                 <Copy size={15} />
-                复制
+                {t('shot.copy')}
               </button>
             </div>
           )}
@@ -1605,7 +1618,7 @@ export default function CaptureOverlay() {
               autoFocus
               style={{ left: textInput.x, top: textInput.y }}
               value={textInput.value}
-              placeholder="输入文字…"
+              placeholder={t('shot.textPlaceholder')}
               onChange={(e) => setTextInput((v) => ({ ...v, value: e.target.value }))}
               onBlur={commitText}
               onKeyDown={(e) => {

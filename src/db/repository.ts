@@ -1,4 +1,5 @@
 import type { Birthday, Recurrence, SyncConfig, SyncState, Task, TaskList } from '../types'
+import type { LocaleKey } from '../i18n'
 
 /**
  * Storage contract used by the UI and the sync engine. Two production impls
@@ -43,11 +44,12 @@ export interface TaskRepository {
  * 自动同步间隔档位(秒)。仅保留 30/60/120 分钟三档,默认 60 分钟:客户端每到一个
  * 间隔就发一次 GET /api/tasks,30 秒空转是 Workers 请求额度偏高的主因,拉长档位可显著降载。
  * 该文件是档位的单一真源,设置页选项与存量归一化都从这里取,避免两处不一致。
+ * label 为显示词条 key(复用 zh-CN 字典的 sync.interval.* 词条,渲染期 t() 取词,真源在字典)。
  */
-export const SYNC_INTERVAL_OPTIONS: { value: number; label: string }[] = [
-  { value: 1800, label: '30分钟' },
-  { value: 3600, label: '60分钟' },
-  { value: 7200, label: '120分钟' },
+export const SYNC_INTERVAL_OPTIONS: { value: number; label: LocaleKey }[] = [
+  { value: 1800, label: 'sync.interval.1800' },
+  { value: 3600, label: 'sync.interval.3600' },
+  { value: 7200, label: 'sync.interval.7200' },
 ]
 export const DEFAULT_SYNC_INTERVAL_SEC = 3600
 

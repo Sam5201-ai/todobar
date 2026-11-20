@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { Copy, ListTodo, X } from 'lucide-react'
 import { emit, listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import {
   clGetRestoreState,
   clSaveSession,
@@ -21,6 +22,7 @@ import {
   clSetHitRects,
   clSetForceClickable,
   clSetDismissOnOutside,
+  clGetSettings,
   clUpdateSettings,
   clSetAlwaysOnTop,
   clReorderCards,
@@ -32,6 +34,8 @@ import {
   clDeleteArchived,
   clReadPreview,
   clSavePreview,
+  clSaveOriginal,
+  clReadOriginal,
   clMakeCard,
   CL_CARDS_CHANGED,
   CL_ORDER_CHANGED,
@@ -67,6 +71,7 @@ import {
 import type { RecorderStatus } from '../recorder'
 import { copyText } from '../clipboard'
 import { useAccount } from '../membership'
+import { t, useI18n } from '../i18n'
 import './clothesline.css'
 
 const lsLog = (msg: string) => {
@@ -98,7 +103,7 @@ export class ClotheslineErrorBoundary extends Component<
     } catch {
       /* noop */
     }
-    lsLog(`渲染异常（已保持透明）: ${error.message}`)
+    lsLog(`render crashed (kept transparent): ${error.message}`)
   }
   render() {
     // 失败只留透明节点，窗口继续存在但不可见——绝不打断桌面其它功能。
@@ -165,26 +170,28 @@ type NoteLite = {
 }
 const NOTES_LS_KEY = 'ticktask.notes.v1'
 /** 与 notes/store.ts::NOTE_COLORS 同步的只读色板（绝不 import store 的写入模块）。
- *  ⚠️ 一律用不带 alpha 的实色 hex：透明置顶窗里 rgba 背景会被合成层算成半透明。 */
-const CL_NOTE_PALETTE = [
-  { key: 'yellow', label: '柠檬黄', bg: '#fdd86e', fg: '#4a3710' },
-  { key: 'pink', label: '樱花粉', bg: '#fcbac8', fg: '#5c2131' },
-  { key: 'blue', label: '晴空蓝', bg: '#a8d6fa', fg: '#123a55' },
-  { key: 'green', label: '薄荷绿', bg: '#afe8c7', fg: '#12462f' },
-  { key: 'purple', label: '薰衣草', bg: '#d4bef5', fg: '#3a2352' },
-  { key: 'gray', label: '石墨灰', bg: '#ced4da', fg: '#2c3033' },
+ *  ⚠️ 一律用不带 alpha 的实色 hex：透明置顶窗里 rgba 背景会被合成层算成半透明。
+ *  颜色名是用户可见文案，渲染期经 t() 取词（模块级常量会在启动时冻结语言）。 */
+const clNotePalette = () => [
+  { key: 'yellow', label: t('clothesline.color.lemon'), bg: '#fdd86e', fg: '#4a3710' },
+  { key: 'pink', label: t('clothesline.color.sakura'), bg: '#fcbac8', fg: '#5c2131' },
+  { key: 'blue', label: t('clothesline.color.sky'), bg: '#a8d6fa', fg: '#123a55' },
+  { key: 'green', label: t('clothesline.color.mint'), bg: '#afe8c7', fg: '#12462f' },
+  { key: 'purple', label: t('clothesline.color.lavender'), bg: '#d4bef5', fg: '#3a2352' },
+  { key: 'gray', label: t('clothesline.color.graphite'), bg: '#ced4da', fg: '#2c3033' },
 ] as const
 /** ★2026-11-15 需求5/6：随手记 / 番茄钟弹窗的自定义卡色（bg=null = 沿用类型默认纸色）。
- *  全部为不透明浅色（透明置顶窗铁律：卡片绝不引入 alpha 背景）。 */
-const CL_CARD_PALETTE = [
-  { key: '', label: '默认', bg: null },
-  { key: 'yellow', label: '麦黄', bg: '#fff8e6' },
-  { key: 'pink', label: '樱粉', bg: '#fdeef1' },
-  { key: 'blue', label: '雾蓝', bg: '#eef3fb' },
-  { key: 'green', label: '苔绿', bg: '#eef7ee' },
-  { key: 'peach', label: '蜜桃', bg: '#fdf3ef' },
-  { key: 'purple', label: '藤紫', bg: '#f3effb' },
-  { key: 'gray', label: '石墨灰', bg: '#ced4da' },
+ *  全部为不透明浅色（透明置顶窗铁律：卡片绝不引入 alpha 背景）。
+ *  颜色名是用户可见文案，渲染期经 t() 取词（模块级常量会在启动时冻结语言）。 */
+const clCardPalette = () => [
+  { key: '', label: t('clothesline.color.default'), bg: null },
+  { key: 'yellow', label: t('clothesline.color.wheat'), bg: '#fff8e6' },
+  { key: 'pink', label: t('clothesline.color.petal'), bg: '#fdeef1' },
+  { key: 'blue', label: t('clothesline.color.mist'), bg: '#eef3fb' },
+  { key: 'green', label: t('clothesline.color.moss'), bg: '#eef7ee' },
+  { key: 'peach', label: t('clothesline.color.peach'), bg: '#fdf3ef' },
+  { key: 'purple', label: t('clothesline.color.vine'), bg: '#f3effb' },
+  { key: 'gray', label: t('clothesline.color.graphite'), bg: '#ced4da' },
 ] as const
 const MAX_NOTE_ITEMS_ON_ROPE = 30
 function readNoteLite(id: string | null): NoteLite | null {
@@ -199,32 +206,33 @@ function readNoteLite(id: string | null): NoteLite | null {
   }
 }
 
-/** 卡片呈现内容。外部引用失效只降级占位，卡本身保留原槽位。 */
+/** 卡片呈现内容。外部引用失效只降级占位，卡本身保留原槽位。
+ *  模块级函数在渲染期被调用，直接用导入的 t() 取词（组件随 locale 变化重渲染）。 */
 function cardCopy(card: ClotheslineCard): { title: string; text: string; missing: boolean } {
   if (refBroken(card)) {
-    return { title: '原内容已删除', text: '卡片已保留在原位', missing: true }
+    return { title: t('clothesline.card.refDeletedTitle'), text: t('clothesline.card.refDeletedText'), missing: true }
   }
   if (card.kind === 'note') {
     const note = readNoteLite(card.note_id)
-    if (!note) return { title: '原内容已删除', text: '卡片已保留在原位', missing: true }
+    if (!note) return { title: t('clothesline.card.refDeletedTitle'), text: t('clothesline.card.refDeletedText'), missing: true }
     const items = note.items ?? []
     const itemId = card.attach_to?.startsWith('item:') ? card.attach_to.slice(5) : null
     if (itemId) {
       const item = items.find((it) => it.id === itemId)
-      if (!item) return { title: '该条事项已删除', text: '卡片已保留在原位', missing: true }
-      return { title: '便利签 · 单条', text: `${item.done ? '✓ ' : '· '}${item.text}`, missing: false }
+      if (!item) return { title: t('clothesline.card.itemDeleted'), text: t('clothesline.card.refDeletedText'), missing: true }
+      return { title: t('clothesline.card.noteSingle'), text: `${item.done ? '✓ ' : '· '}${item.text}`, missing: false }
     }
     return {
-      title: '便利签',
-      text: items.length ? items.map((it) => `${it.done ? '✓ ' : '· '}${it.text}`).join('\n') : '（空便利签）',
+      title: t('clothesline.card.note'),
+      text: items.length ? items.map((it) => `${it.done ? '✓ ' : '· '}${it.text}`).join('\n') : t('clothesline.card.noteEmpty'),
       missing: false,
     }
   }
   const title = card.title || (
-    card.kind === 'timer' ? '计时'
-      : card.kind === 'clipboard' ? '剪贴板'
-      : card.kind === 'audio' ? '录音'
-      : card.kind === 'task' ? '待办' : ''
+    card.kind === 'timer' ? t('clothesline.card.kindTimer')
+      : card.kind === 'clipboard' ? t('clothesline.card.kindClipboard')
+      : card.kind === 'audio' ? t('clothesline.card.kindAudio')
+      : card.kind === 'task' ? t('clothesline.card.kindTask') : ''
   )
   // ★2026-11-15 反馈3：截图 / 贴图 / 图片卡不再显示固定标题「截图」「贴图」，
   //   只呈现用户编写的内容（card.text）；没有就什么都不渲染。
@@ -232,23 +240,24 @@ function cardCopy(card: ClotheslineCard): { title: string; text: string; missing
   //   用户自定义过的标题原样保留，没有标题时回落到类型默认值。
   //   「W×H」尺寸文案仍从源头不再写入、渲染期剥离存量。
   if (card.kind === 'shot' || card.kind === 'pin' || card.kind === 'image') {
-    const fallbackTitle = card.kind === 'shot' ? '截图' : card.kind === 'pin' ? '贴图' : '图片'
+    const fallbackTitle = card.kind === 'shot' ? t('clothesline.card.kindShot') : card.kind === 'pin' ? t('clothesline.card.kindPin') : t('clothesline.card.kindImage')
     const legacyText = /^\d+×\d+$/.test(card.text) ? '' : card.text
     return { title: title || fallbackTitle, text: legacyText, missing: false }
   }
   return { title, text: card.text, missing: false }
 }
 
-/** 仅用于 toast / 菜单文案的类型名（不进入卡片画面）。 */
+/** 仅用于 toast / 菜单文案的类型名（不进入卡片画面）。
+ *  渲染期经 t() 取词，组件随 locale 变化重渲染时取到当前语言。 */
 function kindLabel(card: ClotheslineCard): string {
-  return card.kind === 'shot' ? '截图'
-    : card.kind === 'timer' ? '计时'
-    : card.kind === 'clipboard' ? '剪贴板'
-    : card.kind === 'image' ? '图片'
-    : card.kind === 'pin' ? '贴图'
-    : card.kind === 'task' ? '待办'
-    : card.kind === 'audio' ? '录音'
-    : card.kind === 'note' ? '便利签' : '随手记'
+  return card.kind === 'shot' ? t('clothesline.card.kindShot')
+    : card.kind === 'timer' ? t('clothesline.card.kindTimer')
+    : card.kind === 'clipboard' ? t('clothesline.card.kindClipboard')
+    : card.kind === 'image' ? t('clothesline.card.kindImage')
+    : card.kind === 'pin' ? t('clothesline.card.kindPin')
+    : card.kind === 'task' ? t('clothesline.card.kindTask')
+    : card.kind === 'audio' ? t('clothesline.card.kindAudio')
+    : card.kind === 'note' ? t('clothesline.card.note') : t('clothesline.card.kindText')
 }
 
 /** 计时卡时间正文（纯 mm:ss / h:mm:ss，不含「剩余 / 已计」前缀 —— 圆环中心直接展示）。
@@ -325,16 +334,16 @@ function FmtRow(props: {
       <button
         type="button"
         className="cl-modal-fmt-step"
-        aria-label={`${props.label}字号缩小`}
+        aria-label={t('clothesline.fmt.stepDown', { label: props.label })}
         onClick={() => props.onSize(Math.max(8, Math.round((cur - 0.5) * 2) / 2))}
       >
         −
       </button>
-      <span className="cl-modal-fmt-val">{props.size == null ? '默认' : `${props.size}px`}</span>
+      <span className="cl-modal-fmt-val">{props.size == null ? t('clothesline.fmt.defaultSize') : `${props.size}px`}</span>
       <button
         type="button"
         className="cl-modal-fmt-step"
-        aria-label={`${props.label}字号放大`}
+        aria-label={t('clothesline.fmt.stepUp', { label: props.label })}
         onClick={() => props.onSize(Math.min(28, Math.round((cur + 0.5) * 2) / 2))}
       >
         ＋
@@ -342,7 +351,7 @@ function FmtRow(props: {
       <button
         type="button"
         className={`cl-modal-fmt-tgl${props.bold ? ' is-on' : ''}`}
-        title="加粗"
+        title={t('clothesline.fmt.bold')}
         aria-pressed={props.bold}
         onClick={() => props.onBold(!props.bold)}
       >
@@ -351,7 +360,7 @@ function FmtRow(props: {
       <button
         type="button"
         className={`cl-modal-fmt-tgl cl-modal-fmt-tgl-i${props.italic ? ' is-on' : ''}`}
-        title="倾斜"
+        title={t('clothesline.fmt.italic')}
         aria-pressed={props.italic}
         onClick={() => props.onItalic(!props.italic)}
       >
@@ -368,33 +377,33 @@ function FmtSection(props: { fmt: TextFormat; onChange: (f: TextFormat) => void 
   return (
     <div className="cl-modal-fmt">
       <div className="cl-modal-fmt-head">
-        <span>字体格式</span>
+        <span>{t('clothesline.fmt.head')}</span>
         <button
           type="button"
           className="cl-modal-fmt-reset"
           onClick={() => onChange({ ...TEXT_FMT_DEFAULT })}
         >
-          重置默认
+          {t('clothesline.fmt.reset')}
         </button>
       </div>
       <select
         className="cl-modal-fmt-family"
         value={fmt.family}
         onChange={(e) => set({ family: e.target.value })}
-        title="字体"
+        title={t('clothesline.fmt.family')}
       >
-        <option value="">默认字体（Segoe UI）</option>
-        <option value="'Microsoft YaHei'">微软雅黑</option>
-        <option value="SimSun">宋体</option>
-        <option value="SimHei">黑体</option>
-        <option value="KaiTi">楷体</option>
-        <option value="'Noto Sans SC'">思源黑体</option>
+        <option value="">{t('clothesline.fmt.familyDefault')}</option>
+        <option value="'Microsoft YaHei'">{t('clothesline.fmt.familyYahei')}</option>
+        <option value="SimSun">{t('clothesline.fmt.familySong')}</option>
+        <option value="SimHei">{t('clothesline.fmt.familyHei')}</option>
+        <option value="KaiTi">{t('clothesline.fmt.familyKai')}</option>
+        <option value="'Noto Sans SC'">{t('clothesline.fmt.familyNoto')}</option>
         <option value="Arial">Arial</option>
         <option value="'Times New Roman'">Times New Roman</option>
         <option value="Consolas">Consolas</option>
       </select>
       <FmtRow
-        label="标题"
+        label={t('clothesline.fmt.titleLabel')}
         size={fmt.titleSize}
         defSize={12.5}
         bold={fmt.titleBold}
@@ -404,7 +413,7 @@ function FmtSection(props: { fmt: TextFormat; onChange: (f: TextFormat) => void 
         onItalic={(v) => set({ titleItalic: v })}
       />
       <FmtRow
-        label="内容"
+        label={t('clothesline.fmt.bodyLabel')}
         size={fmt.bodySize}
         defSize={10}
         bold={fmt.bodyBold}
@@ -458,6 +467,9 @@ type CardFaceProps = {
   onRenameAudio: (card: ClotheslineCard, title: string) => void
   /** 问题8：点图片区打开大图预览浮层（仅截图 / 贴图 / 本地图片卡）。 */
   onPreview: (card: ClotheslineCard) => void
+  /** ★2026-11-19 反馈5：长按图片拖出功能已整体移除（易与点击预览误触），点击直接开预览。
+   *  ★2026-11-19 右键图片区：复制图片到系统剪贴板。 */
+  onPhotoCopy: (card: ClotheslineCard) => void
   /** ⑥ 便利签条目操作（发事件给主窗 store 代写，绳窗绝不自己写）。 */
   onNoteAction: (p: ClNoteItemAction) => void
   /** 达到 30 条上限等提示，复用主组件的 toast。 */
@@ -469,10 +481,10 @@ type CardFaceProps = {
  * 番茄圆环 + 控制 / 大图 caption+meta / 楷体便签 / 等宽剪贴板。
  * ⚠️ 这里只做呈现，所有写操作仍由主组件走 clUpdateCard / clRemoveCard，单一写锁不变。
  */
-function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRenameAudio, onTimerAction, onPreview, onNoteAction, onToast }: CardFaceProps) {
+function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRenameAudio, onTimerAction, onPreview, onPhotoCopy, onNoteAction, onToast }: CardFaceProps) {
   // ★清风相位已移到卡片外层 .cl-card-sway 的稳定 CSS 变量，内容层不再挂动画、
   //   也不再有任何 inline animationDelay（根因A：否则每次重渲染都会重启动画 → 抖动）。
-  const pinMark = card.pinned ? ' · 置顶' : ''
+  const pinMark = card.pinned ? t('clothesline.card.pinnedMark') : ''
   // ★⑥ 便利签内联编辑：Tauri wry / WebView2 **未实现 JS dialog**，window.prompt 在透明
   //   置顶绳窗里根本不会弹出（直接返回 null / 抛错），旧版「＋加一条 / 双击编辑」点了
   //   毫无反应，正是用户所说「挂上去后的便利签与现有便利签功能完全不一致」的直接原因。
@@ -495,17 +507,17 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
     // 计时进度 p∈[0,1]：正计时=已计比例，倒计时=已耗比例（ratio 是剩余比例）。
     const progress = Math.min(1, Math.max(0, card.timer_direction === 'countup' ? ratio : 1 - ratio))
     const remain = 1 - progress
-    const statusText = frozen ? '已暂停' : ended ? '已完成' : '计时中'
-    const dirText = card.timer_direction === 'countup' ? '正计时' : '倒计时'
+    const statusText = frozen ? t('clothesline.card.statusPaused') : ended ? t('clothesline.card.statusDone') : t('clothesline.card.statusRunning')
+    const dirText = card.timer_direction === 'countup' ? t('clothesline.card.dirCountup') : t('clothesline.card.dirCountdown')
     const timeCls = ended || card.fired_at ? 'is-fired' : ''
-    const pinMark = card.pinned ? ' · 置顶' : ''
+    const pinMark = card.pinned ? t('clothesline.card.pinnedMark') : ''
     const timerBtns = (
       <div className="cl-tm-btns" onPointerDown={(e) => e.stopPropagation()}>
         <button type="button" onClick={() => onTimerAction(frozen ? 'resume' : 'pause')}>
-          {frozen ? '继续' : '暂停'}
+          {frozen ? t('clothesline.card.resume') : t('clothesline.card.pause')}
         </button>
-        <button type="button" onClick={() => onTimerAction('reset')}>重置</button>
-        <button type="button" onClick={() => onTimerAction('plus5')}>+5 分</button>
+        <button type="button" onClick={() => onTimerAction('reset')}>{t('clothesline.card.reset')}</button>
+        <button type="button" onClick={() => onTimerAction('plus5')}>{t('clothesline.card.plus5')}</button>
       </div>
     )
     if (isClassic) {
@@ -531,7 +543,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           </div>
           {timerBtns}
           <span className="cl-tm-foot">
-            {frozen ? '已暂停 · ' : ended ? '已完成 · ' : ''}
+            {frozen ? t('clothesline.card.footPaused') : ended ? t('clothesline.card.footDone') : ''}
             {dirText}
             {pinMark}
           </span>
@@ -563,7 +575,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             </span>
           </div>
           <span className="cl-tw-sub">
-            {frozen ? 'POMODORO · 已暂停' : ended ? 'POMODORO · 已完成' : 'POMODORO · 剩余'}
+            {frozen ? t('clothesline.card.watchPaused') : ended ? t('clothesline.card.watchDone') : t('clothesline.card.watchRemain')}
           </span>
           {timerBtns}
           <span className="cl-tw-foot">{statusText} · {dirText}</span>
@@ -581,7 +593,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           </span>
           <span className={`cl-tk-time ${timeCls}`}>{timer ?? '--:--'}</span>
           <span className="cl-tk-sub">
-            {ended ? 'CHECKED · 已完成' : frozen ? 'HELD · 已暂停' : 'MIN : SEC 剩余'}
+            {ended ? t('clothesline.card.ticketDone') : frozen ? t('clothesline.card.ticketPaused') : t('clothesline.card.ticketRemain')}
           </span>
           <span className="cl-tk-perf" aria-hidden="true">
             <span className="is-done">{'●'.repeat(done)}</span>
@@ -631,14 +643,14 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
       const groups = Math.floor(strokes / 5)
       return (
         <div className="cl-face">
-          <span className="cl-eb-title">今日 · {copy.title}{pinMark}</span>
+          <span className="cl-eb-title">{t('clothesline.card.boardToday')} · {copy.title}{pinMark}</span>
           <span className={`cl-eb-time ${timeCls}`}>{timer ?? '--:--'}</span>
           <span className="cl-eb-sub">
-            {ended ? '写满一个正字' : frozen ? '已暂停' : `还剩 ${timer ?? ''}`}
+            {ended ? t('clothesline.card.boardDone') : frozen ? t('clothesline.card.statusPaused') : t('clothesline.card.boardRemain', { time: timer ?? '' })}
           </span>
           <span className="cl-eb-tally" aria-hidden="true">
-            <span className="is-done">{'正'.repeat(groups)}{'｜'.repeat(strokes % 5)}</span>
-            <span className="is-rest">{'｜'.repeat(Math.max(0, 10 - strokes))}</span>
+            <span className="is-done">{t('clothesline.card.tallyMark').repeat(groups)}{t('clothesline.card.tallyBar').repeat(strokes % 5)}</span>
+            <span className="is-rest">{t('clothesline.card.tallyBar').repeat(Math.max(0, 10 - strokes))}</span>
           </span>
           {timerBtns}
           <span className="cl-eb-foot">{statusText} · {dirText}</span>
@@ -652,7 +664,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
         <span className="cl-mq-title">{copy.title}{pinMark}</span>
         <span className={`cl-mq-time ${timeCls}`}>{timer ?? '--:--'}</span>
         <span className="cl-mq-sub">
-          {ended ? '全部熄灯' : frozen ? '已暂停' : '距离开演'}
+          {ended ? t('clothesline.card.marqueeDone') : frozen ? t('clothesline.card.statusPaused') : t('clothesline.card.marqueeSoon')}
         </span>
         <span className="cl-mq-bulbs" aria-hidden="true">
           {Array.from({ length: 10 }, (_, i) => (
@@ -669,11 +681,11 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
   // + 状态显示。时长由 CL_RECORDER_STATE 事件驱动渲染（5Hz），铁律：无 CSS animation。
   if (card.kind === 'audio') {
     const status = audio?.status ?? 'idle'
-    const word = audio == null ? '准备中…'
-      : status === 'starting' ? '连接麦克风…'
-      : status === 'recording' ? '录音中'
-      : status === 'paused' ? '已暂停'
-      : status === 'saving' ? '保存中…' : '已停止'
+    const word = audio == null ? t('clothesline.audio.preparing')
+      : status === 'starting' ? t('clothesline.audio.connecting')
+      : status === 'recording' ? t('clothesline.audio.recording')
+      : status === 'paused' ? t('clothesline.card.statusPaused')
+      : status === 'saving' ? t('clothesline.audio.saving') : t('clothesline.audio.stopped')
     // starting/saving 期间按钮全部锁住（引擎侧同样有状态闸门，双保险）；
     // audio==null（状态还没广播到 / 已结束）同样只允许 × 取下。
     const locked = audio == null || status === 'starting' || status === 'saving'
@@ -697,7 +709,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             autoFocus
             value={audioTitleEdit}
             maxLength={60}
-            placeholder="录音标题"
+            placeholder={t('clothesline.audio.titlePlaceholder')}
             onChange={(e) => setAudioTitleEdit(e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -712,14 +724,14 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             type="button"
             className="cl-au-title"
             data-cl-hit="1"
-            title="点击修改标题（保存时文件同步改名）"
+            title={t('clothesline.audio.titleTip')}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
-              setAudioTitleEdit(card.title || '录音')
+              setAudioTitleEdit(card.title || t('clothesline.audio.defaultTitle'))
             }}
           >
-            {copy.title || '录音'}
+            {copy.title || t('clothesline.audio.defaultTitle')}
           </button>
         )}
         <span className="cl-au-time">{fmtTimerBody(audio?.elapsedMs ?? 0)}</span>
@@ -732,7 +744,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           <button
             type="button"
             disabled={locked}
-            title={status === 'paused' ? '继续录音' : '暂停录音'}
+            title={status === 'paused' ? t('recorder.ariaResume') : t('recorder.ariaPause')}
             onClick={() => onAudioAction(card, status === 'paused' ? 'resume' : 'pause')}
           >
             {status === 'paused' ? '▶' : '❚❚'}
@@ -740,7 +752,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           <button
             type="button"
             disabled={locked}
-            title="重新计时：丢弃已录内容，从 00:00 重录"
+            title={t('clothesline.audio.resetTip')}
             onClick={() => onAudioAction(card, 'reset')}
           >
             ⟲
@@ -749,13 +761,13 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             type="button"
             className="cl-au-save"
             disabled={locked}
-            title="保存并取下卡片"
+            title={t('clothesline.audio.saveTip')}
             onClick={() => onAudioAction(card, 'save')}
           >
-            {status === 'saving' ? '…' : '保存'}
+            {status === 'saving' ? '…' : t('common.save')}
           </button>
         </div>
-        <span className="cl-au-foot">{word} · 保存后自动取下{pinMark}</span>
+        <span className="cl-au-foot">{t('clothesline.audio.foot', { status: word, pinned: pinMark })}</span>
       </div>
     )
   }
@@ -791,7 +803,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           data-cl-hit="1"
           autoFocus
           value={noteEdit.value}
-          placeholder={noteEdit.mode === 'add' ? '写点什么…（回车保存，Esc 取消）' : '修改这一条…（回车保存，Esc 取消）'}
+          placeholder={noteEdit.mode === 'add' ? t('clothesline.note.editPlaceholder') : t('clothesline.note.editPlaceholderRow')}
           onChange={(e) => setNoteEdit({ ...noteEdit, value: e.target.value })}
           onClick={(e) => e.stopPropagation()}
           onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'nearest' })}
@@ -805,7 +817,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
     return (
       <div className="cl-face cl-note-face">
         <div className="cl-note-head">
-          <span className="cl-note-title">{itemId ? '便利签 · 单条' : copy.title}{pinMark}</span>
+          <span className="cl-note-title">{itemId ? t('clothesline.card.noteSingle') : copy.title}{pinMark}</span>
         </div>
         <ul className="cl-note-list" data-cl-note-list="1">
           {items.map((it) =>
@@ -817,7 +829,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                   type="button"
                   className="cl-note-check"
                   data-cl-hit="1"
-                  aria-label={it.done ? '取消完成' : '标记完成'}
+                  aria-label={it.done ? t('clothesline.note.ariaUncheck') : t('clothesline.note.ariaCheck')}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -829,7 +841,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                 {/* 问题9：单击即编辑（原双击），且阻止冒泡到整卡的单击编辑。 */}
                 <span
                   className="cl-note-text"
-                  aria-label="单击编辑这一条"
+                  aria-label={t('clothesline.note.ariaEditRow')}
                   onClick={(e) => {
                     e.stopPropagation()
                     setNoteEdit({ mode: 'edit', itemId: it.id, value: it.text })
@@ -844,14 +856,14 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                     type="button"
                     className="cl-note-op"
                     data-cl-hit="1"
-                    title="复制内容"
-                    aria-label="复制内容"
+                    title={t('clothesline.note.copyTip')}
+                    aria-label={t('clothesline.note.copyTip')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation()
                       void copyText(it.text)
-                        .then(() => onToast('已复制'))
-                        .catch(() => onToast('复制失败'))
+                        .then(() => onToast(t('clothesline.note.copied')))
+                        .catch(() => onToast(t('clothesline.note.copyFail')))
                     }}
                   >
                     <Copy size={12} strokeWidth={2} />
@@ -860,8 +872,8 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                     type="button"
                     className="cl-note-op"
                     data-cl-hit="1"
-                    title="加入待办"
-                    aria-label="加入待办"
+                    title={t('clothesline.note.toTask')}
+                    aria-label={t('clothesline.note.toTask')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -874,8 +886,8 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                     type="button"
                     className="cl-note-op is-danger"
                     data-cl-hit="1"
-                    title="删除这一条"
-                    aria-label="删除这一条"
+                    title={t('clothesline.note.deleteRow')}
+                    aria-label={t('clothesline.note.deleteRow')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -891,7 +903,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           {/* 问题10：新增文本框直接出现在最末一条内容下方，宽度撑满整张卡。 */}
           {noteEdit?.mode === 'add' ? <li className="cl-note-row cl-note-addrow">{editBar}</li> : null}
         </ul>
-        {items.length === 0 && !noteEdit ? <span className="cl-note-more">（空便利签）</span> : null}
+        {items.length === 0 && !noteEdit ? <span className="cl-note-more">{t('clothesline.card.noteEmpty')}</span> : null}
         {/* ★2026-11-15 需求1：「＋加一条 / 打开原窗」按钮排移除，改为底部固定添加
             文本框（与桌面便利签一致）。回车即新增；编辑已有条目仍单击文本进入编辑条。 */}
         {noteId && !itemId ? (
@@ -904,7 +916,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             <input
               className="cl-note-input"
               data-cl-hit="1"
-              placeholder={`＋ 写点什么…（回车添加，${items.length}/${MAX_NOTE_ITEMS_ON_ROPE}）`}
+              placeholder={t('clothesline.note.addPlaceholder', { cur: items.length, max: MAX_NOTE_ITEMS_ON_ROPE })}
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter') return
@@ -912,7 +924,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                 const text = e.currentTarget.value.trim()
                 if (!text) return
                 if (items.length >= MAX_NOTE_ITEMS_ON_ROPE) {
-                  onToast(`一张便利签最多 ${MAX_NOTE_ITEMS_ON_ROPE} 条，先删掉几条再加`)
+                  onToast(t('clothesline.note.maxRows', { max: MAX_NOTE_ITEMS_ON_ROPE }))
                   return
                 }
                 onNoteAction({ action: 'add', noteId, text })
@@ -931,11 +943,11 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
       <div className="cl-face">
         <span className="cl-task-title">{copy.title}{pinMark}</span>
         {lines.length ? (
-          lines.map((t, i) => (
-            <div className="cl-task-row" key={`${i}-${t}`}><i /><span>{t}</span></div>
+          lines.map((line, i) => (
+            <div className="cl-task-row" key={`${i}-${line}`}><i /><span>{line}</span></div>
           ))
         ) : (
-          <div className="cl-task-row"><i /><span>（无内容）</span></div>
+          <div className="cl-task-row"><i /><span>{t('clothesline.task.empty')}</span></div>
         )}
       </div>
     )
@@ -949,11 +961,15 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             className="cl-photo"
             role="button"
             tabIndex={0}
-            aria-label="点击查看大图"
-            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={t('clothesline.photo.aria')}
             onClick={(e) => {
               e.stopPropagation()
               onPreview(card)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onPhotoCopy(card)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -961,7 +977,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                 onPreview(card)
               }
             }}
-          ><img src={thumb} alt="预览" draggable={false} /></div>
+          ><img src={thumb} alt={t('clothesline.photo.alt')} draggable={false} /></div>
         ) : (
           <div className="cl-photo-empty">
             <div className="cl-mini-shot">
@@ -1083,6 +1099,7 @@ function collapsedHitRects(winRect: ClRect): HitRect[] {
 }
 
 export function ClotheslineView() {
+  const { t, locale } = useI18n()
   const [settings, setSettings] = useState<ClotheslineSettings | null>(null)
   // 主题跟随主窗显式选择（各窗共享 localStorage 同源），而非系统 prefers-color-scheme。
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
@@ -1096,6 +1113,13 @@ export function ClotheslineView() {
   // ＋ 菜单（原型 .add-sheet）。清风冻结改为「仅悬停单卡时局部冻结」（CSS :hover），
   // 不再整窗 pointerEnter 全暂停——否则绳窗横贯桌面、鼠标常驻其内，清风永远停着（问题5）。
   const [addSheetOpen, setAddSheetOpen] = useState(false)
+  // ＋ 菜单浮层 DOM（测量内容高度，临时加高窗口用）。
+  const addSheetRef = useRef<HTMLDivElement | null>(null)
+  // ＋ 菜单打开期间窗口被临时加高的标记；悬停自动收起在该期间必须让位，否则
+  // 光标落在菜单下半段（原 300px 横带之外）会被 OS 判为「离开面板」把菜单连窗收掉。
+  const menuBoostRef = useRef(false)
+  // ★2026-11-20 操作指引弹窗（复用全屏弹窗机制；首次启用自动弹一次）。
+  const [guideOpen, setGuideOpen] = useState(false)
   const [draggingRope, setDraggingRope] = useState(false)
   // 拖绳 / 拉杆会话（PRD §11 / §4.7）：声明必须在事件监听 effect 之前，避免 TDZ。
   const [dragRatio, setDragRatio] = useState<number | null>(null)
@@ -1272,13 +1296,13 @@ export function ClotheslineView() {
     //   在＋菜单里滚（菜单自己可滚）、在便利签条目列表里滚（列表自己可滚）、
     //   或在大图预览上滚时，整排卡片会跟着左右滑动，非常错乱。
     //   命中这些「自带滚动上下文」的容器时直接交还原生滚动，绝不碰 scrollX。
-    const t = e.target as HTMLElement
+    const tgt = e.target as HTMLElement
     // ★2026-11-15 反馈批4：随手记正文自带垂直滚动 —— 仅当它真的装不下
     // （scrollHeight > clientHeight）时才交还原生滚动；内容不足一屏时仍由
     // 甲板横向平移，避免滚轮落在正文上变成「死区」。
-    const txt = t.closest('.cl-txt') as HTMLElement | null
+    const txt = tgt.closest('.cl-txt') as HTMLElement | null
     if (txt && txt.scrollHeight > txt.clientHeight + 1) return
-    if (t.closest('.cl-add-sheet, .cl-note-list, .cl-preview, input, textarea, select')) return
+    if (tgt.closest('.cl-add-sheet, .cl-note-list, .cl-preview, input, textarea, select')) return
     const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
     scrollXRef.current = Math.min(maxScrollX(), Math.max(0, scrollXRef.current + delta))
     setScrollX(scrollXRef.current)
@@ -1311,10 +1335,18 @@ export function ClotheslineView() {
     // 任何动画，天然稳定；0.25px 变更守卫从此恒不触发，动画零打断。
     const ropeTop = rootRect.top
     const sways = deck.querySelectorAll<HTMLElement>(':scope > .cl-card-sway')
+    // ★2026-11-19 反馈1：清风开启时「写一次后冻结」。旧修复只解决了绳身呼吸
+    // （ropeTop 基准），但 `.cl-card-sway` 本身的摆动动画（rotate ±1.6°）会让
+    // 每次重渲染测得的 clipRect.top 出现 >0.25px 的亚像素差异——逐秒时钟 /
+    // 计时渲染反复改写 --cl-hang → 卡片上下阶梯跳动又复现。冻结策略：清风
+    // 开启时，已有 hang 记账的卡跳过测量改写（写一次后不再动）；新挂的卡
+    // （WeakMap 无记录）仍测一次避免悬浮；清风关闭恢复常规同步。
+    const windOn = root.classList.contains('has-wind')
     // zoom 会等比缩放子树内的 transform 位移：--cl-hang 存 CSS px，
     // 视觉位移 = hang × zoom → 写入值 = 视觉需求 ÷ zoom（旧版漏了这一步）。
     const cs = Math.min(2, Math.max(1, settingsRef.current?.card_size ?? 1))
     sways.forEach((sway) => {
+      if (windOn && hangMapRef.current.get(sway) !== undefined) return
       const clip = sway.querySelector<HTMLElement>('.cl-card-clip')
       if (!clip) return
       const prevApplied = hangMapRef.current.get(sway) ?? 0
@@ -1510,7 +1542,7 @@ export function ClotheslineView() {
       try {
         await clApplyBoundsAndShow(winRect.x, winRect.y, winRect.width, winRect.height)
       } catch (e) {
-        lsLog(`换屏失败：窗口几何写入未完成，保持原屏 ${prevGeom?.mon.stable_id}: ${String(e)}`)
+        lsLog(`monitor switch failed: window geometry not written, keep old screen ${prevGeom?.mon.stable_id}: ${String(e)}`)
         return
       }
     } else if (rectChanged) {
@@ -1518,7 +1550,7 @@ export function ClotheslineView() {
       try {
         await clSetBounds(winRect.x, winRect.y, winRect.width, winRect.height)
       } catch (e) {
-        lsLog(`窄窗矩形写入失败（尽力而为）: ${String(e)}`)
+        lsLog(`narrow rect write failed (best effort): ${String(e)}`)
       }
     }
 
@@ -1541,10 +1573,10 @@ export function ClotheslineView() {
 
     if (!coldStart) setReady(true)
     lsLog(
-      `定位 screen=${mon.stable_id} 面板@${winX},${winY} ${panelW}x${ropeH} (sf${sf})` +
-        ` 窗${winRect.width}x${winRect.height}@${winRect.x},${winRect.y}` +
+      `place screen=${mon.stable_id} panel@${winX},${winY} ${panelW}x${ropeH} (sf${sf})` +
+        ` win${winRect.width}x${winRect.height}@${winRect.x},${winRect.y}` +
         ` x∈[${minX},${maxX}] ratio=${ratio.toFixed(3)}` +
-        (occ ? ` 左避让${occ.side}主窗 ${occupyPhys}px` : ''),
+        (occ ? ` dodge-left ${occ.side} main ${occupyPhys}px` : ''),
     )
 
     // ★第二十一轮：矩形表只服务浮层关闭检测（问题13）——展开态上报面板矩形，
@@ -1564,7 +1596,7 @@ export function ClotheslineView() {
           state = await clGetRestoreState().catch(() => null)
         }
         if (cancelled || !state) {
-          lsLog('恢复状态读取失败（保持透明）')
+          lsLog('restore state read failed (kept transparent)')
           return
         }
         const mon =
@@ -1572,7 +1604,7 @@ export function ClotheslineView() {
           state.monitors.find((m) => m.is_primary) ??
           state.monitors[0]
         if (!mon) {
-          lsLog('无可用显示器（保持透明）')
+          lsLog('no usable monitor (kept transparent)')
           return
         }
 
@@ -1602,7 +1634,7 @@ export function ClotheslineView() {
         sessionRef.current = state.session
         lsLog(
           `restore ok: cards=${state.cards.length}, monitor=${mon.stable_id}, ` +
-            `anchorY=${state.session.anchor_y}${state.recovered_from_backup ? ' (来自备份)' : ''}`,
+            `anchorY=${state.session.anchor_y}${state.recovered_from_backup ? ' (from backup)' : ''}`,
         )
 
         // 拔屏 / 首次启用 → 自固化新稳定 ID（唯一允许的启动时写，不碰 cards.json）。
@@ -1627,7 +1659,7 @@ export function ClotheslineView() {
           if (!cancelled) setRestoring(false)
         }, 80)
       } catch (e) {
-        lsLog(`恢复失败（保持透明）: ${String(e)}`)
+        lsLog(`restore failed (kept transparent): ${String(e)}`)
       }
     })()
     return () => {
@@ -1689,6 +1721,14 @@ export function ClotheslineView() {
       window.setTimeout(() => setRopePhase('idle'), 470)
     }
   }, [settings, monitor, expanded, ropePhase, placeAndArm])
+
+  // ★2026-11-19 反馈4：悬停自动展开。Rust 命中循环（OS 级光标检测）发事件，
+  // 这里经 toggleRef 调最新闭包（toggleExpanded 依赖 settings/monitor/expanded，
+  // 直接在监听 effect 里引用会拿到旧闭包）。
+  const toggleRef = useRef(toggleExpanded)
+  useEffect(() => {
+    toggleRef.current = toggleExpanded
+  }, [toggleExpanded])
 
   // ★2026-11-15 反馈批8：挂绳同步与滚动定位都改为**每次渲染后执行**（不带依赖数组）。
   // 旧版依赖数组的致命漏洞：启动时组件先渲染 booting 早返回分支，切到主树时
@@ -1832,6 +1872,9 @@ export function ClotheslineView() {
   // 问题8：大图预览。只存 card id，图片本体读 previews[id]（data URL，绝不用 asset://）。
   // 采用绳窗内覆盖浮层、不改窗口几何——避免放大窗口带来的命中矩形 / 位置记忆回归。
   const [previewCardId, setPreviewCardId] = useState<string | null>(null)
+  // ★2026-11-19 反馈2：预览优先显示全分辨率原图（originals/{id} 落盘），
+  // 异步取回前 / 老卡没有原图时回退缩略图 previews[id]。null=未加载或无原图。
+  const [previewOriginal, setPreviewOriginal] = useState<string | null>(null)
   // 与直接写 ref 的 openPreview/closePreview 保持一致兜底（Esc / 外部 state 变更也能同步）。
   useEffect(() => {
     previewCardIdRef.current = previewCardId
@@ -1935,7 +1978,7 @@ export function ClotheslineView() {
         )
       })
       reg<string>(CL_CARD_DROPPED, (id) => {
-        setUndoCard({ id, label: '已满 · 已撕下最旧一张' })
+        setUndoCard({ id, label: t('clothesline.toast.dropped') })
         if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current)
         undoTimerRef.current = window.setTimeout(() => setUndoCard(null), UNDO_TOAST_MS)
       })
@@ -1997,6 +2040,23 @@ export function ClotheslineView() {
       // ★不在 setState updater 里调副作用（StrictMode 下 updater 会执行两次）；
       //   本 effect 只挂载一次，直接引用 closePreview 会闭包捕获首次渲染的陈旧函数，
       //   故统一走 closePreviewRef.current（每次渲染后由 effect 同步为最新实现）。
+      // ★2026-11-19 反馈4：悬停自动展开 / 移开自动收起（Rust OS 命中循环驱动）。
+      // 预览覆盖层 / 全屏弹窗打开期间绝不自动收起（用户正在看图或填弹窗）。
+      reg<unknown>('cl-auto-expand', () => {
+        if (!expandedRef.current) void toggleRef.current()
+      })
+      reg<unknown>('cl-auto-collapse', () => {
+        // ★2026-11-20：＋菜单打开期间窗口已临时加高，光标在菜单下半段（原横带外）
+        // 会被 OS 判为离开面板 → 绝不能自动收起把菜单连窗收掉。
+        if (
+          expandedRef.current &&
+          !fullscreenModalRef.current &&
+          previewCardIdRef.current === null &&
+          !menuBoostRef.current
+        ) {
+          void toggleRef.current()
+        }
+      })
       reg<unknown>(CL_DISMISS_OVERLAY, () => {
         setAddSheetOpen(false)
         // ★2026-11-15 需求5/6：随手记 / 番茄钟编辑弹窗无遮罩，点击弹窗外 = 取消；
@@ -2004,6 +2064,7 @@ export function ClotheslineView() {
         setComposing(null)
         setEditModal(null)
         setTakedownConfirm(null) // ★2026-11-18 归档：取下确认弹窗点外 = 取消
+        setGuideOpen(false) // ★2026-11-20：操作指引点外 = 关闭（窗口矩形由其 effect 还原）
         if (previewCardIdRef.current !== null) closePreviewRef.current()
         void clSetDismissOnOutside(false)
       })
@@ -2071,7 +2132,7 @@ export function ClotheslineView() {
           fired.add(c.id)
           void clUpdateCard(c.id, { fired_at: now }).catch(() => undefined)
           void import('@tauri-apps/plugin-notification')
-            .then((m) => m.sendNotification({ title: '晾衣绳 · 时间到', body: c.title || '计时结束' }))
+            .then((m) => m.sendNotification({ title: t('clothesline.notify.timerDone'), body: c.title || t('clothesline.notify.timerFinished') }))
             .catch(() => undefined)
         }
       }
@@ -2092,7 +2153,7 @@ export function ClotheslineView() {
         // ★2026-11-15 反馈批7-1：新卡可能在第二屏 —— 立即登记滚动定位目标，
         // 布局 effect 会把甲板平移到新卡完整可见（尽量居中），用户不再「以为没创建成功」。
         setScrollTargetId(card.id)
-        flash('已挂到晾衣绳')
+        flash(t('clothesline.toast.hung'))
         return card
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
@@ -2120,14 +2181,14 @@ export function ClotheslineView() {
         // 保存成功：卡片自动取下（软删除；不进撤销条 —— 已保存的东西无需撤销）。
         audioStateRef.current = null
         setAudioState(null)
-        flash('录音已保存，可在录音页查看')
+        flash(t('clothesline.toast.savedViewRecorder'))
         void clRemoveCard(cardId)
           .then(() => setCards((prev) => prev.filter((c) => c.id !== cardId)))
           .catch(() => undefined)
       } else if (st.done === 'failed') {
         audioStateRef.current = null
         setAudioState(null)
-        flash(st.error || '录音失败')
+        flash(st.error || t('clothesline.toast.recordFailed'))
         void clRemoveCard(cardId)
           .then(() => setCards((prev) => prev.filter((c) => c.id !== cardId)))
           .catch(() => undefined)
@@ -2149,17 +2210,17 @@ export function ClotheslineView() {
     setAddSheetOpen(false)
     const live = audioStateRef.current
     if (live && live.status !== 'idle') {
-      flash('已有录音在进行中')
+      flash(t('recorder.busy'))
       return
     }
     if (cardsRef.current.some((c) => c.kind === 'audio')) {
-      flash('绳上已有录音卡')
+      flash(t('clothesline.toast.ropeHasAudio'))
       return
     }
     // 方案A 自动命名（与录音页默认标题同格式）；卡上可随时改名。
     const d = new Date()
     const p0 = (n: number) => String(n).padStart(2, '0')
-    const title = `录音 ${d.getMonth() + 1}月${d.getDate()}日 ${p0(d.getHours())}:${p0(d.getMinutes())}`
+    const title = t('recorder.defaultTitle', { m: d.getMonth() + 1, d: d.getDate(), time: `${p0(d.getHours())}:${p0(d.getMinutes())}` })
     const card = await addCard('audio', { title, text: '' })
     if (!card) return
     try {
@@ -2187,10 +2248,10 @@ export function ClotheslineView() {
   /** 卡上改名：写 card.title；保存时主窗按它重命名落盘文件（保持文件名=标题）。 */
   const renameAudioCard = useCallback(
     async (card: ClotheslineCard, title: string) => {
-      const t = title.trim()
-      if (!t || t === card.title) return
+      const trimmed = title.trim()
+      if (!trimmed || trimmed === card.title) return
       try {
-        const next = await clUpdateCard(card.id, { title: t })
+        const next = await clUpdateCard(card.id, { title: trimmed })
         setCards((prev) => prev.map((c) => (c.id === next.id ? next : c)))
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
@@ -2231,7 +2292,7 @@ export function ClotheslineView() {
       }
       void addCard('note', {
         note_id: p.noteId,
-        title: '便利签',
+        title: t('clothesline.card.note'),
         text: p.text ?? '',
       }).then((card) => {
         if (!card) return
@@ -2252,26 +2313,24 @@ export function ClotheslineView() {
     async (card: ClotheslineCard) => {
       setEditing(null)
       // ★2026-11-18 归档：便利签/随手记/番茄卡 × → 两选弹窗（归档 / 删除）。
-      //   其余类型（截图/贴图/图片/待办/录音/剪贴板）保持软删 + 10s 撤销不变。
-      if (card.kind === 'note' || card.kind === 'text' || card.kind === 'timer') {
+      //   ★2026-11-19 录音卡 × → 两选弹窗（保存 / 不保存）；截图卡 × → 两选弹窗
+      //   （归档 / 删除，归档页可查看并全屏预览）；贴图/图片/待办/剪贴板保持
+      //   软删 + 10s 撤销不变。
+      if (
+        card.kind === 'note' ||
+        card.kind === 'text' ||
+        card.kind === 'timer' ||
+        card.kind === 'audio' ||
+        card.kind === 'shot'
+      ) {
         setTakedownConfirm(card)
         return
-      }
-      // ★一键录音卡取下时若引擎还在录，先通知主窗丢弃（否则麦克风一直被占且无 UI 可停）。
-      if (card.kind === 'audio') {
-        audioStateRef.current = null
-        setAudioState(null)
-        try {
-          await emit(CL_RECORDER_CMD, { action: 'abort' })
-        } catch {
-          /* 引擎可能已停，忽略 */
-        }
       }
       try {
         await clRemoveCard(card.id)
         setCards((prev) => prev.filter((c) => c.id !== card.id))
         // ★2026-11-15 需求7：截图/贴图/图片卡不再有兜底标题，toast 文案退回类型名。
-        setUndoCard({ id: card.id, label: `已取下「${card.title || kindLabel(card)}」` })
+        setUndoCard({ id: card.id, label: t('clothesline.toast.takenDown', { name: card.title || kindLabel(card) }) })
         if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current)
         undoTimerRef.current = window.setTimeout(() => setUndoCard(null), UNDO_TOAST_MS)
       } catch (e) {
@@ -2281,7 +2340,7 @@ export function ClotheslineView() {
     [flash, setCards, setEditing, setUndoCard],
   )
 
-  /** 关闭确认弹窗（带 140ms 退场动画）：先播缩退动画再卸载，随后执行回调操作。 */
+  /** ★2026-11-19 反馈3：弹窗动画已删，即时关闭（保留异步边界防同帧 setState 嵌套）。 */
   const closeTakedownAnimated = useCallback((after?: () => void) => {
     if (takedownClosing) return
     setTakedownClosing(true)
@@ -2289,15 +2348,34 @@ export function ClotheslineView() {
       setTakedownClosing(false)
       setTakedownConfirm(null)
       after?.()
-    }, 140)
+    }, 0)
   }, [takedownClosing])
 
-  /** ★2026-11-18 归档：两选弹窗的执行（归档 / 永久删除）。 */
+  /** ★2026-11-18 归档：两选弹窗的执行（归档 / 永久删除）。
+      ★2026-11-19 录音卡两选：audio-save=让主窗引擎落盘（saved 广播回绳窗后
+      自动取下卡片）；audio-discard=丢弃录音（abort 停引擎）+ 直接取下卡片。 */
   const confirmTakedown = useCallback(
-    (card: ClotheslineCard, mode: 'archive' | 'delete') => {
+    (card: ClotheslineCard, mode: 'archive' | 'delete' | 'audio-save' | 'audio-discard') => {
       closeTakedownAnimated(() => {
         void (async () => {
           try {
+            if (mode === 'audio-save') {
+              await emit(CL_RECORDER_CMD, { action: 'save', title: card.title })
+              return
+            }
+            if (mode === 'audio-discard') {
+              audioStateRef.current = null
+              setAudioState(null)
+              try {
+                await emit(CL_RECORDER_CMD, { action: 'abort' })
+              } catch {
+                /* 引擎可能已停，忽略 */
+              }
+              await clRemoveCard(card.id)
+              setCards((prev) => prev.filter((c) => c.id !== card.id))
+              flash(t('clothesline.toast.discarded'))
+              return
+            }
             if (mode === 'archive') {
               if (card.kind === 'note') {
                 // 绳上便利签卡 = 桌面便利签的引用 → 主窗编排「一体归档」（note + card）。
@@ -2311,7 +2389,7 @@ export function ClotheslineView() {
                 await clArchiveCard(card.id)
                 setCards((prev) => prev.filter((c) => c.id !== card.id))
               }
-              flash('已归档 · 可在归档页查看')
+              flash(t('clothesline.toast.archived'))
             } else {
               // 删除 = 永久删除（弹窗本身即确认，无撤销）：软删 + 立即物理清除两连击。
               if (card.kind === 'note') {
@@ -2326,7 +2404,7 @@ export function ClotheslineView() {
                 await clDeleteArchived(card.id)
                 setCards((prev) => prev.filter((c) => c.id !== card.id))
               }
-              flash('已删除')
+              flash(t('clothesline.toast.deleted'))
             }
           } catch (e) {
             flash(e instanceof Error ? e.message : String(e))
@@ -2334,7 +2412,7 @@ export function ClotheslineView() {
         })()
       })
     },
-    [closeTakedownAnimated, flash, setCards],
+    [closeTakedownAnimated, flash, setCards, setAudioState],
   )
 
   const undoTakeDown = useCallback(async () => {
@@ -2344,7 +2422,7 @@ export function ClotheslineView() {
       const card = await clRestoreCard(u.id)
       setCards((prev) => sortCards([...prev.filter((c) => c.id !== card.id), card]))
       setUndoCard(null)
-      flash('已放回原位')
+      flash(t('clothesline.toast.restored'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -2360,7 +2438,7 @@ export function ClotheslineView() {
       try {
         const updated = await clUpdateCard(card.id, { font_scale: next })
         setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
-        flash(`字号 ${Math.round(next * 100)}%`)
+        flash(t('clothesline.toast.fontScale', { n: Math.round(next * 100) }))
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
       }
@@ -2402,7 +2480,7 @@ export function ClotheslineView() {
       const updated = await clUpdateCard(m.id, { title: m.title.trim(), text: m.text, ...fmtPatch })
       setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
       setEditModal(null)
-      flash('已保存')
+      flash(t('clothesline.toast.saved'))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -2591,7 +2669,7 @@ export function ClotheslineView() {
     if (Object.keys(patch).length) {
       void clUpdateSettings(patch).then((next) => setSettings(next)).catch(() => undefined)
     }
-    if (nextY >= anchorMax() && nextY !== d.startAnchor) flash('已到顶部 40% 边界 · 位置已保存')
+    if (nextY >= anchorMax() && nextY !== d.startAnchor) flash(t('clothesline.toast.topBoundary'))
     // ★拖动后只刷新命中矩形与 CSS 变量（零窗口写入），杜绝松手瞬间再抖一下。
     const mon = geomRef.current?.mon
     if (mon) void placeAndArm(nextY, expandedRef.current, mon, settings?.pulltab_x_ratio ?? 0.5, nextRatio, false, d.nextX)
@@ -2737,7 +2815,7 @@ export function ClotheslineView() {
     try {
       const ms = await clGetMonitors()
       if (ms.length < 2) {
-        flash('当前只有一个屏幕')
+        flash(t('clothesline.toast.singleScreen'))
         return
       }
       const cur = geomRef.current?.mon.stable_id ?? ''
@@ -2745,7 +2823,7 @@ export function ClotheslineView() {
       const next = ms[(i + 1) % ms.length]
       if (!next) return
       await clUpdateSettings({ monitor_stable_id: next.stable_id })
-      flash(`晾衣绳已切到 ${next.name || '另一屏幕'} · 位置已保存`)
+      flash(t('clothesline.toast.switchedScreen', { name: next.name || t('clothesline.toast.anotherScreen') }))
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e))
     }
@@ -2780,7 +2858,7 @@ export function ClotheslineView() {
       try {
         if (card.kind === 'note' && card.note_id) await emit(CL_OPEN_NOTE, { id: card.note_id })
         else if (card.kind === 'task' && card.task_id) await emit(CL_OPEN_TASK, { id: card.task_id })
-        else flash('这张卡的内容已存在卡片里，可直接编辑')
+        else flash(t('clothesline.toast.selfContained'))
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
       }
@@ -2809,7 +2887,7 @@ export function ClotheslineView() {
   const submitCompose = useCallback(async () => {
     if (composing === 'timer') {
       if (!composeTitle.trim()) {
-        setComposeErr('任务名称必填，请填写后再挂上')
+        setComposeErr(t('clothesline.compose.errTaskName'))
         return
       }
       setComposeErr('')
@@ -2836,14 +2914,14 @@ export function ClotheslineView() {
           setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
           setNowTick(Date.now())
           setComposing(null)
-          flash('已保存并重新计时')
+          flash(t('clothesline.toast.savedRetimed'))
         } catch (e) {
           flash(e instanceof Error ? e.message : String(e))
         }
         return
       }
       const ok = await addCard('timer', {
-        title: composeTitle.trim() || `${min} 分钟计时`,
+        title: composeTitle.trim() || t('clothesline.compose.defaultTimerTitle', { n: min }),
         text: '',
         end_at: Date.now() + min * 60_000,
         timer_direction: composeDirection,
@@ -2857,7 +2935,7 @@ export function ClotheslineView() {
     }
     const text = composeText.trim()
     if (!composeTitle.trim()) {
-      setComposeErr('标题必填，请填写后再挂上')
+      setComposeErr(t('clothesline.compose.errTitle'))
       return
     }
     setComposeErr('')
@@ -2935,7 +3013,13 @@ export function ClotheslineView() {
   const modalRef = useRef<HTMLDivElement | null>(null)
   // 添加弹窗（随手记 / 番茄钟）与编辑弹窗共用同一套「临时整屏 + 点外关闭」机制。
   // ★2026-11-18 归档：取下确认弹窗（归档 / 删除）同样复用这套机制。
-  const fullscreenModal = composing ?? (editModal ? 'edit' : null) ?? (takedownConfirm ? 'takedown' : null)
+  // ★2026-11-20：操作指引弹窗（guideOpen）也走同一机制 —— 绳窗只有 ~300 逻辑 px 高，
+  // 指引内容放不下，必须临时整屏展示。
+  const fullscreenModal =
+    (guideOpen ? 'guide' : null) ??
+    composing ??
+    (editModal ? 'edit' : null) ??
+    (takedownConfirm ? 'takedown' : null)
   useEffect(() => {
     fullscreenModalRef.current = fullscreenModal !== null
   }, [fullscreenModal])
@@ -3023,12 +3107,63 @@ export function ClotheslineView() {
     }
   }, [fullscreenModal, panelHitRects])
 
+  // ★2026-11-20：＋菜单单屏显示。绳窗展开态只有 ~300 逻辑 px 高，9 个菜单项放不下，
+  // 旧版只能在菜单内部滚动（用户反馈要去掉滚动条）。菜单打开时测量浮层内容底边，
+  // 临时把窗口向下加高到刚好容纳（窗口透明，多出区域不可见），关闭时还原横带矩形。
+  // 期间整窗可点（空命中表）：窗口加高后旧命中矩形只盖原高度，菜单下半段会点不到；
+  // 点击菜单外空白由根 onClick 的 setAddSheetOpen(false) 兜底关闭。
+  useEffect(() => {
+    if (!addSheetOpen) return
+    const g = geomRef.current
+    const sheet = addSheetRef.current
+    if (!g || !sheet || !g.expanded) return
+    const sf = g.mon.scale_factor
+    const needPhysical = Math.round((sheet.getBoundingClientRect().bottom + 8) * sf)
+    if (needPhysical > g.winRect.height) {
+      menuBoostRef.current = true
+      void clSetBounds(g.winRect.x, g.winRect.y, g.winRect.width, needPhysical).catch(() => undefined)
+      void clSetHitRects([]).catch(() => undefined)
+    }
+    void clSetForceClickable(2500)
+    const keep = window.setInterval(() => void clSetForceClickable(2500), 1000)
+    return () => {
+      window.clearInterval(keep)
+      menuBoostRef.current = false
+      const gg = geomRef.current
+      if (gg) {
+        const band: ClRect = gg.expanded
+          ? { x: gg.mon.x, y: gg.mon.y + gg.panelY, width: gg.mon.width, height: gg.ropeH }
+          : { ...gg.winRect }
+        void clSetBounds(band.x, band.y, band.width, band.height).catch(() => undefined)
+        void clSetHitRects(panelHitRects(gg)).catch(() => undefined)
+      }
+      void clSetForceClickable(0)
+    }
+  }, [addSheetOpen, panelHitRects])
+
+  // ★2026-11-20：首次启用晾衣绳自动弹一次操作指引。启用入口（设置页开关 / 顶栏开关）
+  // 都会重建绳窗 → 挂载时检查一次即可覆盖。收起态不弹（弹窗依赖展开态几何还原），
+  // 留到下次以展开态建窗时再弹；guide_shown 落盘后永不再打扰。
+  useEffect(() => {
+    let cancelled = false
+    void clGetSettings()
+      .then((s) => {
+        if (cancelled || !s.enabled || s.guide_shown || !s.expanded) return
+        setGuideOpen(true)
+        void clUpdateSettings({ guide_shown: true }).catch(() => undefined)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   /** 图片文件 → 缩略图落盘 → 挂绳。文件选择器与拖放共用这一条写入路径（问题9）。
    *  只用 DOM FileReader 压 ≤480px，不碰 asset://、不碰 shot-last、绝不写 prefs.json。 */
   const attachImageFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith('image/')) {
-        flash('只支持图片文件')
+        flash(t('clothesline.toast.imageOnly'))
         return
       }
       try {
@@ -3041,7 +3176,7 @@ export function ClotheslineView() {
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const el = new Image()
           el.onload = () => resolve(el)
-          el.onerror = () => reject(new Error('图片解码失败'))
+          el.onerror = () => reject(new Error(t('clothesline.image.decodeFail')))
           el.src = dataUrl
         })
         const scale = Math.min(1, 480 / Math.max(1, img.naturalWidth))
@@ -3051,7 +3186,10 @@ export function ClotheslineView() {
         const ctx = canvas.getContext('2d')
         if (!ctx) return
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const seed = clMakeCard('image', { title: file.name, text: '本地图片' })
+        const seed = clMakeCard('image', { title: file.name, text: t('clothesline.image.local') })
+        // ★2026-11-19 反馈2：落盘全分辨率原图（dataUrl 是文件原始数据），
+        // 预览覆盖层优先显示它；缩略图只做卡片挂绳小图。
+        void clSaveOriginal(seed.id, file.type || 'image/png', dataUrl).catch(() => undefined)
         const path = await clSavePreview(seed.id, canvas.toDataURL('image/png'))
         await addCard('image', { ...seed, src_path: path })
       } catch (err) {
@@ -3129,7 +3267,7 @@ export function ClotheslineView() {
       const files = Array.from(e.dataTransfer?.files ?? [])
       const image = files.find((f) => f.type.startsWith('image/'))
       if (image) void attachImageFile(image)
-      else if (files.length) flash('只支持图片文件')
+      else if (files.length) flash(t('clothesline.toast.imageOnly'))
     },
     [attachImageFile, flash, disarmDrop],
   )
@@ -3149,6 +3287,14 @@ export function ClotheslineView() {
     setAddSheetOpen(false)
     previewCardIdRef.current = card.id // 同步 ref：state 异步更新窗口内 Rust 回发 dismiss 也能读到。
     setPreviewCardId(card.id)
+    // ★2026-11-19 反馈2：异步取全分辨率原图（缩略图先顶上，取到后无感替换）。
+    setPreviewOriginal(null)
+    void clReadOriginal(card.id)
+      .then((orig) => {
+        // 预览已切走（连点两张图）时丢弃过期结果。
+        if (previewCardIdRef.current === card.id && orig) setPreviewOriginal(orig)
+      })
+      .catch(() => undefined)
     // 窗口临时放大整屏（只在展开态可打开预览 → geom.winRect 必为横带）。
     // 坐标零变化（横带 x/y 与整屏 x/y 相同），只有 width/height 变化。
     const full: ClRect = {
@@ -3172,8 +3318,25 @@ export function ClotheslineView() {
     previewKeepAliveRef.current = window.setInterval(() => void clSetForceClickable(2500), 1000)
   }
 
+  // ——— ★2026-11-19 图片卡：右键复制图片（长按拖出已按反馈5整体移除）———
+
+  /** 图片区右键：把原图写入系统剪贴板（位图，可直接粘贴）。 */
+  const copyCardImage = useCallback(
+    async (card: ClotheslineCard) => {
+      if (!card.src_path) return
+      try {
+        await invoke('cl_copy_card_image', { path: card.src_path })
+        flash(t('clothesline.toast.imageCopied'))
+      } catch (err) {
+        flash(t('clothesline.toast.copyFailed', { detail: err instanceof Error ? err.message : String(err) }))
+      }
+    },
+    [flash],
+  )
+
   const closePreview = useCallback(() => {
     previewCardIdRef.current = null
+    setPreviewOriginal(null)
     if (previewKeepAliveRef.current !== null) {
       window.clearInterval(previewKeepAliveRef.current)
       previewKeepAliveRef.current = null
@@ -3279,12 +3442,12 @@ export function ClotheslineView() {
         for (const c of cardsRef.current) if (!byId.has(c.id) || !d.preview?.includes(c.id)) next.push(c)
         setCards(next)
         setReorderFailed(false)
-        lsLog(`排序已保存 ${pairs.length} 张卡`)
+        lsLog(`sort saved ${pairs.length} cards`)
       })
       .catch((err) => {
         setReorderFailed(true)
         window.setTimeout(() => setReorderFailed(false), 2600)
-        lsLog(`排序失败已回滚: ${String(err)}`)
+        lsLog(`sort failed, rolled back: ${String(err)}`)
       })
   }, [cancelTimers, setCards, setDragVisual, setReorderFailed])
 
@@ -3472,11 +3635,11 @@ export function ClotheslineView() {
           // 问题10：颜色来自桌面便利签同一份 localStorage 快照，改色后 notesTick 触发重算。
           noteColor:
             c.kind === 'note'
-              ? (CL_NOTE_PALETTE.find((p) => p.key === readNoteLite(c.note_id)?.colorKey) ?? CL_NOTE_PALETTE[0])
+              ? (clNotePalette().find((p) => p.key === readNoteLite(c.note_id)?.colorKey) ?? clNotePalette()[0])
               : null,
         }
       }),
-    [displayCards, previews, nowTick, notesTick],
+    [displayCards, previews, nowTick, notesTick, locale],
   )
 
   // 卡片增减 / 换屏后可能超出可平移上限，钳回尾部（只在此处写 state）。
@@ -3540,7 +3703,9 @@ export function ClotheslineView() {
         settings.wind_effect ? 'has-wind' : ''
       } ${restoring ? 'is-restoring' : ''} ${draggingRope ? 'is-dragging-rope' : ''} ${
         previewCardId ? 'has-preview' : ''
-      } ${ropePhase !== 'idle' ? `is-${ropePhase}` : ''}`}
+      } ${ropePhase !== 'idle' ? `is-${ropePhase}` : ''} ${
+        addSheetOpen ? 'is-menu-open' : ''
+      }`}
       data-cl-state={ready ? 'ready' : 'placing'}
       data-theme={theme}
       data-pulltab={settings.pulltab_style ?? 'porcelain'}
@@ -3552,8 +3717,8 @@ export function ClotheslineView() {
       onMouseDown={(e) => {
         // 问题12：点击任意区域先摘掉焦点，杜绝 WebView2 的 focus ring / 蓝色方框残留。
         // ★不能误伤正在编辑的输入框/文本域（否则第一个字符打不进去）——只 blur 按钮类元素。
-        const t = e.target as HTMLElement
-        if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+        const tgt = e.target as HTMLElement
+        if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable) return
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
       }}
       onClick={() => {
@@ -3611,7 +3776,7 @@ export function ClotheslineView() {
           onPointerMove={moveWindowDrag}
           onPointerUp={endWindowDrag}
           onPointerCancel={endWindowDrag}
-          aria-label="按住拖动晾衣绳（上下调整高度 · 左右调整水平位置）"
+          aria-label={t('clothesline.toolbar.ropeAria')}
         />
       ) : null}
 
@@ -3628,7 +3793,7 @@ export function ClotheslineView() {
           onPointerUp={endWindowDrag}
           onPointerCancel={endWindowDrag}
           onClick={(e) => e.stopPropagation()}
-          aria-label="长按拖动整条晾衣绳 · 上下调高度 / 左右调位置"
+          aria-label={t('clothesline.toolbar.dragAria')}
         >
           ⠿
         </button>
@@ -3642,9 +3807,9 @@ export function ClotheslineView() {
               .then((s) => setSettings(s))
               .catch(() => undefined)
           }}
-          aria-label="清风动效 · 悬停单张卡片时局部暂停"
+          aria-label={t('clothesline.toolbar.windAria')}
         >
-          清风
+          {t('clothesline.toolbar.wind')}
         </button>
         <button
           type="button"
@@ -3653,9 +3818,22 @@ export function ClotheslineView() {
             e.stopPropagation()
             void toggleExpanded()
           }}
-          aria-label="收起晾衣绳"
+          aria-label={t('clothesline.toolbar.collapseAria')}
         >
-          收起 ⌃
+          {t('clothesline.toolbar.collapse')}
+        </button>
+        {/* ★2026-11-20：操作指引入口（收起按钮右侧的问号）。悬停显示小浮窗提示。 */}
+        <button
+          type="button"
+          className="cl-tool-btn cl-tool-help"
+          data-tip={t('clothesline.guide.aria')}
+          onClick={(e) => {
+            e.stopPropagation()
+            setGuideOpen(true)
+          }}
+          aria-label={t('clothesline.guide.aria')}
+        >
+          ?
         </button>
       </div>
 
@@ -3668,16 +3846,17 @@ export function ClotheslineView() {
           e.stopPropagation()
           setAddSheetOpen((v) => !v)
         }}
-        aria-label="新增卡片"
+        aria-label={t('clothesline.menu.addAria')}
       >
         ＋
       </button>
       <div
+        ref={addSheetRef}
         className={`cl-add-sheet ${addSheetOpen ? 'is-open' : ''}`}
         data-cl-hit="1"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <span className="cl-sheet-head">挂一张到晾衣绳</span>
+        <span className="cl-sheet-head">{t('clothesline.menu.head')}</span>
         <button
           type="button"
           onClick={() => {
@@ -3688,30 +3867,30 @@ export function ClotheslineView() {
             void emit(CL_CREATE_NOTE, {}).catch(() => undefined)
           }}
         >
-          ▤ 新建便利签 <em>创建即挂绳 · 桌面同款</em>
+          {t('clothesline.menu.newNote')} <em>{t('clothesline.menu.newNoteSub')}</em>
         </button>
         <button type="button" onClick={() => openComposer('text')}>
-          ✎ 随手记 <em>标题 + 正文 + 颜色</em>
+          {t('clothesline.menu.text')} <em>{t('clothesline.menu.textSub')}</em>
         </button>
         <button type="button" onClick={() => openComposer('timer')}>
-          ◷ 计时 / 番茄 <em>{composeMinutes} 分</em>
+          {t('clothesline.menu.timer')} <em>{t('clothesline.menu.timerSub', { n: composeMinutes })}</em>
         </button>
         {/* ★2026-11-15 一键录音：建卡即开录（引擎在主窗），保存后卡片自动取下。
             ★0.4.81：标题包进独立 span 强制单行，副标题精简为「挂绳即录」。 */}
         <button type="button" className="cl-mi-record" onClick={() => void startRopeRecording()}>
-          <span className="cl-mi-label">◉ 一键录音</span><em>挂绳即录</em>
+          <span className="cl-mi-label">{t('clothesline.menu.record')}</span><em>{t('clothesline.menu.recordSub')}</em>
         </button>
         <button type="button" onClick={() => { imageInputRef.current?.click(); setAddSheetOpen(false) }}>
-          ▣ 本地图片 <em>PNG</em>
+          {t('clothesline.menu.image')} <em>PNG</em>
         </button>
         {/* ★2026-11-15 反馈批3：「从现有工具挂上来」整组（便利签/待办/剪贴板贴图截图）
             按需求移除 —— 各工具内容仍在原工具内通过晾衣绳图标一键挂绳。 */}
         <div className="cl-sheet-sep" />
         <button type="button" onClick={() => { void cycleMonitor(); setAddSheetOpen(false) }}>
-          ▣ 显示屏幕 <em>{monitor?.name || '主屏'}</em>
+          {t('clothesline.menu.screen')} <em>{monitor?.name || t('dock.primary')}</em>
         </button>
         <button type="button" onClick={() => { void toggleTopmost(); setAddSheetOpen(false) }}>
-          ☝ 晾衣绳置顶 <em>{settings.always_on_top ? '开' : '关'}</em>
+          {t('clothesline.menu.topmost')} <em>{settings.always_on_top ? t('clothesline.menu.on') : t('clothesline.menu.off')}</em>
         </button>
         {/* ★2026-11-18 归档：＋菜单直达主窗归档页（不改绳身展开态）。 */}
         <button
@@ -3722,7 +3901,7 @@ export function ClotheslineView() {
             void emit(CL_OPEN_ARCHIVE, {}).catch(() => undefined)
           }}
         >
-          ▦ 归档 <em>便利签 · 随手记 · 番茄</em>
+          {t('clothesline.menu.archive')} <em>{t('clothesline.menu.archiveSub')}</em>
         </button>
         {/* 2026-11-15 反馈2：菜单直达晾衣绳设置页。收起态先展开绳身，再通知主窗
             （主窗若折叠会自动展开并打开「晾衣绳」页，见 App.tsx 的监听）。 */}
@@ -3734,7 +3913,7 @@ export function ClotheslineView() {
             void emit(CL_OPEN_SETTINGS, {}).catch(() => undefined)
           }}
         >
-          ⚙ 晾衣绳设置 <em>绳长 · 卡片尺寸 · 清风</em>
+          {t('clothesline.menu.settings')} <em>{t('clothesline.menu.settingsSub')}</em>
         </button>
       </div>
 
@@ -3748,10 +3927,10 @@ export function ClotheslineView() {
           e.preventDefault() // 置顶唯一同源入口：把手右键（＋菜单第 7 行为主入口）
           void toggleTopmost()
         }}
-        aria-label={expanded ? '收起晾衣绳 · 右键切置顶' : '展开晾衣绳 · 右键切置顶'}
+        aria-label={expanded ? t('clothesline.handle.collapseAria') : t('clothesline.handle.expandAria')}
       >
         <span className="cl-clip" />
-        <span className="cl-handle-label">{expanded ? '收起' : '展开'}</span>
+        <span className="cl-handle-label">{expanded ? t('clothesline.handle.collapse') : t('clothesline.handle.expand')}</span>
       </button>
 
       {!expanded ? (
@@ -3782,7 +3961,7 @@ export function ClotheslineView() {
             // 收起态木夹把手已隐藏（原型收起态只有拉绳），置顶能力挪到拉绳右键，避免丢失。
             void toggleTopmost()
           }}
-          aria-label="点击 / 下拉展开 · 左右拖动移动 · 右键切置顶"
+          aria-label={t('clothesline.pull.aria')}
         >
           {/* ① 丝线：从桌面顶垂下的细绳，下拉时按 --cl-pull 纵向拉伸（只改 transform）。 */}
           <span className="cl-pull-cord" aria-hidden="true" />
@@ -3795,7 +3974,7 @@ export function ClotheslineView() {
           </span>
           <span className="cl-pull-badge">
             {/* ★2026-11-15 需求8：窗口收窄到拉手本身，badge 移到拉手正下方并缩短文案。 */}
-            {cards.length ? `${cards.length} 张` : '空绳'}
+            {cards.length ? t('clothesline.pull.count', { n: cards.length }) : t('clothesline.pull.empty')}
           </span>
         </button>
       ) : null}
@@ -3829,9 +4008,9 @@ export function ClotheslineView() {
         >
           {posedCards.length === 0 ? (
             <div className="cl-deck-empty">
-              <span className="cl-deck-hint">晾衣绳已就绪</span>
+              <span className="cl-deck-hint">{t('clothesline.empty.title')}</span>
               <span className="cl-deck-sub">
-                从便利签 / 截图 / 剪贴板挂一张卡片上来 · 右键木夹可切置顶
+                {t('clothesline.empty.hint')}
               </span>
             </div>
           ) : (
@@ -3861,7 +4040,7 @@ export function ClotheslineView() {
               <span
                 className="cl-card-clip"
                 role="button"
-                aria-label="拖动排序 · Alt+拖可立即开始"
+                aria-label={t('clothesline.action.dragSort')}
                 onPointerDown={(e) => {
                   e.stopPropagation()
                   onCardPointerDown(e, card, 'clip')
@@ -3879,7 +4058,7 @@ export function ClotheslineView() {
               <span
                 className="cl-card-clip2"
                 role="button"
-                aria-label="拖动排序 · Alt+拖可立即开始"
+                aria-label={t('clothesline.action.dragSort')}
                 onPointerDown={(e) => {
                   e.stopPropagation()
                   onCardPointerDown(e, card, 'clip')
@@ -3944,7 +4123,7 @@ export function ClotheslineView() {
                       }
                     : {}),
                 } as CSSProperties}
-                aria-label="长按 / Alt+拖排序 · 单击编辑"
+                aria-label={t('clothesline.action.cardAria')}
                 onPointerDown={(e) => onCardPointerDown(e, card, 'longpress')}
                 onPointerMove={onCardPointerMove}
                 onPointerUp={(e) => onCardPointerUp(e, true)}
@@ -3952,8 +4131,8 @@ export function ClotheslineView() {
                 /* 问题9：双击编辑 → 单击编辑。守卫所有可交互子元素，避免点按钮/图片/输入框
                    时被误判成「编辑整卡」。 */
                 onClick={(e) => {
-                  const t = e.target as HTMLElement
-                  if (t.closest('button, input, textarea, select, [contenteditable="true"], [data-cl-hit], .cl-photo, .cl-note-text')) return
+                  const tgt = e.target as HTMLElement
+                  if (tgt.closest('button, input, textarea, select, [contenteditable="true"], [data-cl-hit], .cl-photo, .cl-note-text')) return
                   if (clickSuppressed()) return
                   // 便利签卡的内容来自 notes/store（单一写方），card.text 恒为空。
                   // 整卡编辑对便利签没有意义，点空白处不再弹空白编辑框；条目编辑走行内。
@@ -3985,8 +4164,8 @@ export function ClotheslineView() {
                   {(card.kind === 'note' || card.kind === 'task') && !broken ? (
                     <button
                       type="button"
-                      aria-label="打开原内容"
-                      title="打开原内容"
+                      aria-label={t('clothesline.action.openSource')}
+                      title={t('clothesline.action.openSource')}
                       onClick={(e) => { e.stopPropagation(); void openSource(card) }}
                     >
                       ⧉
@@ -3995,8 +4174,8 @@ export function ClotheslineView() {
                   {(card.kind === 'note' || card.kind === 'text') && !broken ? (
                     <button
                       type="button"
-                      aria-label="调整字体大小"
-                      title={`字体 ${Math.round((card.font_scale ?? 1) * 100)}% · 点击切换`}
+                      aria-label={t('clothesline.action.fontScale')}
+                      title={t('clothesline.action.fontScaleTip', { n: Math.round((card.font_scale ?? 1) * 100) })}
                       onClick={(e) => {
                         e.stopPropagation()
                         void cycleFont(card)
@@ -4009,7 +4188,7 @@ export function ClotheslineView() {
                   {card.kind === 'note' && card.note_id && !broken ? (
                     <button
                       type="button"
-                      aria-label="修改卡片颜色"
+                      aria-label={t('clothesline.action.recolor')}
                       onClick={(e) => {
                         e.stopPropagation()
                         setColorMenu({
@@ -4029,11 +4208,11 @@ export function ClotheslineView() {
                   {!broken && card.kind !== 'audio' && !(card.kind === 'note' && card.note_id) ? (
                     <button
                       type="button"
-                      aria-label="编辑文字"
+                      aria-label={t('clothesline.action.edit')}
                       onClick={(e) => {
                         e.stopPropagation()
                         if (broken) {
-                          flash('原内容已删除，可直接取下这张卡')
+                          flash(t('clothesline.toast.brokenTakeDown'))
                         } else if (card.kind === 'shot' || card.kind === 'pin' || card.kind === 'image' || card.kind === 'text') {
                           openCardEditor(card)
                         } else if (card.kind === 'timer') {
@@ -4049,7 +4228,7 @@ export function ClotheslineView() {
                   <button
                     type="button"
                     className="is-danger"
-                    aria-label="取下这张卡"
+                    aria-label={t('clothesline.action.takeDown')}
                     onClick={(e) => { e.stopPropagation(); void takeDown(card) }}
                   >
                     ×
@@ -4059,7 +4238,7 @@ export function ClotheslineView() {
                   <div className="cl-card-placeholder">
                     <span className="cl-ph-icon">⌁</span>
                     <span className="cl-ph-title">{copy.title}</span>
-                    <span className="cl-ph-sub">卡片已保留在原位 · 右键可取下一张</span>
+                    <span className="cl-ph-sub">{t('clothesline.card.brokenHint')}</span>
                   </div>
                 ) : editing?.id === card.id ? (
                   <div className="cl-card-edit" onPointerDown={(e) => e.stopPropagation()}>
@@ -4074,11 +4253,11 @@ export function ClotheslineView() {
                           void commitEdit(card.id, editing.value)
                         }
                       }}
-                      placeholder="写点什么…"
+                      placeholder={t('clothesline.action.editPlaceholder')}
                     />
                     <div className="cl-edit-actions">
-                      <button type="button" onClick={() => void commitEdit(card.id, editing.value)}>保存</button>
-                      <button type="button" onClick={() => setEditing(null)}>取消</button>
+                      <button type="button" onClick={() => void commitEdit(card.id, editing.value)}>{t('common.save')}</button>
+                      <button type="button" onClick={() => setEditing(null)}>{t('common.cancel')}</button>
                     </div>
                   </div>
                 ) : (
@@ -4094,9 +4273,10 @@ export function ClotheslineView() {
                         : null
                     }
                     onAudioAction={(c, a) => void audioAction(c, a)}
-                    onRenameAudio={(c, t) => void renameAudioCard(c, t)}
+                    onRenameAudio={(c, title) => void renameAudioCard(c, title)}
                     onTimerAction={(action) => void timerAction(card, action)}
                     onPreview={openPreview}
+                    onPhotoCopy={(c) => void copyCardImage(c)}
                     onNoteAction={onNoteItemAction}
                     onToast={flash}
                   />
@@ -4113,6 +4293,35 @@ export function ClotheslineView() {
         </div>
       ) : null}
 
+      {/* ★2026-11-20：操作指引弹窗 —— 复用全屏弹窗机制（临时整屏 + 点外关闭），
+          避免绳窗 300px 高度裁切内容。 */}
+      {guideOpen ? (
+        <div
+          ref={modalRef}
+          className="cl-modal cl-guide"
+          data-cl-hit="1"
+          onPointerDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <span className="cl-modal-title">{t('clothesline.guide.title')}</span>
+          <ul className="cl-guide-list">
+            <li>{t('clothesline.guide.reorder')}</li>
+            <li>{t('clothesline.guide.move')}</li>
+            <li>{t('clothesline.guide.copyImage')}</li>
+            <li>{t('clothesline.guide.rope')}</li>
+            <li>{t('clothesline.guide.settings')}</li>
+            <li>{t('clothesline.guide.hover')}</li>
+          </ul>
+          <button
+            type="button"
+            className="cl-guide-close"
+            onClick={() => setGuideOpen(false)}
+          >
+            {t('clothesline.guide.close')}
+          </button>
+        </div>
+      ) : null}
+
       {composing ? (
         <div
           ref={modalRef}
@@ -4121,10 +4330,10 @@ export function ClotheslineView() {
           onPointerDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
         >
-          <span className="cl-modal-title">{composing === 'timer' ? (composeEditId ? '✎ 编辑番茄钟' : '◷ 添加番茄钟') : (composeEditId ? '✎ 编辑随手记' : '✎ 添加随手记')}</span>
+          <span className="cl-modal-title">{composing === 'timer' ? (composeEditId ? t('clothesline.compose.editTimer') : t('clothesline.compose.addTimer')) : (composeEditId ? t('clothesline.compose.editText') : t('clothesline.compose.addText'))}</span>
           <div className="cl-modal-row">
             <span className="cl-modal-label">
-              {composing === 'timer' ? '专注任务名称（必填）' : '标题（必填）'}
+              {composing === 'timer' ? t('clothesline.compose.taskNameLabel') : t('clothesline.compose.titleLabel')}
             </span>
             <input
               className="cl-modal-input"
@@ -4138,33 +4347,33 @@ export function ClotheslineView() {
                   void submitCompose()
                 }
               }}
-              placeholder={composing === 'timer' ? '比如：写周报' : '比如：灵感、待办…'}
+              placeholder={composing === 'timer' ? t('clothesline.compose.taskPlaceholder') : t('clothesline.compose.textPlaceholder')}
             />
             {composeErr ? <span className="cl-modal-err">{composeErr}</span> : null}
           </div>
           {composing === 'timer' ? (
             <>
               <div className="cl-modal-row">
-                <span className="cl-modal-label">计时方式</span>
+                <span className="cl-modal-label">{t('clothesline.compose.direction')}</span>
                 <div className="cl-modal-seg">
                   <button
                     type="button"
                     className={composeDirection === 'countdown' ? 'is-active' : ''}
                     onClick={() => setComposeDirection('countdown')}
                   >
-                    倒计时
+                    {t('clothesline.card.dirCountdown')}
                   </button>
                   <button
                     type="button"
                     className={composeDirection === 'countup' ? 'is-active' : ''}
                     onClick={() => setComposeDirection('countup')}
                   >
-                    正计时
+                    {t('clothesline.card.dirCountup')}
                   </button>
                 </div>
               </div>
               <div className="cl-modal-row">
-                <span className="cl-modal-label">时长（1–720 分钟，下次自动带出）</span>
+                <span className="cl-modal-label">{t('clothesline.compose.duration')}</span>
                 <label className="cl-minutes">
                   <input
                     type="range"
@@ -4188,7 +4397,7 @@ export function ClotheslineView() {
                       }
                     }}
                   />
-                  <span>分钟</span>
+                  <span>{t('clothesline.compose.minutesUnit')}</span>
                 </label>
                 <div className="cl-modal-quick">
                   {[5, 10, 15, 25].map((m) => (
@@ -4198,62 +4407,62 @@ export function ClotheslineView() {
                       className={Number(composeMinutes) === m ? 'is-active' : ''}
                       onClick={() => setComposeMinutes(String(m))}
                     >
-                      {m} 分
+                      {t('clothesline.compose.quick', { n: m })}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="cl-modal-row">
-                <span className="cl-modal-label">卡片样式</span>
+                <span className="cl-modal-label">{t('clothesline.compose.style')}</span>
                 <div className="cl-modal-seg is-7">
                   <button
                     type="button"
                     className={composeStyle === 'paper' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('paper')}
                   >
-                    经典
+                    {t('clothesline.compose.stylePaper')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'watch' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('watch')}
                   >
-                    怀表
+                    {t('clothesline.compose.styleWatch')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'ticket' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('ticket')}
                   >
-                    车票
+                    {t('clothesline.compose.styleTicket')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'lcd' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('lcd')}
                   >
-                    掌机
+                    {t('clothesline.compose.styleLcd')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'can' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('can')}
                   >
-                    罐头
+                    {t('clothesline.compose.styleCan')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'board' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('board')}
                   >
-                    黑板
+                    {t('clothesline.compose.styleBoard')}
                   </button>
                   <button
                     type="button"
                     className={composeStyle === 'marquee' ? 'is-active' : ''}
                     onClick={() => setComposeStyle('marquee')}
                   >
-                    灯牌
+                    {t('clothesline.compose.styleMarquee')}
                   </button>
                 </div>
               </div>
@@ -4263,12 +4472,12 @@ export function ClotheslineView() {
                   checked={composeRemind}
                   onChange={(e) => setComposeRemind(e.target.checked)}
                 />
-                结束时弹系统提醒
+                {t('clothesline.compose.remindCheck')}
               </label>
             </>
           ) : (
             <div className="cl-modal-row">
-              <span className="cl-modal-label">正文</span>
+              <span className="cl-modal-label">{t('clothesline.compose.bodyLabel')}</span>
               <textarea
                 className="cl-modal-textarea"
                 value={composeText}
@@ -4280,7 +4489,7 @@ export function ClotheslineView() {
                     void submitCompose()
                   }
                 }}
-                placeholder="写点什么，Ctrl+Enter 挂上去"
+                placeholder={t('clothesline.compose.bodyPlaceholder')}
               />
             </div>
           )}
@@ -4290,28 +4499,28 @@ export function ClotheslineView() {
               旧版无条件渲染导致番茄钟弹窗出现两个「卡片样式」字段。 */}
           {composing !== 'timer' ? (
           <div className="cl-modal-row">
-            <span className="cl-modal-label">卡片样式</span>
+            <span className="cl-modal-label">{t('clothesline.compose.style')}</span>
             <div className="cl-modal-seg">
               <button
                 type="button"
                 className={composeTextStyle === 'mist' ? 'is-active' : ''}
                 onClick={() => setComposeTextStyle('mist')}
               >
-                晨雾
+                {t('clothesline.compose.styleMist')}
               </button>
               <button
                 type="button"
                 className={composeTextStyle === 'tape' ? 'is-active' : ''}
                 onClick={() => setComposeTextStyle('tape')}
               >
-                胶带
+                {t('clothesline.compose.styleTape')}
               </button>
               <button
                 type="button"
                 className={composeTextStyle === 'night' ? 'is-active' : ''}
                 onClick={() => setComposeTextStyle('night')}
               >
-                墨夜
+                {t('clothesline.compose.styleNight')}
               </button>
             </div>
           </div>
@@ -4320,9 +4529,9 @@ export function ClotheslineView() {
               设计图（7 款样式各有固定配色），自定义色会把新皮肤染丑。 */}
           {composing !== 'timer' ? (
           <div className="cl-modal-row">
-            <span className="cl-modal-label">卡片颜色</span>
+            <span className="cl-modal-label">{t('clothesline.compose.colorLabel')}</span>
             <div className="cl-modal-swatches">
-              {CL_CARD_PALETTE.map((c) => (
+              {clCardPalette().map((c) => (
                 <button
                   key={c.key || 'default'}
                   type="button"
@@ -4342,9 +4551,9 @@ export function ClotheslineView() {
           ) : null}
           <div className="cl-edit-actions">
             <button type="button" onClick={() => void submitCompose()}>
-              {composeEditId ? '保存' : '挂上'}
+              {composeEditId ? t('common.save') : t('clothesline.compose.submitAdd')}
             </button>
-            <button type="button" onClick={() => setComposing(null)}>取消</button>
+            <button type="button" onClick={() => setComposing(null)}>{t('common.cancel')}</button>
           </div>
         </div>
       ) : null}
@@ -4360,10 +4569,10 @@ export function ClotheslineView() {
           onWheel={(e) => e.stopPropagation()}
         >
           <div className="cl-modal-head">
-            <span className="cl-modal-title">✎ 编辑卡片内容</span>
+            <span className="cl-modal-title">{t('clothesline.edit.title')}</span>
           </div>
           <label className="cl-modal-row">
-            <span className="cl-modal-label">标题</span>
+            <span className="cl-modal-label">{t('clothesline.edit.titleLabel')}</span>
             <input
               autoFocus
               className="cl-modal-input"
@@ -4376,11 +4585,11 @@ export function ClotheslineView() {
                   void commitEditModal()
                 }
               }}
-              placeholder="可选，例如：会议纪要"
+              placeholder={t('clothesline.edit.titlePlaceholder')}
             />
           </label>
           <div className="cl-modal-row">
-            <span className="cl-modal-label">内容</span>
+            <span className="cl-modal-label">{t('clothesline.edit.contentLabel')}</span>
             <textarea
               className="cl-modal-textarea"
               value={editModal.text}
@@ -4392,7 +4601,7 @@ export function ClotheslineView() {
                   void commitEditModal()
                 }
               }}
-              placeholder="写点什么，Ctrl+Enter 保存"
+              placeholder={t('clothesline.edit.contentPlaceholder')}
             />
           </div>
           {/* ★批12：随手记编辑弹窗的字体格式段（仅随手记卡显示）。 */}
@@ -4403,8 +4612,8 @@ export function ClotheslineView() {
             />
           ) : null}
           <div className="cl-edit-actions">
-            <button type="button" onClick={() => void commitEditModal()}>保存</button>
-            <button type="button" onClick={() => setEditModal(null)}>取消</button>
+            <button type="button" onClick={() => void commitEditModal()}>{t('common.save')}</button>
+            <button type="button" onClick={() => setEditModal(null)}>{t('common.cancel')}</button>
           </div>
         </div>
       ) : null}
@@ -4420,31 +4629,64 @@ export function ClotheslineView() {
           onPointerDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
         >
-          <div className="cl-modal-head">
-            <span className="cl-modal-title">取下「{takedownConfirm.title || kindLabel(takedownConfirm)}」</span>
-          </div>
-          <div className="cl-modal-label">
-            归档保留内容，可在归档页查看与恢复；删除将永久移除，无法撤销。
-          </div>
-          <div className="cl-edit-actions">
-            <button type="button" className="cl-btn" onClick={() => closeTakedownAnimated()}>
-              取消
-            </button>
-            <button
-              type="button"
-              className="cl-btn is-danger"
-              onClick={() => confirmTakedown(takedownConfirm, 'delete')}
-            >
-              删除
-            </button>
-            <button
-              type="button"
-              className="cl-btn is-primary"
-              onClick={() => confirmTakedown(takedownConfirm, 'archive')}
-            >
-              归档
-            </button>
-          </div>
+          {takedownConfirm.kind === 'audio' ? (
+            <>
+              {/* ★2026-11-19 录音卡 ×：确认是否保存本次录音。 */}
+              <div className="cl-modal-head">
+                <span className="cl-modal-title">{t('clothesline.takedown.title', { name: takedownConfirm.title || t('clothesline.audio.defaultTitle') })}</span>
+              </div>
+              <div className="cl-modal-label">
+                {t('clothesline.takedown.audioBody')}
+              </div>
+              <div className="cl-edit-actions">
+                <button type="button" className="cl-btn" onClick={() => closeTakedownAnimated()}>
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  className="cl-btn is-danger"
+                  onClick={() => confirmTakedown(takedownConfirm, 'audio-discard')}
+                >
+                  {t('clothesline.takedown.discard')}
+                </button>
+                <button
+                  type="button"
+                  className="cl-btn is-primary"
+                  onClick={() => confirmTakedown(takedownConfirm, 'audio-save')}
+                >
+                  {t('common.save')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="cl-modal-head">
+                <span className="cl-modal-title">{t('clothesline.takedown.title', { name: takedownConfirm.title || kindLabel(takedownConfirm) })}</span>
+              </div>
+              <div className="cl-modal-label">
+                {t('clothesline.takedown.body')}
+              </div>
+              <div className="cl-edit-actions">
+                <button type="button" className="cl-btn" onClick={() => closeTakedownAnimated()}>
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  className="cl-btn is-danger"
+                  onClick={() => confirmTakedown(takedownConfirm, 'delete')}
+                >
+                  {t('clothesline.takedown.delete')}
+                </button>
+                <button
+                  type="button"
+                  className="cl-btn is-primary"
+                  onClick={() => confirmTakedown(takedownConfirm, 'archive')}
+                >
+                  {t('clothesline.takedown.archive')}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       ) : null}
       <input
@@ -4466,7 +4708,7 @@ export function ClotheslineView() {
           style={{ left: Math.min(colorMenu.x - 70, window.innerWidth - 160), top: Math.min(colorMenu.y + 8, window.innerHeight - 40) }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {CL_NOTE_PALETTE.map((c) => {
+          {clNotePalette().map((c) => {
             const cur = cards.find((x) => x.id === colorMenu.cardId)
             const note = cur && cur.note_id ? readNoteLite(cur.note_id) : null
             const active = note?.colorKey === c.key
@@ -4494,8 +4736,8 @@ export function ClotheslineView() {
         <div className="cl-drop-overlay" aria-hidden="true">
           <div className="cl-drop-card">
             <span className="cl-drop-icon">▣</span>
-            <span className="cl-drop-title">松手，把图片挂上晾衣绳</span>
-            <span className="cl-drop-sub">支持 PNG / JPG / GIF · 自动压缩为卡片</span>
+            <span className="cl-drop-title">{t('clothesline.drop.title')}</span>
+            <span className="cl-drop-sub">{t('clothesline.drop.sub')}</span>
           </div>
         </div>
       ) : null}
@@ -4516,17 +4758,21 @@ export function ClotheslineView() {
             type="button"
             className="cl-pv-close"
             onClick={(e) => { e.stopPropagation(); closePreview() }}
-            aria-label="关闭预览 (Esc)"
+            aria-label={t('clothesline.preview.closeAria')}
           >
             ✕
           </button>
           <div className="cl-pv-card cl-pv-image" onClick={(e) => e.stopPropagation()}>
             <div className="cl-pv-photo">
-              <img src={previews[previewCardId]} alt={previewCopy?.title || '大图预览'} draggable={false} />
+              <img
+                src={previewOriginal ?? previews[previewCardId]}
+                alt={previewCopy?.title || t('clothesline.preview.fallback')}
+                draggable={false}
+              />
             </div>
             <div className="cl-pv-info">
-              <span>{previewCopy?.title || '大图预览'}</span>
-              <small>{previewCopy?.text || '挂在晾衣绳上'}</small>
+              <span>{previewCopy?.title || t('clothesline.preview.fallback')}</span>
+              <small>{previewCopy?.text || t('clothesline.preview.onRope')}</small>
             </div>
           </div>
         </div>
@@ -4544,7 +4790,7 @@ export function ClotheslineView() {
         const noteColor =
           posed?.noteColor ??
           (src.note_id
-            ? (CL_NOTE_PALETTE.find((c) => c.key === readNoteLite(src.note_id)?.colorKey) ?? CL_NOTE_PALETTE[0])
+            ? (clNotePalette().find((c) => c.key === readNoteLite(src.note_id)?.colorKey) ?? clNotePalette()[0])
             : null)
         const csG = Math.min(2, Math.max(1, settingsRef.current?.card_size ?? 1))
         return (
@@ -4581,6 +4827,7 @@ export function ClotheslineView() {
                 onRenameAudio={() => undefined}
                 onTimerAction={() => undefined}
                 onPreview={() => undefined}
+                onPhotoCopy={() => undefined}
                 onNoteAction={() => undefined}
                 onToast={() => undefined}
               />
@@ -4592,16 +4839,16 @@ export function ClotheslineView() {
       {/* 恢复提示 / 排序失败提示：仅一次，不阻断 */}
       {((monitorFallback || recoveredFromBackup) && !restoring) || reorderFailed ? (
         <div className="cl-toast" role="status">
-          {reorderFailed ? '卡片集合已变化，排序已取消 · ' : ''}
-          {recoveredFromBackup ? '已从备份恢复卡片 · ' : ''}
-          {monitorFallback ? '原屏幕已断开，晾衣绳已移到当前屏幕' : ''}
+          {reorderFailed ? t('clothesline.toast.reorderCancelled') : ''}
+          {recoveredFromBackup ? t('clothesline.toast.restoredBackup') : ''}
+          {monitorFallback ? t('clothesline.toast.monitorFallback') : ''}
         </div>
       ) : null}
       {undoCard ? (
         <div className="cl-toast cl-toast-action" role="status">
           {undoCard.label}
-          <button type="button" onClick={() => void undoTakeDown()}>撤销</button>
-          <span className="cl-toast-limit">{fullAccess ? '' : ' · 免费最多 12 张'}</span>
+          <button type="button" onClick={() => void undoTakeDown()}>{t('clothesline.toast.undo')}</button>
+          <span className="cl-toast-limit">{fullAccess ? '' : t('clothesline.toast.freeLimit')}</span>
         </div>
       ) : null}
       {hint ? (

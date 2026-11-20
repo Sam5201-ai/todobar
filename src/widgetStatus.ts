@@ -9,6 +9,7 @@
  */
 
 import type { SalaryConfig } from './SalaryView'
+import { t, type LocaleKey } from './i18n'
 
 export type WidgetStateKey =
   | 'newborn' // 刚出土
@@ -22,46 +23,48 @@ export type WidgetStateKey =
 
 export interface WidgetStateDef {
   key: WidgetStateKey
-  name: string
+  /** 状态名(词条 key,渲染期 t() 取词)。 */
+  name: LocaleKey
   emoji: string
   /** 插图徽章底色 / 状态名文字色。 */
   bg: string
   fg: string
-  quips: string[]
+  /** 吐槽语录(词条 key 数组,渲染期 t() 取词,顺序即轮换顺序)。 */
+  quips: LocaleKey[]
 }
 
 export const WIDGET_STATES: WidgetStateDef[] = [
   {
-    key: 'newborn', name: '刚出土', emoji: '🌱', bg: '#e8f6df', fg: '#4d8b3d',
-    quips: ['正在加载今日打工魂…', '假装很忙中…', '早安，打工人！', '打卡成功，开始营业', '今天的砖还热乎着'],
+    key: 'newborn', name: 'widget.state.newborn', emoji: '🌱', bg: '#e8f6df', fg: '#4d8b3d',
+    quips: ['widget.quip.newborn.1', 'widget.quip.newborn.2', 'widget.quip.newborn.3', 'widget.quip.newborn.4', 'widget.quip.newborn.5'],
   },
   {
-    key: 'working', name: '疯狂搬砖', emoji: '💼', bg: '#e3f0ff', fg: '#3d6fa8',
-    quips: ['老板的眼睛在身后…', '键盘敲出火星子', '努力值一个奶茶', '搬砖姿势已摆好', '效率咖啡因满格'],
+    key: 'working', name: 'widget.state.working', emoji: '💼', bg: '#e3f0ff', fg: '#3d6fa8',
+    quips: ['widget.quip.working.1', 'widget.quip.working.2', 'widget.quip.working.3', 'widget.quip.working.4', 'widget.quip.working.5'],
   },
   {
-    key: 'waiting_meal', name: '等饭中', emoji: '🍚', bg: '#fff1de', fg: '#c07a2a',
-    quips: ['肚子已经开始抗议', '干饭魂在燃烧', '午餐倒计时', '香味已经飘过来了', '等一个干饭铃'],
+    key: 'waiting_meal', name: 'widget.state.waiting_meal', emoji: '🍚', bg: '#fff1de', fg: '#c07a2a',
+    quips: ['widget.quip.waiting_meal.1', 'widget.quip.waiting_meal.2', 'widget.quip.waiting_meal.3', 'widget.quip.waiting_meal.4', 'widget.quip.waiting_meal.5'],
   },
   {
-    key: 'lunch', name: '午休回血', emoji: '😴', bg: '#efe9ff', fg: '#7a5fc9',
-    quips: ['灵魂尚未完全归位', '闭眼充个电…', '请勿打扰', '干饭人干饭魂', '睡醒又是好汉'],
+    key: 'lunch', name: 'widget.state.lunch', emoji: '😴', bg: '#efe9ff', fg: '#7a5fc9',
+    quips: ['widget.quip.lunch.1', 'widget.quip.lunch.2', 'widget.quip.lunch.3', 'widget.quip.lunch.4', 'widget.quip.lunch.5'],
   },
   {
-    key: 'exhausted', name: '电量耗尽', emoji: '🔋', bg: '#ffe9e3', fg: '#c96f5a',
-    quips: ['需要输入奶茶能量', '眼睛已离家出走', '困意达到峰值', '电量不足，请充电', '灵魂还在硬撑'],
+    key: 'exhausted', name: 'widget.state.exhausted', emoji: '🔋', bg: '#ffe9e3', fg: '#c96f5a',
+    quips: ['widget.quip.exhausted.1', 'widget.quip.exhausted.2', 'widget.quip.exhausted.3', 'widget.quip.exhausted.4', 'widget.quip.exhausted.5'],
   },
   {
-    key: 'spacing', name: '带薪发呆', emoji: '💭', bg: '#e6f4ff', fg: '#4a7db8',
-    quips: ['脑子：我不会；手：正在装会', '放空自己是带薪哲学', '思绪已飘向远方', '白日梦加载中', '发呆也是一种产出'],
+    key: 'spacing', name: 'widget.state.spacing', emoji: '💭', bg: '#e6f4ff', fg: '#4a7db8',
+    quips: ['widget.quip.spacing.1', 'widget.quip.spacing.2', 'widget.quip.spacing.3', 'widget.quip.spacing.4', 'widget.quip.spacing.5'],
   },
   {
-    key: 'sprint', name: '冲刺下班', emoji: '🚀', bg: '#ffe8f0', fg: '#d85588',
-    quips: ['摸鱼暂停，开始表演', '座位烫屁股', '马上解放！', '收拾桌面冲刺中', '自由在向你招手'],
+    key: 'sprint', name: 'widget.state.sprint', emoji: '🚀', bg: '#ffe8f0', fg: '#d85588',
+    quips: ['widget.quip.sprint.1', 'widget.quip.sprint.2', 'widget.quip.sprint.3', 'widget.quip.sprint.4', 'widget.quip.sprint.5'],
   },
   {
-    key: 'free', name: '下班自由', emoji: '🌙', bg: '#e6ecff', fg: '#4a5fb8',
-    quips: ['下班快乐！今晚属于我', '跑路成功', '明天见，老板！', '自由万岁', '今晚不谈工作'],
+    key: 'free', name: 'widget.state.free', emoji: '🌙', bg: '#e6ecff', fg: '#4a5fb8',
+    quips: ['widget.quip.free.1', 'widget.quip.free.2', 'widget.quip.free.3', 'widget.quip.free.4', 'widget.quip.free.5'],
   },
 ]
 
@@ -142,7 +145,7 @@ export function computeAutoStateKey(cfg: SalaryConfig, now: Date): WidgetStateKe
 /** 吐槽语录:按 8 秒确定性轮换。 */
 export function quipFor(key: WidgetStateKey, now: Date): string {
   const quips = stateDef(key).quips
-  return quips[Math.floor(now.getTime() / 8000) % quips.length]
+  return t(quips[Math.floor(now.getTime() / 8000) % quips.length])
 }
 
 /** 秒 → 'X 小时 X 分'(不足 1 小时只给分)。 */
@@ -150,7 +153,7 @@ export function fmtHmShort(sec: number): string {
   const v = Math.max(0, Math.floor(sec))
   const h = Math.floor(v / 3600)
   const m = Math.floor((v % 3600) / 60)
-  return h >= 1 ? `${h} 小时 ${m} 分` : `${m} 分钟`
+  return h >= 1 ? t('widget.dur.hm', { h, m }) : t('widget.dur.m', { m })
 }
 
 /** 秒 → 'X 分 X 秒'。 */
@@ -158,7 +161,7 @@ export function fmtMs(sec: number): string {
   const v = Math.max(0, Math.floor(sec))
   const m = Math.floor(v / 60)
   const s = v % 60
-  return m >= 1 ? `${m} 分 ${s} 秒` : `${s} 秒`
+  return m >= 1 ? t('widget.dur.ms', { m, s }) : t('widget.dur.s', { s })
 }
 
 /**
@@ -184,30 +187,32 @@ export function stateSubtitle(
   }
   switch (key) {
     case 'newborn':
-      return `今日已打卡 ${fmtHmShort(workedSec)}`
+      return t('widget.sub.checkedIn', { t: fmtHmShort(workedSec) })
     case 'working': {
-      const base = `已专注 ${fmtHmShort(workedSec)}`
-      return hasLunch && s < ls ? `${base} · 距午休还有 ${Math.max(1, Math.ceil((ls - s) / 60))} 分` : base
+      const base = t('widget.sub.focus', { t: fmtHmShort(workedSec) })
+      return hasLunch && s < ls
+        ? t('widget.sub.focusLunch', { t: base, n: Math.max(1, Math.ceil((ls - s) / 60)) })
+        : base
     }
     case 'waiting_meal': {
       // 倒计时(递减):目标取午休开始;无午休配置时回退到下班(下午下班)
       const mealTarget = hasLunch ? ls : end
-      return `距离干饭还有 ${Math.max(1, Math.ceil((mealTarget - s) / 60))} 分钟`
+      return t('widget.sub.toMeal', { n: Math.max(1, Math.ceil((mealTarget - s) / 60)) })
     }
     case 'lunch': {
       // 正在回血(递增):从午休开始算已休息时长
       const em = Math.max(0, Math.floor((s - ls) / 60))
-      return em < 1 ? '正在回血…' : `正在回血 ${em} 分钟`
+      return em < 1 ? t('widget.sub.recovering') : t('widget.sub.recoveringN', { n: em })
     }
     case 'exhausted':
-      return `已硬撑 ${fmtHmShort((now.getTime() - enterAt) / 1000)}`
+      return t('widget.sub.enduring', { t: fmtHmShort((now.getTime() - enterAt) / 1000) })
     case 'spacing':
-      return `已发呆 ${fmtMs((now.getTime() - enterAt) / 1000)}`
+      return t('widget.sub.zoning', { t: fmtMs((now.getTime() - enterAt) / 1000) })
     case 'sprint':
-      return `距离下班自由还有 ${fmtMs(Math.max(0, end - s))}`
+      return t('widget.sub.toFree', { t: fmtMs(Math.max(0, end - s)) })
     case 'free':
       return s >= end && cfg.workdays[now.getDay()]
-        ? `今日已打工 ${fmtHmShort(workedSec)}`
-        : '今天不上班，好好休息'
+        ? t('widget.sub.worked', { t: fmtHmShort(workedSec) })
+        : t('widget.sub.restDay')
   }
 }

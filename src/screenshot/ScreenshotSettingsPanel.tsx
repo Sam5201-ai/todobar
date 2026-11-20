@@ -18,6 +18,7 @@ import { applyShortcuts } from './shortcuts';
 import { ShortcutField } from '../ShortcutField';
 import { useAccount } from '../membership';
 import { VipBadge } from '../VipBadge';
+import { t, useI18n } from '../i18n';
 
 // 与系统托盘冲突的快捷键(CommandOrControl+Shift+T / +Alt+T 已被窗口开关键占用)。
 const EXTRA_RESERVED = ['CommandOrControl+Shift+T', 'CommandOrControl+Shift+Alt+T'];
@@ -33,17 +34,17 @@ function conflictFor(
   key: ShortcutKey,
 ): string | null {
   const value = settings[key];
-  if (!value.trim()) return '快捷键不能为空';
+  if (!value.trim()) return t('shot.errEmptyHotkey');
   const reserved = [...RESERVED_SHORTCUTS, ...EXTRA_RESERVED];
   if (reserved.some((r) => normalize(r) === normalize(value))) {
-    return '该快捷键被系统 / 托盘占用,请换一个';
+    return t('shot.errHotkeyReserved');
   }
   const others = (['shotShortcut', 'pinShortcut', 'exitShortcut'] as ShortcutKey[]).filter(
     (k) => k !== key,
   );
   for (const o of others) {
     if (normalize(settings[o]) === normalize(value)) {
-      return '与其他快捷键重复';
+      return t('shot.errHotkeyDup');
     }
   }
   // 基本格式校验:必须含一个非修饰键主键
@@ -53,7 +54,7 @@ function conflictFor(
     ['control', 'ctrl', 'commandorcontrol', 'command', 'cmd', 'alt', 'shift', 'super', 'meta']
       .includes(main.toLowerCase())
   ) {
-    return '快捷键需包含一个主键(如 A、F2、数字),不能只有修饰键';
+    return t('shot.errHotkeyNoMain');
   }
   return null;
 }
@@ -70,6 +71,7 @@ export default function ScreenshotSettingsPanel({
   const [settings, setSettingsState] = useState<ScreenshotSettings>(() => getSettings());
   // 会员闸门:非会员不能启用截图 / 贴图。
   const { fullAccess, showVip } = useAccount();
+  const { t: tUi } = useI18n();
   // 本地 OCR 引擎能力探测(一次性;Win 缺语言包时展示系统安装指引)。
   const [ocrSt, setOcrSt] = useState<OcrStatus | null>(null);
   useEffect(() => {
@@ -120,9 +122,9 @@ export default function ScreenshotSettingsPanel({
       setSettings(next);
       const r = await applyShortcuts();
       if (r.ok) {
-        onToast?.('ok', next.enabled ? '已保存,快捷键生效' : '已关闭截图 / 贴图');
+        onToast?.('ok', next.enabled ? tUi('shot.savedHotkeyOn') : tUi('shot.savedShotOff'));
       } else {
-        onToast?.('err', r.error ?? '快捷键注册失败,可能被其他程序占用');
+        onToast?.('err', r.error ?? tUi('shot.errHotkeyRegister'));
       }
     },
     [onToast],
@@ -130,11 +132,11 @@ export default function ScreenshotSettingsPanel({
 
   return (
     <div className="settings-group shot-settings-group">
-      <div className="settings-group-title">截图 / 贴图</div>
+      <div className="settings-group-title">{tUi('shot.groupTitle')}</div>
 
       <label className="toggle-setting">
         <span>
-          <strong>启用截图 / 贴图</strong>
+          <strong>{tUi('shot.enableTitle')}</strong>
           {showVip ? <VipBadge /> : null}
         </span>
         <input
@@ -143,7 +145,7 @@ export default function ScreenshotSettingsPanel({
           onChange={(e) => {
             // 非会员试图启用 → 弹会员提示,不写入、保持停用。
             if (e.target.checked && !fullAccess) {
-              onLocked?.('截图 / 贴图')
+              onLocked?.(tUi('shot.groupTitle'))
               return
             }
             void patch({ enabled: e.target.checked })
@@ -152,29 +154,26 @@ export default function ScreenshotSettingsPanel({
         <em />
       </label>
 
-      <p className="settings-hint">
-        启用后,可使用全局快捷键截图并把截图钉在桌面上。双击快捷键即可修改,点击
-        ✓ 保存后生效。
-      </p>
+      <p className="settings-hint">{tUi('shot.enableDesc')}</p>
 
       {settings.enabled && fullAccess ? (
         <>
           <ShortcutField
-            label="截图快捷键"
+            label={tUi('shot.hotkeyCapture')}
             value={settings.shotShortcut}
             conflictFor={(draft) => conflictFor({ ...settings, shotShortcut: draft }, 'shotShortcut')}
             onCommit={(v) => patch({ shotShortcut: v })}
             onToast={onToast}
           />
           <ShortcutField
-            label="贴图快捷键"
+            label={tUi('shot.hotkeyPin')}
             value={settings.pinShortcut}
             conflictFor={(draft) => conflictFor({ ...settings, pinShortcut: draft }, 'pinShortcut')}
             onCommit={(v) => patch({ pinShortcut: v })}
             onToast={onToast}
           />
           <ShortcutField
-            label="退出快捷键"
+            label={tUi('shot.hotkeyExit')}
             value={settings.exitShortcut}
             conflictFor={(draft) => conflictFor({ ...settings, exitShortcut: draft }, 'exitShortcut')}
             onCommit={(v) => patch({ exitShortcut: v })}
@@ -183,13 +182,14 @@ export default function ScreenshotSettingsPanel({
           <p className="settings-hint">
             {ocrSt
               ? ocrSt.available
-                ? `识别文字:本地离线引擎已就绪(${
-                    [ocrSt.zhAvailable && '中文', ocrSt.enAvailable && '英文']
-                      .filter(Boolean)
-                      .join(' / ') || ocrSt.engine
-                  })。`
-                : `识别文字暂不可用:${ocrSt.message}`
-              : '正在检查本地文字识别引擎…'}
+                ? tUi('shot.ocrReady', {
+                    langs:
+                      [ocrSt.zhAvailable && tUi('shot.langZh'), ocrSt.enAvailable && tUi('shot.langEn')]
+                        .filter(Boolean)
+                        .join(' / ') || ocrSt.engine,
+                  })
+                : tUi('shot.ocrUnavailable', { msg: ocrSt.message })
+              : tUi('shot.ocrChecking')}
           </p>
         </>
       ) : null}

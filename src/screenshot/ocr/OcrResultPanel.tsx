@@ -5,6 +5,7 @@
 // 原生引擎无进度回调:识别中显示转圈 + 已耗时秒数,超时由调用方控制。
 import { useEffect, useState } from 'react';
 import type { OcrLine } from './ocrClient';
+import { useI18n } from '../../i18n';
 import './ocr.css';
 
 export type OcrPhase = 'idle' | 'running' | 'done';
@@ -33,6 +34,7 @@ const PANEL_W = 340;
 
 export function OcrResultPanel(props: Props) {
   const { phase, lines, startedAt, anchor, placeAbove, variant, actionBusy } = props;
+  const { t } = useI18n();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -68,11 +70,11 @@ export function OcrResultPanel(props: Props) {
     >
       <div className="ocr-head">
         <span className="ocr-title">
-          {phase === 'running' ? '正在识别文字' : `识别结果 · ${lines.length} 行`}
+          {phase === 'running' ? t('shot.ocrRunning') : t('shot.ocrResultN', { n: lines.length })}
         </span>
         {phase === 'running' && <span className="ocr-elapsed">{elapsed}s</span>}
         {props.toast && <span className="ocr-head-toast">{props.toast}</span>}
-        <button type="button" className="ocr-close" title="关闭 (Esc)" onClick={props.onClose}>
+        <button type="button" className="ocr-close" title={t('shot.ocrCloseTip')} onClick={props.onClose}>
           ×
         </button>
       </div>
@@ -80,7 +82,7 @@ export function OcrResultPanel(props: Props) {
       {phase === 'running' && (
         <div className="ocr-busy">
           <span className="ocr-spinner" aria-hidden="true" />
-          <span>离线识别中,已耗时 {elapsed} 秒</span>
+          <span>{t('shot.ocrElapsed', { n: elapsed })}</span>
         </div>
       )}
 
@@ -93,7 +95,7 @@ export function OcrResultPanel(props: Props) {
               disabled={!!actionBusy}
               onClick={props.onCopyAll}
             >
-              复制全部
+              {t('shot.ocrCopyAll')}
             </button>
             <button
               type="button"
@@ -101,7 +103,7 @@ export function OcrResultPanel(props: Props) {
               disabled={!!actionBusy}
               onClick={props.onConvertAll}
             >
-              {actionBusy === 'convert' ? '添加中…' : '全部转为待办'}
+              {actionBusy === 'convert' ? t('shot.ocrAdding') : t('shot.ocrConvertAll')}
             </button>
           </div>
           <div className="ocr-lines">
@@ -114,14 +116,14 @@ export function OcrResultPanel(props: Props) {
                     disabled={!!actionBusy}
                     onClick={() => props.onCopyLine(l)}
                   >
-                    复制
+                    {t('shot.copy')}
                   </button>
                   <button
                     type="button"
                     disabled={!!actionBusy}
                     onClick={() => props.onConvertLine(l)}
                   >
-                    待办
+                    {t('shot.ocrTodo')}
                   </button>
                 </span>
               </div>

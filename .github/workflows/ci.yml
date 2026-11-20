@@ -41,6 +41,9 @@ jobs:
       - name: Project verification
         run: npm run verify
 
+      - name: i18n audit (dict alignment + no hardcoded copy)
+        run: npm run i18n:check
+
       - name: TypeScript and Vite build
         run: npm run build
 

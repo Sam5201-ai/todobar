@@ -22,6 +22,7 @@ import { listenConvertResult, requestConvert } from './bridge'
 import { copyText } from '../clipboard'
 import { clAddCard, clGetRestoreState, clMakeCard, CL_ARCHIVE_CARD, CL_DROP_NOTE_WINDOW, CL_NOTE_HUNG, type ClArchiveCard } from '../clothesline/bridge'
 import { isFullAccess, loadAccount } from '../account'
+import { useI18n } from '../i18n'
 
 const win = getCurrentWindow()
 const NOTE_ID = win.label.replace(/^note-/, '')
@@ -29,6 +30,7 @@ const NOTE_ID = win.label.replace(/^note-/, '')
 export function NoteWindow() {
   const notes = useNotes()
   const note = notes.find((n) => n.id === NOTE_ID) ?? null
+  const { t } = useI18n()
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
@@ -56,10 +58,10 @@ export function NoteWindow() {
           clMakeCard('note', {
             note_id: note.id,
             attach_to: itemId ? `item:${itemId}` : null,
-            title: item ? '便利签 · 单条' : '便利签',
+            title: item ? t('clothesline.card.noteSingle') : t('clothesline.card.note'),
             text: item?.text ?? (note.items.length
               ? note.items.map((it) => `${it.done ? '✓ ' : '· '}${it.text}`).join('\n')
-              : '（空便利签）'),
+              : t('clothesline.card.noteEmpty')),
           }),
           isFullAccess(loadAccount()),
         )
@@ -67,7 +69,7 @@ export function NoteWindow() {
         // 只发事件给主窗统一收起（数据保留），便利签窗口不自己改 notes 数据。
         // 「单条挂绳」只挂一条、桌面便利签仍要继续用，故不隐藏。
         if (!itemId) void emit(CL_NOTE_HUNG, { noteId: note.id }).catch(() => {})
-        flash('已挂到晾衣绳')
+        flash(t('clothesline.toast.hung'))
       } catch (e) {
         flash(e instanceof Error ? e.message : String(e))
       }
@@ -273,7 +275,7 @@ export function NoteWindow() {
       const n = getNoteSync(d.noteId)
       const text = (n?.items ?? []).map((it) => it.text).join(' · ').slice(0, 120)
       void emit(CL_DROP_NOTE_WINDOW, { noteId: d.noteId, text }).catch(() => {})
-      flash('已挂到晾衣绳')
+      flash(t('clothesline.toast.hung'))
     }
   }, [onDragMove, flash])
 
@@ -317,7 +319,7 @@ export function NoteWindow() {
     if (!newText.trim() || !note) return
     const ok = addNoteItem(note.id, newText)
     if (!ok) {
-      flash('单条上限 200 条,或内容为空')
+      flash(t('note.limitSingle'))
       return
     }
     setNewText('') // 连续快记:不清空焦点
@@ -346,15 +348,15 @@ export function NoteWindow() {
 
   const handleConvert = (noteId: string, itemId: string, text: string) => {
     // 由主窗口执行真正的 addTask(保留会员闸门/配额/reload/同步),这里等回执。
-    void requestConvert({ noteId, itemId, text }).catch(() => flash('转待办失败'))
+    void requestConvert({ noteId, itemId, text }).catch(() => flash(t('note.toTaskFail')))
   }
 
   // 复制单条内容到系统剪贴板(走 copyText 统一通道,带 self-write 标记不污染剪贴板历史)。
   const handleCopy = (text: string) => {
     if (!text.trim()) return
     void copyText(text)
-      .then(() => flash('已复制'))
-      .catch(() => flash('复制失败'))
+      .then(() => flash(t('note.copied')))
+      .catch(() => flash(t('note.copyFail')))
   }
 
   // 监听转换回执(emit 是全局广播,故按 noteId 过滤)。
@@ -365,9 +367,9 @@ export function NoteWindow() {
       if (disposed || res.noteId !== NOTE_ID) return
       if (res.ok) {
         updateNoteItem(res.noteId, res.itemId, { converted: true })
-        flash('已转为待办')
+        flash(t('note.toTaskDone'))
       } else {
-        flash(res.reason || '转待办失败')
+        flash(res.reason || t('note.toTaskFail'))
       }
     }).then((fn) => {
       if (disposed) fn()
@@ -452,9 +454,9 @@ export function NoteWindow() {
   if (!note) {
     return (
       <div className="ns-root ns-empty">
-        <div className="ns-empty-text">便利签已删除</div>
+        <div className="ns-empty-text">{t('note.deleted')}</div>
         <button type="button" className="ns-btn" onClick={() => void win.close()}>
-          关闭
+          {t('common.close')}
         </button>
       </div>
     )
@@ -472,7 +474,7 @@ export function NoteWindow() {
           <button
             type="button"
             className="ns-btn"
-            title="整张挂到晾衣绳"
+            title={t('note.hangAll')}
             onClick={() => void hangOnRope()}
           >
             <Shirt size={13} />
@@ -481,7 +483,7 @@ export function NoteWindow() {
             type="button"
             className={`ns-btn ${styleOpen ? 'is-on' : ''}`}
             data-style-toggle
-            title="颜色与透明度"
+            title={t('note.colorOpacity')}
             onClick={() => setStyleOpen((v) => !v)}
           >
             <Palette size={13} />
@@ -489,7 +491,7 @@ export function NoteWindow() {
           <button
             type="button"
             className={`ns-btn ${note.pinned ? 'is-on' : ''}`}
-            title={note.pinned ? '取消置顶' : '始终置顶'}
+            title={note.pinned ? t('note.unpin') : t('note.pin')}
             onClick={() => {
               const pinned = !note.pinned
               updateNote(note.id, { pinned })
@@ -498,7 +500,7 @@ export function NoteWindow() {
           >
             {note.pinned ? <Pin size={13} /> : <PinOff size={13} />}
           </button>
-          <button type="button" className="ns-btn ns-close" title="关闭便利签" onClick={handleClose}>
+          <button type="button" className="ns-btn ns-close" title={t('note.closeTitle')} onClick={handleClose}>
             <X size={13} />
           </button>
         </div>
@@ -514,13 +516,13 @@ export function NoteWindow() {
                 type="button"
                 className={`ns-swatch ${c.key === note.colorKey ? 'is-on' : ''}`}
                 style={{ background: `rgb(${c.bg})` }}
-                title={c.label}
+                title={t(c.label)}
                 onClick={() => updateNote(note.id, { colorKey: c.key })}
               />
             ))}
           </div>
           <div className="ns-alpha-row">
-            <span className="ns-alpha-label">不透明</span>
+            <span className="ns-alpha-label">{t('note.opaque')}</span>
             <input
               type="range"
               className="ns-alpha"
@@ -528,7 +530,7 @@ export function NoteWindow() {
               max={100}
               step={1}
               value={Math.round(note.bgAlpha * 100)}
-              title={`背景不透明度 ${Math.round(note.bgAlpha * 100)}%`}
+              title={t('note.alphaTip', { n: Math.round(note.bgAlpha * 100) })}
               onChange={(e) => updateNote(note.id, { bgAlpha: Number(e.target.value) / 100 })}
             />
             <span className="ns-alpha-val">{Math.round(note.bgAlpha * 100)}%</span>
@@ -539,7 +541,7 @@ export function NoteWindow() {
       {/* 条目列表 */}
       <div className="ns-body">
         {note.items.length === 0 ? (
-          <div className="ns-placeholder">在下方输入,回车快速添加</div>
+          <div className="ns-placeholder">{t('note.addHint')}</div>
         ) : (
           <ol className="ns-list">
             {note.items.map((it, idx) => (
@@ -565,7 +567,7 @@ export function NoteWindow() {
                 ) : (
                   <span
                     className={`ns-text ${it.done ? 'is-done' : ''}`}
-                    title="双击编辑"
+                    title={t('note.dblEditTip')}
                     onMouseDown={(e) => startEdit(it.id, it.text, e)}
                   >
                     {it.text}
@@ -576,7 +578,7 @@ export function NoteWindow() {
                   <button
                     type="button"
                     className="ns-btn"
-                    title="复制内容"
+                    title={t('clothesline.note.copyTip')}
                     onClick={() => handleCopy(it.text)}
                   >
                     <Copy size={12} />
@@ -584,7 +586,7 @@ export function NoteWindow() {
                   <button
                     type="button"
                     className="ns-btn"
-                    title="单条挂到晾衣绳"
+                    title={t('note.hangOne')}
                     onClick={() => void hangOnRope(it.id)}
                   >
                     <Shirt size={12} />
@@ -592,7 +594,7 @@ export function NoteWindow() {
                   <button
                     type="button"
                     className={`ns-btn ns-check ${it.done ? 'is-on' : ''}`}
-                    title="标记完成"
+                    title={t('clothesline.note.ariaCheck')}
                     onClick={() => toggleNoteItem(note.id, it.id)}
                   >
                     <Check size={12} />
@@ -600,7 +602,7 @@ export function NoteWindow() {
                   <button
                     type="button"
                     className="ns-btn"
-                    title="转为待办"
+                    title={t('note.toTask')}
                     disabled={it.converted}
                     onClick={() => handleConvert(note.id, it.id, it.text)}
                   >
@@ -611,7 +613,7 @@ export function NoteWindow() {
                   <button
                     type="button"
                     className="ns-btn ns-del"
-                    title="删除"
+                    title={t('note.delete')}
                     onClick={() => removeNoteItem(note.id, it.id)}
                   >
                     ×
@@ -629,7 +631,7 @@ export function NoteWindow() {
         <input
           className="ns-input"
           value={newText}
-          placeholder="添加一条…"
+          placeholder={t('note.addPlaceholder')}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -644,10 +646,10 @@ export function NoteWindow() {
             className="ns-cleanup"
             onClick={() => {
               const n = clearConvertedItems(note.id)
-              if (n > 0) flash(`已清理 ${n} 条`)
+              if (n > 0) flash(t('note.cleaned', { n }))
             }}
           >
-            清理已转
+            {t('note.clearDone')}
           </button>
         ) : null}
       </div>
@@ -658,17 +660,17 @@ export function NoteWindow() {
       {confirmClose ? (
         <div className="ns-confirm" onMouseDown={(e) => e.stopPropagation()}>
           <div className="ns-confirm-card">
-            <div className="ns-confirm-title">关闭便利签</div>
-            <div className="ns-confirm-text">归档保留内容，可稍后恢复；删除将永久移除。</div>
+            <div className="ns-confirm-title">{t('note.closeTitle')}</div>
+            <div className="ns-confirm-text">{t('note.closeBody')}</div>
             <div className="ns-confirm-actions">
               <button type="button" className="ns-confirm-btn is-primary" onClick={doArchiveClose}>
-                归档
+                {t('note.archive')}
               </button>
               <button type="button" className="ns-confirm-btn is-danger" onClick={doDeleteClose}>
-                删除
+                {t('note.delete')}
               </button>
               <button type="button" className="ns-confirm-btn" onClick={() => setConfirmClose(false)}>
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>

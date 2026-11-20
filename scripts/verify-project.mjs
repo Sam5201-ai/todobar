@@ -149,6 +149,7 @@ function verifyScripts() {
 
   for (const script of [
     'verify',
+    'i18n:check',
     'build',
     'lint',
     'test:smoke',

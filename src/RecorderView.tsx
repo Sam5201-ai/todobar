@@ -38,6 +38,7 @@ import { open as pickDirectory } from '@tauri-apps/plugin-dialog'
 import { useAccount } from './membership'
 import { memberOnly, OPEN_LOGIN_GUIDE_EVENT } from './account'
 import { loadDiskPref } from './prefs'
+import { t, useI18n } from './i18n'
 import {
   cancelRecording,
   getRecorderLevel,
@@ -109,12 +110,13 @@ function isSameLocalDay(a: Date, b: Date): boolean {
 function dayLabelOf(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
-  if (isSameLocalDay(d, now)) return '今天'
+  if (isSameLocalDay(d, now)) return t('date.today')
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
-  if (isSameLocalDay(d, yesterday)) return '昨天'
-  const core = `${d.getMonth() + 1}月${d.getDate()}日`
-  return d.getFullYear() === now.getFullYear() ? core : `${d.getFullYear()}年${core}`
+  if (isSameLocalDay(d, yesterday)) return t('recorder.yesterday')
+  return d.getFullYear() === now.getFullYear()
+    ? t('recorder.monthDay', { m: d.getMonth() + 1, d: d.getDate() })
+    : t('recorder.monthDayYear', { year: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() })
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +134,7 @@ function RecSheet({ title, onClose, children }: RecSheetProps): ReactNode {
   /** enter=挂载待展开 / open=已展开 / closing=收起中。 */
   const [phase, setPhase] = useState<'enter' | 'open' | 'closing'>('enter')
   const closingRef = useRef(false)
+  const { t } = useI18n()
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setPhase('open'))
@@ -151,7 +154,7 @@ function RecSheet({ title, onClose, children }: RecSheetProps): ReactNode {
       <div className={`rec-panel is-${phase}`} role="dialog" aria-label={title}>
         <div className="rec-panel-bar">
           <span className="rec-panel-title">{title}</span>
-          <button type="button" aria-label="关闭" onClick={close}>
+          <button type="button" aria-label={t('common.close')} onClick={close}>
             <X size={15} />
           </button>
         </div>
@@ -174,6 +177,7 @@ interface RecToast {
 export function RecorderView(): ReactNode {
   const snap = useRecorderSnapshot()
   const { fullAccess, account } = useAccount()
+  const { t } = useI18n()
 
   const [list, setList] = useState<RecordingMeta[]>(() => loadRecordings())
   const [missing, setMissing] = useState<Set<string>>(() => new Set())
@@ -276,14 +280,16 @@ export function RecorderView(): ReactNode {
     const r = snap.lastResult
     if (!r) return
     setList(loadRecordings())
-    const text = `已保存 · 时长 ${fmtDur(r.durationMs)}${r.savedOk ? '' : '(末尾几秒可能未写入)'}`
+    const text = r.savedOk
+      ? t('recorder.saved', { dur: fmtDur(r.durationMs) })
+      : t('recorder.savedTail', { dur: fmtDur(r.durationMs) })
     showToast(r.savedOk ? 'ok' : 'warn', text)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.lastResult])
 
   // ---- 即将到达 2 小时上限提醒 ----
   useEffect(() => {
-    if (snap.limitWarned) showToast('warn', '已录音 1 小时 55 分,即将到达 2 小时上限')
+    if (snap.limitWarned) showToast('warn', t('recorder.limitWarn'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.limitWarned])
 
@@ -322,9 +328,9 @@ export function RecorderView(): ReactNode {
     // 会员闸门:受限用户可进页/回放/管理,仅禁止新增录音。
     if (!fullAccess) {
       if (!account) {
-        window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: '录音' }))
+        window.dispatchEvent(new CustomEvent(OPEN_LOGIN_GUIDE_EVENT, { detail: t('feature.recorder') }))
       } else {
-        showToast('err', memberOnly('录音'))
+        showToast('err', memberOnly(t('feature.recorder')))
       }
       return
     }
@@ -349,11 +355,11 @@ export function RecorderView(): ReactNode {
       await invoke('recording_open', { dir: item.dir, file: item.file })
     } catch (e) {
       const msg = String(e ?? '')
-      if (msg.includes('不存在')) {
+      if (msg.includes(t('recorder.errMissingMarker'))) {
         setMissing((prev) => new Set(prev).add(item.id))
-        showToast('err', '录音文件不存在或已被移动')
+        showToast('err', t('recorder.fileMissing'))
       } else {
-        showToast('err', msg || '打开录音失败')
+        showToast('err', msg || t('recorder.errOpen'))
       }
     }
   }
@@ -363,18 +369,18 @@ export function RecorderView(): ReactNode {
       await invoke('recording_reveal', { dir: item.dir, file: item.file })
     } catch (e) {
       const msg = String(e ?? '')
-      if (msg.includes('不存在')) {
+      if (msg.includes(t('recorder.errMissingMarker'))) {
         setMissing((prev) => new Set(prev).add(item.id))
-        showToast('err', '录音文件不存在或已被移动')
+        showToast('err', t('recorder.fileMissing'))
       } else {
-        showToast('err', msg || '打开文件夹失败')
+        showToast('err', msg || t('recorder.errReveal'))
       }
     }
   }
 
   const handleOpenFolder = () => {
     void invoke('recordings_open_folder', { dir: recDir }).catch(() =>
-      showToast('err', '打开文件夹失败'),
+      showToast('err', t('recorder.errReveal')),
     )
   }
 
@@ -384,16 +390,16 @@ export function RecorderView(): ReactNode {
       const picked = await pickDirectory({
         directory: true,
         multiple: false,
-        title: '选择录音保存位置',
+        title: t('recorder.pickDirTitle'),
       })
       if (typeof picked === 'string' && picked) {
         saveRecordingsDir(picked)
         setRecDir(picked)
         setDirSheetOpen(false)
-        showToast('ok', '已更新保存位置,新录音将存入该文件夹')
+        showToast('ok', t('recorder.dirUpdated'))
       }
     } catch {
-      showToast('err', '打开文件夹选择器失败')
+      showToast('err', t('recorder.errDirPicker'))
     }
   }
 
@@ -401,7 +407,7 @@ export function RecorderView(): ReactNode {
     saveRecordingsDir('')
     setRecDir('')
     setDirSheetOpen(false)
-    showToast('ok', '已恢复默认保存位置')
+    showToast('ok', t('recorder.dirReset'))
   }
 
   const handleCleanupMissing = () => {
@@ -410,7 +416,7 @@ export function RecorderView(): ReactNode {
     persist(list.filter((r) => !missing.has(r.id)))
     setMissing(new Set())
     setConfirmDeleteId(null)
-    showToast('ok', `已清理 ${n} 条丢失记录`)
+    showToast('ok', t('recorder.cleaned', { n }))
   }
 
   const handleDelete = async (item: RecordingMeta) => {
@@ -421,7 +427,7 @@ export function RecorderView(): ReactNode {
     }
     persist(list.filter((r) => r.id !== item.id))
     setConfirmDeleteId(null)
-    showToast('ok', '已删除')
+    showToast('ok', t('recorder.deleted'))
   }
 
   /** 重命名:记录名 + 磁盘文件名一起改,保持「文件名 = 标题」;冲突自动加序号。 */
@@ -442,7 +448,7 @@ export function RecorderView(): ReactNode {
           newFile: sanitizeFileName(title),
         })
       } catch {
-        showToast('err', '磁盘文件重命名失败,仅更新了记录名称')
+        showToast('err', t('recorder.renameFail'))
       }
     }
     persist(list.map((r) => (r.id === id ? { ...r, title, file } : r)))
@@ -457,7 +463,7 @@ export function RecorderView(): ReactNode {
     const target = list.find((r) => r.id === id)
     if (target && target.note !== note) {
       persist(list.map((r) => (r.id === id ? { ...r, note } : r)))
-      showToast('ok', '备注已保存')
+      showToast('ok', t('recorder.noteSaved'))
     }
   }
 
@@ -513,15 +519,15 @@ export function RecorderView(): ReactNode {
   const statusLabel = () => {
     switch (snap.status) {
       case 'starting':
-        return '正在启动麦克风…'
+        return t('recorder.statusStarting')
       case 'recording':
-        return '录音中 · 点击圆钮暂停'
+        return t('recorder.statusRecording')
       case 'paused':
-        return '已暂停 · 点击圆钮继续'
+        return t('recorder.statusPaused')
       case 'saving':
-        return '正在保存…'
+        return t('recorder.statusSaving')
       default:
-        return '最长可录2h，超限自动结束保存'
+        return t('recorder.statusIdle')
     }
   }
 
@@ -536,10 +542,10 @@ export function RecorderView(): ReactNode {
           disabled={snap.status === 'starting' || snap.status === 'saving'}
           aria-label={
             snap.status === 'recording'
-              ? '暂停录音'
+              ? t('recorder.ariaPause')
               : snap.status === 'paused'
-                ? '继续录音'
-                : '开始录音'
+                ? t('recorder.ariaResume')
+                : t('recorder.ariaStart')
           }
         >
           {orbContent()}
@@ -565,7 +571,7 @@ export function RecorderView(): ReactNode {
               onClick={() => void stopRecording('manual')}
             >
               <Check size={14} />
-              完成
+              {t('recorder.done')}
             </button>
             <button
               type="button"
@@ -573,7 +579,7 @@ export function RecorderView(): ReactNode {
               onClick={() => void cancelRecording()}
             >
               <X size={14} />
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         ) : null}
@@ -590,7 +596,7 @@ export function RecorderView(): ReactNode {
               className="rec-error-action"
               onClick={() => void invoke('open_mic_privacy_settings')}
             >
-              系统设置
+              {t('recorder.systemSettings')}
             </button>
           ) : null}
         </div>
@@ -599,27 +605,27 @@ export function RecorderView(): ReactNode {
       {/* ===== 统计 + 工具 ===== */}
       <div className="rec-toolbar">
         <div className="rec-stats">
-          共 {stats.count} 条 · {fmtBytes(stats.bytes)}
+          {t('recorder.stats', { n: stats.count, size: fmtBytes(stats.bytes) })}
         </div>
         <div className="rec-toolbar-actions">
           {missing.size > 0 ? (
             <button type="button" className="rec-tool-btn is-warn" onClick={handleCleanupMissing}>
-              清理丢失({missing.size})
+              {t('recorder.cleanMissing', { n: missing.size })}
             </button>
           ) : null}
           <button
             type="button"
             className="rec-tool-btn"
-            aria-label="修改保存位置"
-            title="修改保存位置"
+            aria-label={t('recorder.changeDir')}
+            title={t('recorder.changeDir')}
             onClick={() => setDirSheetOpen(true)}
           >
             <Settings2 size={13} />
-            位置
+            {t('recorder.location')}
           </button>
           <button type="button" className="rec-tool-btn" onClick={handleOpenFolder}>
             <FolderOpen size={13} />
-            文件夹
+            {t('recorder.folder')}
           </button>
         </div>
       </div>
@@ -632,11 +638,11 @@ export function RecorderView(): ReactNode {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索录音或备注"
+            placeholder={t('recorder.searchPlaceholder')}
             spellCheck={false}
           />
           {query ? (
-            <button type="button" aria-label="清空搜索" onClick={() => setQuery('')}>
+            <button type="button" aria-label={t('recorder.clearSearch')} onClick={() => setQuery('')}>
               <X size={13} />
             </button>
           ) : null}
@@ -649,16 +655,16 @@ export function RecorderView(): ReactNode {
           <div className="rec-empty-icon">
             <Mic size={26} />
           </div>
-          <strong>还没有录音</strong>
-          <span>点击上方按钮,开始第一段录音</span>
+          <strong>{t('recorder.emptyTitle')}</strong>
+          <span>{t('recorder.emptyHint')}</span>
         </div>
       ) : groups.length === 0 ? (
         <div className="rec-empty">
           <div className="rec-empty-icon">
             <Search size={24} />
           </div>
-          <strong>没有匹配的录音</strong>
-          <span>换个关键词试试</span>
+          <strong>{t('recorder.noMatchTitle')}</strong>
+          <span>{t('recorder.noMatchHint')}</span>
         </div>
       ) : (
         <div className="rec-list">
@@ -677,7 +683,7 @@ export function RecorderView(): ReactNode {
                     <button
                       type="button"
                       className="rec-play"
-                      aria-label={`播放 ${item.title}`}
+                      aria-label={t('recorder.playAria', { title: item.title })}
                       onClick={() => void handleOpen(item)}
                     >
                       <Play size={14} />
@@ -701,7 +707,7 @@ export function RecorderView(): ReactNode {
                       ) : (
                         <div className="rec-item-title" title={item.title}>
                           {item.title}
-                          {isMissing ? <em className="rec-missing-tag">文件丢失</em> : null}
+                          {isMissing ? <em className="rec-missing-tag">{t('recorder.missingTag')}</em> : null}
                         </div>
                       )}
                       <div className="rec-item-meta">
@@ -727,16 +733,16 @@ export function RecorderView(): ReactNode {
                           <button
                             type="button"
                             className="rec-act is-danger"
-                            aria-label="确认删除"
-                            title="确认删除"
+                            aria-label={t('recorder.confirmDelete')}
+                            title={t('recorder.confirmDelete')}
                             onClick={() => void handleDelete(item)}
                           >
                             <Check size={14} />
                           </button>
                           <button
                             type="button"
-                            aria-label="取消删除"
-                            title="取消"
+                            aria-label={t('recorder.cancelDelete')}
+                            title={t('common.cancel')}
                             onClick={() => setConfirmDeleteId(null)}
                           >
                             <X size={14} />
@@ -746,8 +752,8 @@ export function RecorderView(): ReactNode {
                         <>
                           <button
                             type="button"
-                            aria-label="备注"
-                            title="备注"
+                            aria-label={t('recorder.note')}
+                            title={t('recorder.note')}
                             onClick={() => {
                               setConfirmDeleteId(null)
                               setNoteTarget(item)
@@ -758,8 +764,8 @@ export function RecorderView(): ReactNode {
                           </button>
                           <button
                             type="button"
-                            aria-label="重命名"
-                            title="重命名"
+                            aria-label={t('recorder.rename')}
+                            title={t('recorder.rename')}
                             onClick={() => {
                               setRenamingId(item.id)
                               setRenameDraft(item.title)
@@ -769,16 +775,16 @@ export function RecorderView(): ReactNode {
                           </button>
                           <button
                             type="button"
-                            aria-label="打开所在文件夹"
-                            title="打开所在文件夹"
+                            aria-label={t('recorder.reveal')}
+                            title={t('recorder.reveal')}
                             onClick={() => void handleReveal(item)}
                           >
                             <FolderOpen size={14} />
                           </button>
                           <button
                             type="button"
-                            aria-label="删除"
-                            title="删除"
+                            aria-label={t('recorder.delete')}
+                            title={t('recorder.delete')}
                             onClick={() => {
                               setConfirmDeleteId(item.id)
                               setNoteTarget(null)
@@ -794,20 +800,20 @@ export function RecorderView(): ReactNode {
               })}
             </section>
           ))}
-          <p className="rec-list-foot">录音文件仅存储在本机，不会上传云端</p>
+          <p className="rec-list-foot">{t('recorder.privacyNote')}</p>
         </div>
       )}
 
       {/* ===== 备注弹窗(底部,向上展开) ===== */}
       {noteTarget ? (
-        <RecSheet title="录音备注" onClose={() => setNoteTarget(null)}>
+        <RecSheet title={t('recorder.noteSheet')} onClose={() => setNoteTarget(null)}>
           <div className="rec-note-editor">
             <textarea
               className="rec-note-input"
               value={noteDraft}
               rows={3}
               maxLength={NOTE_MAX}
-              placeholder="给这段录音写点备注…"
+              placeholder={t('recorder.notePlaceholder')}
               autoFocus
               spellCheck={false}
               onChange={(e) => setNoteDraft(e.target.value)}
@@ -821,10 +827,10 @@ export function RecorderView(): ReactNode {
                 className="rec-btn is-cancel"
                 onClick={() => setNoteTarget(null)}
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button type="button" className="rec-btn is-done" onClick={commitNote}>
-                保存
+                {t('common.save')}
               </button>
             </div>
           </div>
@@ -833,24 +839,24 @@ export function RecorderView(): ReactNode {
 
       {/* ===== 保存位置弹窗(底部,向上展开) ===== */}
       {dirSheetOpen ? (
-        <RecSheet title="保存位置" onClose={() => setDirSheetOpen(false)}>
+        <RecSheet title={t('recorder.dirSheet')} onClose={() => setDirSheetOpen(false)}>
           <div className="rec-dir-body">
             <div className="rec-dir-current">
-              {recDir || defaultDir || '文档\\Tacco录音'}
+              {recDir || defaultDir || t('recorder.defaultDir')}
             </div>
             <div className="rec-dir-tip">
-              修改后新录音将保存到所选文件夹,已有录音保留在原位置。
+              {t('recorder.dirTip')}
             </div>
             <div className="rec-sheet-actions">
               <button type="button" className="rec-btn is-cancel" onClick={resetSaveDir}>
-                恢复默认
+                {t('dataDir.reset')}
               </button>
               <button
                 type="button"
                 className="rec-btn is-done"
                 onClick={() => void pickSaveDir()}
               >
-                选择文件夹…
+                {t('recorder.pickFolder')}
               </button>
             </div>
           </div>

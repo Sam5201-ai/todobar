@@ -119,7 +119,15 @@ pub struct ClotheslineSettings {
     /// 在配置页手动启用由 clothesline_set_enabled 正常写盘记忆，重启后保持启用。
     #[serde(default)]
     pub default_off_v0481: bool,
+    /// ★2026-11-19 悬停自动展开（默认 true）：鼠标移到绳窗所在屏上缘 ≤6 逻辑 px
+    /// 自动展开；展开态光标离开面板矩形持续 600ms 自动收起。命中循环 OS 轮询驱动。
+    #[serde(default = "default_true")]
+    pub auto_expand_hover: bool,
+    /// ★2026-11-20 操作指引已看过：首次启用晾衣绳时绳窗自动弹一次指引，写盘后不再打扰。
+    #[serde(default)]
+    pub guide_shown: bool,
 }
+fn default_true() -> bool { true }
 fn default_half() -> f64 { 0.5 }
 fn default_pulltab_style() -> String { "porcelain".to_string() }
 fn default_rope_ratio() -> f64 { 0.86 }
@@ -144,6 +152,8 @@ impl Default for ClotheslineSettings {
             rope_width_ratio: default_rope_ratio(),
             card_size: default_card_size(),
             default_off_v0481: true, // 全新安装无需迁移（enabled 本就 false）
+            auto_expand_hover: true, // ★2026-11-19 悬停自动展开，默认启用
+            guide_shown: false,      // ★2026-11-20 首次启用自动弹一次操作指引
         }
     }
 }
@@ -336,6 +346,8 @@ pub struct ClotheslineStateInner {
     pub loop_running: AtomicBool,
     /// 截图挂起深度（支持前端会话级 + capture_screen 自守卫嵌套）。
     pub suspend_depth: AtomicU32,
+    /// ★2026-11-19 悬停自动展开内存镜像（48ms 循环读，settings.json 为真源）。
+    pub auto_expand_hover: AtomicBool,
     /// 浮层（右键菜单 / ＋菜单）打开期间置 true：命中循环据此检测「左键点在可点区外」，
     /// 发 cl-dismiss-overlay 让前端关闭浮层（问题13：透明穿透窗收不到窗外 click，必须 OS 轮询）。
     pub dismiss_on_outside: AtomicBool,
@@ -723,6 +735,10 @@ fn spawn_hit_loop(app: tauri::AppHandle, state: ClotheslineState) {
         crate::append_app_log("[clothesline] 独立命中循环启动 (48ms · 绳带窄窗 · 零窗口操作)");
         let mut last_seen = std::time::Instant::now();
         let mut prev_lbuttondown = false; // 左键上一帧状态，用于边沿检测（问题13）。
+        // ★2026-11-19 悬停自动展开/收起的状态机（边沿触发，事件只发一次直到重新武装）。
+        let mut expand_armed = true; // 收起态：光标离开上缘后重新武装
+        let mut collapse_armed = false; // 展开态：光标回到面板内后重新武装
+        let mut out_since: Option<std::time::Instant> = None; // 展开态离开面板的起始时刻
         while !state.stop_loop.load(Ordering::Relaxed) {
             // 截图挂起期间不干预，避免与 hide/show 竞态。
             let suspended = state.suspend_depth.load(Ordering::Relaxed) > 0;
@@ -773,6 +789,58 @@ fn spawn_hit_loop(app: tauri::AppHandle, state: ClotheslineState) {
                     prev_lbuttondown = ldown;
                 } else {
                     prev_lbuttondown = false;
+                }
+
+                // ★2026-11-19 悬停自动展开 / 收起（设置 auto_expand_hover，默认开）。
+                //  收起态：光标贴到绳窗所在屏上缘 ≤6 逻辑 px → 发 cl-auto-expand；
+                //  展开态：光标离开面板矩形持续 600ms → 发 cl-auto-collapse。
+                //  按住左键（拖绳 / 拖卡排序 / 截图框选）期间一律不触发，防误伤。
+                //  预览 / 拖放会话矩形为空时不算「离开」，绝不在浮层打开时收起。
+                if state.auto_expand_hover.load(Ordering::Relaxed) {
+                    if let Some(win) = app.get_webview_window(LABEL) {
+                        let ldown = left_button_down();
+                        if !ldown {
+                            if let (Some((cx, cy)), Ok(Some(mon))) =
+                                (cursor_physical(), win.current_monitor())
+                            {
+                                let scale = win.scale_factor().unwrap_or(1.0);
+                                let mp = mon.position();
+                                let ms = mon.size();
+                                let in_top_band = cy - mp.y <= (6.0 * scale) as i32
+                                    && cx >= mp.x
+                                    && cx < mp.x + ms.width as i32;
+                                let collapsed = win
+                                    .outer_size()
+                                    .map(|s| s.width < ms.width / 2)
+                                    .unwrap_or(true);
+                                if collapsed {
+                                    out_since = None;
+                                    if in_top_band && expand_armed {
+                                        expand_armed = false;
+                                        let _ = app.emit("cl-auto-expand", ());
+                                    } else if !in_top_band {
+                                        expand_armed = true;
+                                    }
+                                } else {
+                                    expand_armed = true;
+                                    let inside = !rects.is_empty()
+                                        && cursor_on_clickable(cx, cy, &rects);
+                                    if inside {
+                                        out_since = None;
+                                        collapse_armed = true;
+                                    } else if collapse_armed && !rects.is_empty() {
+                                        let since =
+                                            *out_since.get_or_insert_with(std::time::Instant::now);
+                                        if since.elapsed() >= Duration::from_millis(600) {
+                                            collapse_armed = false;
+                                            out_since = None;
+                                            let _ = app.emit("cl-auto-collapse", ());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if last_seen.elapsed() > Duration::from_millis(1500) {
@@ -831,6 +899,7 @@ pub fn clothesline_set_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(
 
     let state = app.state::<ClotheslineState>();
     state.enabled.store(enabled, Ordering::SeqCst);
+    state.auto_expand_hover.store(load_settings().auto_expand_hover, Ordering::SeqCst);
     if enabled {
         let handle = app.clone();
         let st = app.state::<ClotheslineState>().inner().clone();
@@ -869,6 +938,12 @@ pub fn clothesline_update_settings(
                 }
                 "expanded" => { if let Some(b) = v.as_bool() { s.expanded = b } }
                 "wind_effect" => { if let Some(b) = v.as_bool() { s.wind_effect = b } }
+                "auto_expand_hover" => {
+                    if let Some(b) = v.as_bool() { s.auto_expand_hover = b }
+                }
+                "guide_shown" => {
+                    if let Some(b) = v.as_bool() { s.guide_shown = b }
+                }
                 "auto_fly_shot" => { if let Some(b) = v.as_bool() { s.auto_fly_shot = b } }
                 "monitor_stable_id" => {
                     if let Some(id) = v.as_str() { s.monitor_stable_id = id.to_string() }
@@ -896,6 +971,10 @@ pub fn clothesline_update_settings(
     s = sanitize(s);
     if let Some(base) = base_dir() {
         save_settings_to(&base, &s)?;
+    }
+    // ★2026-11-19 悬停自动展开镜像进 48ms 命中循环（AtomicBool，免磁盘轮询）。
+    if let Some(state) = app.try_state::<ClotheslineState>() {
+        state.auto_expand_hover.store(s.auto_expand_hover, Ordering::SeqCst);
     }
     // 广播给绳窗（若开着）：本次会话内即时生效展开/收起、换屏、清风等，无需重启。
     // 总开关 enabled 走单独命令(建窗/销毁)，不经过这里。
@@ -1255,7 +1334,6 @@ pub struct SessionState {
     #[serde(default)]
     pub monitor_stable_id: String,
 }
-fn default_true() -> bool { true }
 fn default_pull() -> f64 { 0.5 }
 
 impl Default for SessionState {
@@ -1995,11 +2073,34 @@ pub fn clothesline_save_preview(
     Ok(final_path.to_string_lossy().to_string())
 }
 
-/// 读回预览缩略图（data URL）。不用 asset://：capabilities 未授权 asset scope，
-/// 且 asset 跨源图会污染 canvas（项目铁律）。缩略图已在前端压到 ≤480px。
+/// 读回缩略图 data URL（绳窗预览覆盖层用）。
+/// ★2026-11-19 修复：① 兼容 webp（拖拽线把预览写盘改成了 .webp，读侧只认 .png
+///   导致读不到 → 前端破图）；② 同步大文件 base64 会阻塞 Tauri 主线程，全部窗口
+///   冻结（教训）→ 改 async + spawn_blocking。
 #[tauri::command]
-pub fn clothesline_read_preview(app: tauri::AppHandle, id: String) -> Option<String> {
-    let _ = &app;
+pub async fn clothesline_read_preview(app: tauri::AppHandle, id: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || clothesline_read_preview_sync(&app, &id))
+        .await
+        .ok()
+        .flatten()
+}
+
+/// 预览文件定位：webp 优先（当前写侧格式），png 兜底（历史数据）。
+fn preview_file_path(base: &std::path::Path, id: &str) -> Option<std::path::PathBuf> {
+    let dir = cards_dir(base).join("previews");
+    let webp = dir.join(format!("{id}.webp"));
+    if webp.exists() {
+        return Some(webp);
+    }
+    let png = dir.join(format!("{id}.png"));
+    if png.exists() {
+        return Some(png);
+    }
+    None
+}
+
+fn clothesline_read_preview_sync(app: &tauri::AppHandle, id: &str) -> Option<String> {
+    let _ = app;
     let clean_id: String = id
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -2009,11 +2110,92 @@ pub fn clothesline_read_preview(app: tauri::AppHandle, id: String) -> Option<Str
         return None;
     }
     let base = base_dir()?;
-    let bytes = std::fs::read(cards_dir(&base).join("previews").join(format!("{clean_id}.png"))).ok()?;
+    let path = preview_file_path(&base, &clean_id)?;
+    let is_webp = path.extension().and_then(|e| e.to_str()) == Some("webp");
+    let bytes = std::fs::read(&path).ok()?;
+    let mime = if is_webp { "image/webp" } else { "image/png" };
     Some(format!(
-        "data:image/png;base64,{}",
+        "data:{mime};base64,{}",
         base64::engine::general_purpose::STANDARD.encode(bytes)
     ))
+}
+
+/// ★2026-11-19 反馈2：原图落盘 `originals/{id}.{png|jpg|jpeg|webp}`。
+/// 反馈2根因：三条入库路径（截图飞入 / 贴图 / 本地导入）写入 src_path 的都是
+/// ≤480px 缩略图，预览覆盖层共用它 → 大图必然模糊。现在入库时同步存一份
+/// 全分辨率原图（独立目录、单图上限 32MB），预览优先读原图、回退缩略图
+/// （老卡兼容）。mime 决定扩展名，未知 mime 默认 png。
+#[tauri::command]
+pub fn cl_save_original(id: String, mime: String, data_url: String) -> Result<String, String> {
+    let clean_id: String = id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect();
+    if clean_id.is_empty() {
+        return Err("非法原图 ID".into());
+    }
+    let b64 = data_url.split_once(',').map(|(_, b)| b).unwrap_or(&data_url);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|e| format!("原图解码失败: {e}"))?;
+    if bytes.len() > 32 * 1024 * 1024 {
+        return Err("原图超过 32MB，未保存".into());
+    }
+    let ext = match mime.as_str() {
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/webp" => "webp",
+        _ => "png",
+    };
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let dir = cards_dir(&base).join("originals");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建原图目录失败: {e}"))?;
+    let final_path = dir.join(format!("{clean_id}.{ext}"));
+    let tmp = dir.join(format!("{clean_id}.{ext}.tmp"));
+    std::fs::write(&tmp, &bytes).map_err(|e| format!("写原图临时文件失败: {e}"))?;
+    if final_path.exists() {
+        let _ = std::fs::remove_file(&final_path);
+    }
+    std::fs::rename(&tmp, &final_path).map_err(|e| format!("原图原子替换失败: {e}"))?;
+    Ok(final_path.to_string_lossy().to_string())
+}
+
+/// 读回原图 data URL（预览覆盖层优先用；没有原图文件返回 None 回退缩略图）。
+/// 与 clothesline_read_preview 同款：同步大 base64 会冻结所有窗口 → async + spawn_blocking。
+#[tauri::command]
+pub async fn cl_read_original(id: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || cl_read_original_sync(&id))
+        .await
+        .ok()
+        .flatten()
+}
+
+fn cl_read_original_sync(id: &str) -> Option<String> {
+    let clean_id: String = id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect();
+    if clean_id.is_empty() {
+        return None;
+    }
+    let base = base_dir()?;
+    let dir = cards_dir(&base).join("originals");
+    // 与写侧扩展名映射一致，逐个探测。
+    for (ext, mime) in [
+        ("png", "image/png"),
+        ("jpg", "image/jpeg"),
+        ("webp", "image/webp"),
+    ] {
+        let path = dir.join(format!("{clean_id}.{ext}"));
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Some(format!(
+                "data:{mime};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            ));
+        }
+    }
+    None
 }
 
 /// 只读用量（配置页状态条用）。**不写任何文件**，也不按会员过滤——上限由 add 命令把关。
@@ -2049,6 +2231,7 @@ pub fn spawn_if_enabled(app: tauri::AppHandle) {
         }
         let st = app.state::<ClotheslineState>().inner().clone();
         st.enabled.store(true, Ordering::SeqCst);
+        st.auto_expand_hover.store(load_settings().auto_expand_hover, Ordering::SeqCst);
         if build_window(&app) {
             // 建窗期间用户又关了开关：立刻撤销这次建窗，避免 Setting 已关却残留窗口。
             if !load_settings().enabled {
@@ -2260,3 +2443,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 }
+
+// ————————————————————— ★2026-11-19 图片卡：复制图片 / 长按拖出文件 —————————————————————
+
+/// 右键图片卡：把本地图片解码为 RGBA 写入系统剪贴板（位图格式，可直接粘贴到
+/// 微信 / Word / PS 等）。剪贴板历史监听只记 CF_UNICODETEXT，不会误录图片。
+#[tauri::command]
+pub fn cl_copy_card_image(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let img = image::open(&path).map_err(|e| format!("读取图片失败: {e}"))?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let mut clip = arboard::Clipboard::new().map_err(|e| format!("打开剪贴板失败: {e}"))?;
+        clip.set_image(arboard::ImageData {
+            width: w as usize,
+            height: h as usize,
+            bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+        })
+        .map_err(|e| format!("写入剪贴板失败: {e}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("当前平台暂不支持复制图片".to_string())
+    }
+}
+
+// ★2026-11-19 反馈5：长按图片拖出功能已整体移除（易与点击预览误触），
+//   仅保留右键复制图片（cl_copy_card_image）。

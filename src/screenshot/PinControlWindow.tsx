@@ -18,12 +18,14 @@ import { emit, listen } from '@tauri-apps/api/event';
 import { Move, X } from 'lucide-react';
 import { dismissPinWindow, takeImage } from './bridge';
 import { PIN_CTL } from './store';
+import { useI18n } from '../i18n';
 import './screenshot.css';
 
 export default function PinControlWindow() {
   const win = getCurrentWindow();
   // 自身 label = `pinctl-<贴图label>` → 反推目标贴图。
   const target = win.label.replace(/^pinctl-/, '');
+  const { t } = useI18n();
   const [opacity, setOpacity] = useState(1);
   const [showBubble, setShowBubble] = useState(true);
   // 拖动串行队列:防止 setPosition IPC 乱序导致窗口抖动。
@@ -127,26 +129,26 @@ export default function PinControlWindow() {
           <button
             type="button"
             className="pinctl-bubble-close"
-            title="关闭提示"
+            title={t('shot.pinctlCloseTip')}
             onClick={collapseBubble}
           >
             <X size={14} />
           </button>
-          <h4>鼠标穿透</h4>
-          <p>开启后，您可以直接使用鼠标操作贴图下方的控件，以便临时操作或对比。</p>
-          <p className="pinctl-bubble-hl">按住并拖动左侧抓手图标可以移动贴图。</p>
+          <h4>{t('shot.pinctlTitle')}</h4>
+          <p>{t('shot.pinctlDesc')}</p>
+          <p className="pinctl-bubble-hl">{t('shot.pinctlMoveHint')}</p>
         </div>
       )}
       <div className="pinctl-bar" onMouseDown={(e) => e.stopPropagation()}>
         <span
           className="pinctl-drag"
-          title="按住拖动以移动贴图"
+          title={t('shot.pinctlMoveTip')}
           onPointerDown={onDragStart}
         >
           <Move size={17} />
         </span>
         <span className="pinctl-sep" />
-        <span className="pinctl-label">不透明度</span>
+        <span className="pinctl-label">{t('shot.pinctlOpacityLabel')}</span>
         <input
           type="range"
           className="pinctl-slider"
@@ -158,7 +160,7 @@ export default function PinControlWindow() {
         <button
           type="button"
           className="pinctl-btn"
-          title="关闭贴图"
+          title={t('shot.pinctlCloseBtnTip')}
           onClick={() => void dismissPinWindow(target)}
         >
           <X size={15} />

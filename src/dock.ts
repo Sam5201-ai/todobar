@@ -26,6 +26,7 @@ import {
   normalizeMonitorPref,
   type SidebarSettings,
 } from './sidebarSettings'
+import { t } from './i18n'
 
 export type DockSide = 'left' | 'right'
 
@@ -83,7 +84,7 @@ function workAreaOf(m: Monitor) {
 
 function humanName(m: Monitor, index: number): string {
   const raw = m.name?.trim()
-  return raw ? raw : `显示器 ${index + 1}`
+  return raw ? raw : t('dock.monitorN', { n: index + 1 })
 }
 
 /**
@@ -100,15 +101,15 @@ export async function listDockMonitors(): Promise<DockMonitorOption[]> {
     ;[monitors, primary] = await Promise.all([availableMonitors(), primaryMonitor()])
   } catch {
     // 浏览器预览 / 非 Tauri 环境:至少给出主屏项,由调用方禁用整行。
-    return [{ value: 'primary', label: '主屏' }]
+    return [{ value: 'primary', label: t('dock.primary') }]
   }
   const first = primary ?? monitors[0] ?? null
   const options: DockMonitorOption[] = [
-    { value: 'primary', label: first ? `主屏 · ${humanName(first, 0)}` : '主屏' },
+    { value: 'primary', label: first ? `${t('dock.primary')} · ${humanName(first, 0)}` : t('dock.primary') },
   ]
   if (!first) return options
   if (monitors.length > 1) {
-    options.push({ value: 'secondary', label: '副屏' })
+    options.push({ value: 'secondary', label: t('dock.secondary') })
   }
   if (monitors.length > 2) {
     const pk = primary ? monitorKey(primary) : null
@@ -116,7 +117,7 @@ export async function listDockMonitors(): Promise<DockMonitorOption[]> {
       const key = monitorKey(m)
       options.push({
         value: key,
-        label: `${key === pk ? '主屏' : `副屏 ${i}`} · ${humanName(m, i)}`,
+        label: `${key === pk ? t('dock.primary') : t('dock.secondaryN', { n: i })} · ${humanName(m, i)}`,
       })
     })
   }

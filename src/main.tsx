@@ -4,14 +4,21 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './ErrorBoundary'
 import { hydrateIdentity } from './account'
+import { I18nProvider, initI18n, t } from './i18n'
+
+// i18n 初始化:同步部分只读 localStorage(不阻塞首帧),磁盘回灌异步补齐。
+// 必须在任何渲染前执行,showFatal / ErrorBoundary 才能拿到正确语言。
+initI18n()
 
 // —— 启动兜底:任何未捕获错误 / Promise 拒绝 / 挂载超时,都在窗口里显示【可见】错误面板,
 // 避免"白屏静默卡死"无法排查。窗口本身是 transparent,故错误面板用不透明背景确保看得见。
 // 启动早期错误面板:此时能力表尚未加载,用 UA 仅作「数据目录文案」分流(不涉及功能门控)。
 const IS_MAC_UA = /Mac/i.test(navigator.userAgent)
-const DATA_DIR_HINT = IS_MAC_UA
-  ? '~/Library/Application Support/dev.todobar.desktop 与 ~/.ticktask'
-  : '%LOCALAPPDATA%\\Tacco 与用户目录下的 .ticktask'
+// 数据目录提示:路径原样保留,连接词按当前语言取词条(调用时取值,跟随语言切换)。
+const dataDirHint = () =>
+  IS_MAC_UA
+    ? t('fatal.dataDirMac')
+    : t('fatal.dataDirWin')
 
 function showFatal(title: string, detail?: string) {
   const root = document.getElementById('root')
@@ -30,20 +37,18 @@ function showFatal(title: string, detail?: string) {
         String(detail).slice(0, 2000) +
         '</div>'
       : '') +
-    '<div style="margin-top:16px;color:#555">如反复出现,可删除应用数据目录后重试(' +
-    (IS_MAC_UA ? 'macOS' : 'Windows') +
-    ': ' +
-    DATA_DIR_HINT +
-    '),并查看 ~/.ticktask/logs/app.log</div>'
+    '<div style="margin-top:16px;color:#555">' +
+    t('fatal.hint', { os: IS_MAC_UA ? 'macOS' : 'Windows', dir: dataDirHint() }) +
+    '</div>'
   root.appendChild(box)
 }
 
 window.addEventListener('error', (e) => {
-  showFatal('应用启动出错', e.message + (e.filename ? `\n${e.filename}:${e.lineno}` : ''))
+  showFatal(t('fatal.title'), e.message + (e.filename ? `\n${e.filename}:${e.lineno}` : ''))
 })
 window.addEventListener('unhandledrejection', (e) => {
   const r = (e as PromiseRejectionEvent).reason
-  showFatal('应用启动出错(未处理的 Promise 拒绝)', (r && (r.stack || r.message)) || String(r))
+  showFatal(t('fatal.titlePromise'), (r && (r.stack || r.message)) || String(r))
 })
 
 // 挂载看门狗:若 12 秒内界面仍未挂载(初始化阻塞 / 卡死),给出诊断提示而非静默白屏。
@@ -51,11 +56,8 @@ window.setTimeout(() => {
   const root = document.getElementById('root')
   if (root && root.childElementCount === 0) {
     showFatal(
-      '应用启动超时(界面未能加载)',
-      '可能是本地数据库初始化阻塞或环境异常。请尝试:\n' +
-        '1) 关闭后重新打开;\n' +
-        '2) 删除 ' + DATA_DIR_HINT + ' 后重开;\n' +
-        '3) 查看 ~/.ticktask/logs/app.log 中的报错。',
+      t('fatal.titleTimeout'),
+      t('fatal.timeoutBody', { dir: dataDirHint() }),
     )
   }
 }, 12000)
@@ -98,11 +100,13 @@ void (async () => {
     document.documentElement.dataset.runtime = 'tauri'
     const { WidgetView } = await import('./WidgetView')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="计薪组件">
-          <WidgetView />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="计薪组件">
+            <WidgetView />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -112,11 +116,13 @@ void (async () => {
     document.documentElement.dataset.runtime = 'tauri'
     const { WidgetView } = await import('./WidgetView')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="计薪组件预览">
-          <WidgetView />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="计薪组件预览">
+            <WidgetView />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -132,11 +138,13 @@ void (async () => {
     document.documentElement.classList.add('screenshot-mode')
     const { default: CaptureOverlay } = await import('./screenshot/CaptureOverlay')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="截图覆盖层">
-          <CaptureOverlay />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="截图覆盖层">
+            <CaptureOverlay />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -148,11 +156,13 @@ void (async () => {
     document.documentElement.classList.add('screenshot-mode')
     const { default: PinControlWindow } = await import('./screenshot/PinControlWindow')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="贴图控制条">
-          <PinControlWindow />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="贴图控制条">
+            <PinControlWindow />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -162,11 +172,13 @@ void (async () => {
     document.documentElement.classList.add('screenshot-mode')
     const { default: PinWindow } = await import('./screenshot/PinWindow')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="贴图窗口">
-          <PinWindow />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="贴图窗口">
+            <PinWindow />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -178,11 +190,13 @@ void (async () => {
     document.documentElement.dataset.runtime = 'tauri'
     const { NoteWindow } = await import('./notes/NoteWindow')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="便利签窗口">
-          <NoteWindow />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="便利签窗口">
+            <NoteWindow />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -207,11 +221,13 @@ void (async () => {
     try {
       const { ClotheslineView, ClotheslineErrorBoundary } = await import('./clothesline/ClotheslineView')
       createRoot(document.getElementById('root')!).render(
-        <StrictMode>
-          <ClotheslineErrorBoundary>
-            <ClotheslineView />
-          </ClotheslineErrorBoundary>
-        </StrictMode>,
+        <I18nProvider>
+          <StrictMode>
+            <ClotheslineErrorBoundary>
+              <ClotheslineView />
+            </ClotheslineErrorBoundary>
+          </StrictMode>
+        </I18nProvider>,
       )
     } catch (e) {
       keepTransparentOnFailure()
@@ -227,11 +243,33 @@ void (async () => {
     document.documentElement.dataset.runtime = 'tauri'
     const { ClipboardView } = await import('./ClipboardView')
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <ErrorBoundary label="剪贴板历史浮窗">
-          <ClipboardView />
-        </ErrorBoundary>
-      </StrictMode>,
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="剪贴板历史浮窗">
+            <ClipboardView />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
+    )
+    return
+  }
+
+  // 归档截图预览覆盖窗:label = archive-preview(Rust 按绳窗同款参数动态建窗,
+  // 见 src-tauri/src/lib.rs archive_preview_show)。透明整屏遮罩 + 居中大图,
+  // 视觉与晾衣绳预览完全一致;主窗零改动 ⇒ 工具窗完全静止。
+  // - 必须打 data-runtime='tauri',复用 index.css 透明背景规则(否则白底)。
+  // - 跳过 hydrateIdentity:预览窗只读截图预览数据。
+  if (label === 'archive-preview') {
+    document.documentElement.dataset.runtime = 'tauri'
+    const { default: ShotPreviewWindow } = await import('./archive/ShotPreviewWindow')
+    createRoot(document.getElementById('root')!).render(
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="归档截图预览">
+            <ShotPreviewWindow />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
     )
     return
   }
@@ -248,10 +286,12 @@ void (async () => {
     /* best-effort:失败时 App effect 内仍会重试 */
   }
   createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <ErrorBoundary label="主界面">
-        <App />
-      </ErrorBoundary>
-    </StrictMode>,
+    <I18nProvider>
+      <StrictMode>
+        <ErrorBoundary label="主界面">
+          <App />
+        </ErrorBoundary>
+      </StrictMode>
+    </I18nProvider>,
   )
-})().catch((e) => showFatal('应用初始化失败', (e && (e.stack || e.message)) || String(e)))
+})().catch((e) => showFatal(t('fatal.initFailed'), (e && (e.stack || e.message)) || String(e)))

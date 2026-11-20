@@ -1258,6 +1258,130 @@ fn widget_probe_alive(w: &tauri::WebviewWindow<tauri::Wry>) -> bool {
     false
 }
 
+/// 归档截图预览覆盖窗 label（前端 main.tsx 按此路由到 ShotPreviewWindow）。
+pub const ARCHIVE_PREVIEW_LABEL: &str = "archive-preview";
+
+/// 预览覆盖窗待显示的 cardId（供组件挂载时拉取，规避「建窗后立刻 emit、
+/// 前端监听器尚未挂载」的竞态）。
+#[derive(Default)]
+struct ArchivePreviewState(std::sync::Mutex<Option<String>>);
+
+/// ★2026-11-19 归档截图预览：显示整屏透明覆盖窗（与晾衣绳预览同构）。
+/// 六轮实测定论：主窗是小条带窗口，setFullscreen（tao 改窗口样式=「系统框」
+/// 闪现）与 setSize/setPosition 几何改造（跳变=闪屏/黑幕）都无法做到「窗口
+/// 完全静止」；晾衣绳预览之所以完美，是因为绳窗本身恒为整屏、预览零几何变化。
+/// 故预览必须发生在**本来就在整屏的表面**上：本命令按绳窗同款参数建/复用一个
+/// 透明 + 无边框 + 不进任务栏 + 不抢焦点的覆盖窗，主窗彻底零改动 ⇒ 必然静止。
+/// 显示器矩形由前端传入（Rust 侧 current_monitor 实测不可靠，见组件窗口注释）。
+/// 常驻复用（hide/show 不销毁），cardId 走 ArchivePreviewState（挂载拉取）+ 事件。
+#[tauri::command]
+fn archive_preview_show(
+    app: tauri::AppHandle,
+    card_id: String,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    use tauri::Emitter as _;
+    if app.try_state::<ArchivePreviewState>().is_none() {
+        app.manage(ArchivePreviewState(Default::default()));
+    }
+    app.state::<ArchivePreviewState>()
+        .0
+        .lock()
+        .unwrap()
+        .replace(card_id.clone());
+    // 创建必须放独立线程：命令内联 build() 会与 IPC 死锁（见 open_salary_widget 注释）
+    std::thread::spawn(move || {
+        let label = ARCHIVE_PREVIEW_LABEL;
+        if let Some(existing) = app.get_webview_window(label) {
+            if widget_window_alive(&existing) {
+                // 复用：改几何 → 事件带新 cardId（监听器早已挂载，无竞态）。
+                // ⚠️ 不在这里 show：等前端图片解码完成（img onLoad）调
+                // archive_preview_reveal 才显示，杜绝「空窗先闪现」。
+                let _ = existing.set_size(tauri::PhysicalSize::new(w, h));
+                let _ = existing.set_position(tauri::PhysicalPosition::new(x, y));
+                let _ = app.emit_to(label, "archive-preview-show", card_id);
+                return;
+            }
+            // 死句柄（ghost）：销毁后稍候按同 label 重建（destroy 是异步的）
+            append_app_log("[archive-preview] 检测到 ghost 死句柄，销毁重建");
+            let _ = existing.destroy();
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        }
+        match tauri::WebviewWindowBuilder::new(
+            &app,
+            label,
+            tauri::WebviewUrl::App(std::path::PathBuf::from("index.html")),
+        )
+        .title("ticktask-preview")
+        // ⚠️ 必须与主窗逐字符一致（WebView2 环境参数不一致 → 0x8007139F，见组件窗口注释）
+        .additional_browser_args(crate::BROWSER_ARGS)
+        .decorations(false)
+        .transparent(true)
+        .skip_taskbar(true)
+        // 预览覆盖层要盖住桌面与主窗（与绳窗预览同层级观感）
+        .always_on_top(true)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        // 不抢焦点：主窗保持前台，Esc 由主窗 ArchiveView 监听（焦点在主窗）
+        .focused(false)
+        // 创建后默认 Windows 级联位置会闪现未定位窗口（见组件窗口 0.4.44 注释）
+        .visible(false)
+        .shadow(false)
+        .build()
+        {
+            Ok(win) => {
+                if widget_window_alive(&win) {
+                    // ⚠️ 只定位不 show：前端图片解码完成后调 archive_preview_reveal 才显示
+                    let _ = win.set_size(tauri::PhysicalSize::new(w, h));
+                    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+                } else {
+                    append_app_log("[archive-preview] build() Ok 但探活失败（ghost）");
+                    let _ = win.destroy();
+                }
+            }
+            Err(e) => append_app_log(&format!("[archive-preview] 创建失败: {e}")),
+        }
+    });
+    Ok(())
+}
+
+/// 组件挂载时拉取待显示的 cardId（首建路径：建窗→挂载→主动拉取，无事件竞态）。
+#[tauri::command]
+fn archive_preview_current(app: tauri::AppHandle) -> Option<String> {
+    if app.try_state::<ArchivePreviewState>().is_none() {
+        return None;
+    }
+    app.state::<ArchivePreviewState>()
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+}
+
+/// 图片解码完成（img onLoad）后由前端调用：此刻 webview 已完成含图片的绘制，
+/// 此刻 show = 窗口出现即完整画面，杜绝「透明空窗先闪现一下」的预览图闪烁。
+#[tauri::command]
+fn archive_preview_reveal(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(ARCHIVE_PREVIEW_LABEL) {
+        let _ = w.set_always_on_top(true);
+        let _ = w.show();
+    }
+    Ok(())
+}
+
+/// 隐藏预览覆盖窗（常驻复用，下次打开零创建延迟）。不存在时为 no-op。
+#[tauri::command]
+fn archive_preview_hide(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(ARCHIVE_PREVIEW_LABEL) {
+        let _ = w.hide();
+    }
+    Ok(())
+}
+
 /// 打开「牛马计薪器 · 桌面组件」独立透明窗口(label 见 widget_label_candidates)。
 ///
 /// ⚠️ 死锁铁律(0.4.21 踩坑): 绝不能在同步命令里内联 `WebviewWindowBuilder::build()`!
@@ -1871,6 +1995,7 @@ pub fn run() {
             screenshot::position_capture_overlay,
             screenshot::finish_capture_overlay,
             screenshot::is_overlay_active,
+            screenshot::rescue_capture_overlay,
             screenshot::read_capture_png,
             screenshot::hide_window,
             screenshot::show_pin_window,
@@ -1910,6 +2035,10 @@ pub fn run() {
             clipboard::register_clipboard_shortcut,
             clipboard::clipboard_set_active,
             app_log,
+            archive_preview_show,
+            archive_preview_current,
+            archive_preview_reveal,
+            archive_preview_hide,
             get_screenshot_settings,
             save_screenshot_settings,
             recording_begin,
@@ -1949,7 +2078,10 @@ pub fn run() {
             clothesline::clothesline_delete_archived,
             clothesline::clothesline_save_preview,
             clothesline::clothesline_read_preview,
-            clothesline::clothesline_get_card_usage
+            clothesline::clothesline_get_card_usage,
+            clothesline::cl_copy_card_image,
+            clothesline::cl_save_original,
+            clothesline::cl_read_original
         ])
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {

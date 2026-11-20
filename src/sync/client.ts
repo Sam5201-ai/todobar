@@ -1,4 +1,5 @@
 import type { Birthday, Recurrence, Task } from '../types'
+import { t } from '../i18n'
 
 // Wire format sent to / received from the Cloudflare Worker (snake_case, matches
 // the D1 column names so the backend can store rows with minimal translation).
@@ -78,7 +79,7 @@ async function errorDetail(res: Response): Promise<string> {
   } catch {
     /* 响应体不是 JSON,忽略 */
   }
-  if (res.status === 401) return ': 访问令牌无效或未在服务端注册'
+  if (res.status === 401) return `: ${t('sync.tokenInvalid')}`
   return ''
 }
 

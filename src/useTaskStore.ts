@@ -32,7 +32,7 @@ import {
   ACCOUNT_CHANGED_EVENT,
   AUTH_INVALID_EVENT,
   FREE_DAILY_TASK_LIMIT,
-  MEMBER_ONLY_TIP,
+  memberOnlyTip,
   isFullAccess,
   loadAccount,
   notifyAuthInvalid,
@@ -40,6 +40,7 @@ import {
 } from './account'
 import { trackAppOpen } from './analytics'
 import { effectiveAutoSync } from './membership'
+import { t } from './i18n'
 
 export type CustomList = {
   id: string
@@ -138,13 +139,13 @@ function hasFullAccess(): boolean {
 //
 // 迁移完成后清空游客库,防止第二个新账号登录时把同一份游客数据再并入一遍。
 
-/** 首次启动写入的示例种子标题:游客库只剩这些时视为「无真实数据」,不迁移(避免把演示数据上传云端)。 */
+/** 首次启动写入的示例种子标题:游客库只剩这些时视为「无真实数据」,不迁移(避免把演示数据上传云端)。与存储内容/isSeedOnly 判定耦合,保持中文。 */
 const SEED_TITLES = new Set([
-  '设计侧栏框架',
-  '验证桌面快捷键',
-  '收集收件箱',
-  '开源路线图',
-  '随手记点灵感',
+  '设计侧栏框架', // i18n-allow
+  '验证桌面快捷键', // i18n-allow
+  '收集收件箱', // i18n-allow
+  '开源路线图', // i18n-allow
+  '随手记点灵感', // i18n-allow
 ])
 
 function isSeedOnly(tasks: { title: string }[]): boolean {
@@ -371,12 +372,13 @@ export function useTaskStore() {
       // 仅在「游客默认库且确为空」时塞示例数据;自定义存储位置/账号分库不污染。
       const customDir = SqliteStore.getDataDir()
       if ((await repo.getAllTasks()).length === 0 && !customDir && !getActiveProfile()) {
+        // 演示种子:标题需与上方 SEED_TITLES 一致,入库内容不翻译。
         const seeds: Task[] = [
-          makeTask('today', '设计侧栏框架', { meta: '今天', priority: 'focus' }),
-          makeTask('today', '验证桌面快捷键', { meta: '原生钩子' }),
-          makeTask('today', '收集收件箱', { meta: '快速添加', done: true }),
-          makeTask('month', '开源路线图', { meta: '里程碑 0.1', priority: 'focus' }),
-          makeTask('month', '随手记点灵感', { meta: '稍后', priority: 'later' }),
+          makeTask('today', '设计侧栏框架', { meta: '今天', priority: 'focus' }), // i18n-allow
+          makeTask('today', '验证桌面快捷键', { meta: '原生钩子' }), // i18n-allow
+          makeTask('today', '收集收件箱', { meta: '快速添加', done: true }), // i18n-allow
+          makeTask('month', '开源路线图', { meta: '里程碑 0.1', priority: 'focus' }), // i18n-allow
+          makeTask('month', '随手记点灵感', { meta: '稍后', priority: 'later' }), // i18n-allow
         ]
         for (const t of seeds) await repo.saveTask(t)
       }
@@ -1073,10 +1075,10 @@ export function useTaskStore() {
     async (mode: 'overwrite' | 'merge'): Promise<RestoreResult> => {
       const repo = repoRef.current
       const engine = engineRef.current
-      if (!repo || !engine) return { ok: false, reason: '本地数据未就绪' }
+      if (!repo || !engine) return { ok: false, reason: t('store.dbNotReady') }
       // 会员闸门:受限用户不能从云端恢复数据(上传/下载双向限制)。
-      if (!hasFullAccess()) return { ok: false, reason: MEMBER_ONLY_TIP }
-      if (!syncEnabledRef.current) return { ok: false, reason: '尚未开启云同步' }
+      if (!hasFullAccess()) return { ok: false, reason: memberOnlyTip() }
+      if (!syncEnabledRef.current) return { ok: false, reason: t('store.syncNotEnabled') }
       const pushState = async (patch: Partial<SyncState>) => {
         await repo.setSyncState(patch)
         setSyncState(await repo.getSyncState())
@@ -1157,11 +1159,11 @@ export function useTaskStore() {
    */
   const autoFillFromCloud = useCallback(async (): Promise<RestoreResult> => {
     const repo = repoRef.current
-    if (!repo) return { ok: false, reason: '本地数据未就绪' }
+    if (!repo) return { ok: false, reason: t('store.dbNotReady') }
     const account = loadAccount()
-    if (!account?.token) return { ok: false, reason: '未登录' }
+    if (!account?.token) return { ok: false, reason: t('store.notLoggedIn') }
     // 会员闸门:受限用户不做云端补齐(登录后的自动恢复同样受限)。
-    if (!hasFullAccess()) return { ok: false, reason: MEMBER_ONLY_TIP }
+    if (!hasFullAccess()) return { ok: false, reason: memberOnlyTip() }
     try {
       const client = createHttpSyncClient(AUTH_BASE, account.token)
       const snapshot = await client.pull(null)

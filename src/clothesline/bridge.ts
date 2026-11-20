@@ -113,6 +113,10 @@ export interface ClotheslineSettings {
   rope_width_ratio: number
   /** 卡片尺寸缩放 1.0~2.0（1.0=最小=当前默认，2.0=放大一倍）。 */
   card_size: number
+  /** ★2026-11-19 反馈4：悬停自动展开（默认 true）——鼠标移到屏幕上缘自动展开，移开自动收起。 */
+  auto_expand_hover: boolean
+  /** ★2026-11-20 操作指引已看过：首次启用晾衣绳时自动弹一次，写盘后不再打扰。 */
+  guide_shown?: boolean
 }
 
 export type ClPulltabStyle = 'porcelain' | 'brass' | 'glass'
@@ -389,6 +393,14 @@ export const clSavePreview = (id: string, pngDataUrl: string) =>
 /** 读回缩略图 data URL（不用 asset://：未授权 asset scope 且会污染 canvas）。 */
 export const clReadPreview = (id: string) =>
   invoke<string | null>('clothesline_read_preview', { id })
+
+/** ★2026-11-19 反馈2：全分辨率原图落盘 originals/{id}.{ext}（预览覆盖层用，非缩略）。 */
+export const clSaveOriginal = (id: string, mime: string, dataUrl: string) =>
+  invoke<string>('cl_save_original', { id, mime, dataUrl })
+
+/** ★2026-11-19 反馈2：读回原图 data URL；老卡无原图返回 null，前端回退缩略图。 */
+export const clReadOriginal = (id: string) =>
+  invoke<string | null>('cl_read_original', { id })
 
 /** 只读卡片用量，配置页状态条显示「已挂 n/limit」。 */
 export const clGetCardUsage = () => invoke<number>('clothesline_get_card_usage')

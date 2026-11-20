@@ -61,6 +61,7 @@ import {
 import { saveDiskPref, loadDiskPref } from './prefs'
 import { isTauriRuntime } from './useTaskStore'
 import { invoke } from '@tauri-apps/api/core'
+import { t, useI18n } from './i18n'
 
 import cowImg from './assets/widget/cow.png'
 import sceneCowImg from './assets/widget/scene-cow.png'
@@ -238,8 +239,16 @@ async function centerOnMonitor(style: WidgetStyle) {
 
 /** 星期中文(参考图样式:4月24日 周四)。 */
 function dateLine(d: Date): string {
-  const wk = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()]
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${wk}`
+  const wk = [
+    t('widget.weekday.0'),
+    t('widget.weekday.1'),
+    t('widget.weekday.2'),
+    t('widget.weekday.3'),
+    t('widget.weekday.4'),
+    t('widget.weekday.5'),
+    t('widget.weekday.6'),
+  ][d.getDay()]
+  return t('widget.dateLine', { m: d.getMonth() + 1, d: d.getDate(), w: wk })
 }
 
 /** 今日工作时长(小时,一位小数,参考图样式 6.8 h)。 */
@@ -252,8 +261,9 @@ function workedHours(sec: number): string {
  * 非倒计时状态(已下班/休息日)回退为整段文案。
  */
 function CountdownCols({ text, cls }: { text: string; cls: string }) {
+  const { t } = useI18n()
   const segs = text.split(':')
-  const labels = ['小时', '分钟', '秒']
+  const labels = [t('widget.unit.hour'), t('widget.unit.minute'), t('widget.unit.second')]
   if (segs.length !== 3) {
     return <div className={`${cls}-fallback`}>{text}</div>
   }
@@ -313,12 +323,13 @@ function StatusBody({
   quip: string
   variant?: 'candy' | 'sunset'
 }) {
+  const { t } = useI18n()
   const def = stateDef(stateKey)
   return (
     <div className={`st-body${variant ? ` st-body-${variant}` : ''}`}>
       <span className="st-avatar" style={{ background: def.bg }}>{def.emoji}</span>
       <div className="st-text">
-        <div className="st-name" style={{ color: def.fg }}>{def.name}</div>
+        <div className="st-name" style={{ color: def.fg }}>{t(def.name)}</div>
         <div className="st-sub">{sub}</div>
         <div className="st-quip">“{quip}”</div>
       </div>
@@ -340,12 +351,13 @@ function StatePicker({
   onRestore: () => void
   onClose: () => void
 }) {
+  const { t } = useI18n()
   return (
     <div className="st-picker-mask" data-no-drag onClick={onClose}>
       <div className="st-picker" onClick={(e) => e.stopPropagation()}>
         <div className="st-picker-head">
-          <span>选择今日状态</span>
-          <button type="button" className="st-picker-close" onClick={onClose} aria-label="关闭">×</button>
+          <span>{t('widget.picker.title')}</span>
+          <button type="button" className="st-picker-close" onClick={onClose} aria-label={t('widget.aria.close')}>×</button>
         </div>
         <div className="st-pgrid">
           {WIDGET_STATES.map((d) => (
@@ -357,7 +369,7 @@ function StatePicker({
               onClick={() => onPick(d.key)}
             >
               <span className="st-pitem-emoji">{d.emoji}</span>
-              <span className="st-pitem-name">{d.name}</span>
+              <span className="st-pitem-name">{t(d.name)}</span>
             </button>
           ))}
         </div>
@@ -366,7 +378,7 @@ function StatePicker({
           className="st-pauto"
           onClick={isAuto ? () => onPick(current) : onRestore}
         >
-          {isAuto ? '当前为自动模式（可点击切换为手动模式）' : '当前为手动模式（点击恢复自动切换）'}
+          {isAuto ? t('widget.picker.autoMode') : t('widget.picker.manualMode')}
         </button>
       </div>
     </div>
@@ -374,6 +386,7 @@ function StatePicker({
 }
 
 export function WidgetView() {
+  const { t } = useI18n()
   const [style, setStyle] = useState<WidgetStyle>('candy')
   const [now, setNow] = useState(() => new Date())
   // 今日状态:手动覆盖(仅当天有效) + 选择弹窗 + 趣味计时起点(进入当前状态的时间戳)
@@ -419,7 +432,7 @@ export function WidgetView() {
         const fp = await win.outerPosition()
         const fs = await win.outerSize()
         void invoke('app_log', {
-          message: `[widget] 窗口就位 pos=(${fp.x},${fp.y}) size=${fs.width}x${fs.height} style=${s}`,
+          message: `[widget] window ready pos=(${fp.x},${fp.y}) size=${fs.width}x${fs.height} style=${s}`,
         }).catch(() => {})
       } catch {
         /* 忽略 */
@@ -557,20 +570,20 @@ export function WidgetView() {
   const countdownText = counting
     ? fmtDur(stat.remainSec)
     : stat.status === 'after'
-      ? '已下班'
+      ? t('salary.offDone')
       : stat.status === 'rest'
-        ? '休息日'
+        ? t('widget.status.rest')
         : '--'
   const countdownSub = counting
     ? stat.status === 'before'
-      ? '加油！马上开工啦！'
-      : '加油！马上下班啦！'
+      ? t('widget.cheer.before')
+      : t('widget.cheer.leave')
     : stat.status === 'after'
-      ? '今天辛苦啦，好好休息~'
-      : '好好享受假期吧!'
-  // candy 圆环内的加油语按「！」拆成两行(参考图样式:加油！/马上下班啦！)
+      ? t('widget.cheer.afterWork')
+      : t('widget.cheer.holiday')
+  // candy 圆环内的加油语按句末标点拆成两行(参考图样式:加油！/马上下班啦！)
   const subLines = counting
-    ? countdownSub.split('！').filter(Boolean).map((s) => `${s}！`)
+    ? countdownSub.split(/(?<=[！!])/).filter(Boolean).map((s) => s.trim())
     : []
 
   function handlePointerDown(e: React.PointerEvent) {
@@ -593,14 +606,14 @@ export function WidgetView() {
   // —— 风格一:candy 奶牛萌卡(卡片 440×370)——
   if (style === 'candy') {
     return (
-      <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label="牛马计薪器桌面组件">
+      <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label={t('widget.aria.app')}>
         <div className="wv-card wv-candy">
-          <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label="关闭组件">×</button>
+          <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label={t('widget.aria.closeWidget')}>×</button>
           <div className="cd-hero">
             <img className="cd-cow" src={cowImg} alt="" draggable={false} />
             <div className="cd-bubble">
               <div className="cd-bubble-title">
-                牛马寄语 <span className="cd-heart">❤</span>
+                {t('salary.quoteTitle')} <span className="cd-heart">❤</span>
               </div>
               <p className="cd-quote"><QuoteRows text={quote} maxRows={3} balance /></p>
               <svg className="cd-sun" viewBox="0 0 24 24" aria-hidden="true">
@@ -632,7 +645,7 @@ export function WidgetView() {
                     <rect x="7" y="2.6" width="6" height="3" rx="1.4" fill="#3cb878" stroke="#fff" strokeWidth="1" />
                   </svg>
                 </span>
-                <span className="cd-card-title">今日状态</span>
+                <span className="cd-card-title">{t('widget.card.status')}</span>
                 <EditIcon onOpen={() => setPickerOpen(true)} />
                 <span className="cd-card-date">{dateLine(now)}</span>
               </div>
@@ -646,8 +659,8 @@ export function WidgetView() {
                     <path d="M10 6v4.4l3 1.8" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </span>
-                <span className="cd-card-title">下班倒计时</span>
-                <span className="cd-card-date">今日 {cfg.workEnd}</span>
+                <span className="cd-card-title">{t('widget.card.countdown')}</span>
+                <span className="cd-card-date">{t('widget.card.todayUntil', { time: cfg.workEnd })}</span>
               </div>
               <div className="cd-ring">
                 <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -682,10 +695,10 @@ export function WidgetView() {
             </div>
           </div>
           <div className="cd-pills">
-            <span className="cd-pill"><i className="cd-pi cd-pi-blue">✓</i>好好工作</span>
-            <span className="cd-pill"><i className="cd-pi cd-pi-pink">❤</i>按时下班</span>
-            <span className="cd-pill"><i className="cd-pi cd-pi-green">✓</i>好好生活</span>
-            <span className="cd-pill"><i className="cd-pi cd-pi-yellow">★</i>保持开心</span>
+            <span className="cd-pill"><i className="cd-pi cd-pi-blue">✓</i>{t('widget.pill.work')}</span>
+            <span className="cd-pill"><i className="cd-pi cd-pi-pink">❤</i>{t('widget.pill.offOnTime')}</span>
+            <span className="cd-pill"><i className="cd-pi cd-pi-green">✓</i>{t('widget.pill.liveWell')}</span>
+            <span className="cd-pill"><i className="cd-pi cd-pi-yellow">★</i>{t('widget.pill.stayHappy')}</span>
           </div>
         </div>
         <FlowersTL />
@@ -698,9 +711,9 @@ export function WidgetView() {
   // —— 风格二:wide 小马宽屏(卡片 560×240)——
   if (style === 'wide') {
     return (
-      <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label="牛马计薪器桌面组件">
+      <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label={t('widget.aria.app')}>
         <div className="wv-card wv-wide">
-          <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label="关闭组件">×</button>
+          <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label={t('widget.aria.closeWidget')}>×</button>
           <div className="wd-quote">
             <img className="wd-quote-bg" src={wideCardImg} alt="" draggable={false} />
             <div className="wd-quote-inner">
@@ -709,21 +722,21 @@ export function WidgetView() {
                   <path d="M5 15c0-5 2.4-8.4 6-10l1 1.8C9.6 8.2 8.6 10 8.4 11.6c.3-.1.7-.2 1.1-.2 1.7 0 3 1.3 3 3.1S11.1 18 9.2 18C6.7 18 5 16.9 5 15Z" fill="#5b84b8" />
                   <path d="M14 15c0-5 2.4-8.4 6-10l1 1.8c-2.4 1.4-3.4 3.2-3.6 4.8.3-.1.7-.2 1.1-.2 1.7 0 3 1.3 3 3.1S20.1 18 18.2 18c-2.5 0-4.2-1.1-4.2-3Z" fill="#5b84b8" />
                 </svg>
-                牛马寄语
+                {t('salary.quoteTitle')}
               </div>
               <p className="wd-quote-text"><QuoteRows text={quote} maxRows={5} /></p>
             </div>
-            <div className="wd-doodle">加油！打工人！</div>
+            <div className="wd-doodle">{t('widget.doodle')}</div>
           </div>
           <div className="wd-col">
             <div className="wd-card wd-earn">
               <span className="wd-state-emoji-lg" style={{ background: adef.bg }}>{adef.emoji}</span>
               <div className="wd-card-mid">
                 <div className="wd-card-title">
-                  今日状态
+                  {t('widget.card.status')}
                   <EditIcon onOpen={() => setPickerOpen(true)} />
                 </div>
-                <div className="wd-state-name" style={{ color: adef.fg }}>{adef.name}</div>
+                <div className="wd-state-name" style={{ color: adef.fg }}>{t(adef.name)}</div>
                 <div className="wd-state-sub">{subtitle}</div>
               </div>
               <div className="wd-earn-right">
@@ -738,14 +751,14 @@ export function WidgetView() {
                 </svg>
               </span>
               <div className="wd-card-mid">
-                <div className="wd-card-title">下班倒计时</div>
+                <div className="wd-card-title">{t('widget.card.countdown')}</div>
                 {counting ? (
                   <CountdownCols text={countdownText} cls="wd-down" />
                 ) : (
                   <div className="wd-down-fallback">{countdownText}</div>
                 )}
               </div>
-              <div className="wd-down-note">坚持一下~<br />下班见自由!</div>
+              <div className="wd-down-note">{t('widget.hangIn')}<br />{t('widget.freedomSoon')}</div>
               <svg className="wd-mtn" viewBox="0 0 56 34" aria-hidden="true">
                 <circle cx="44" cy="9" r="5" fill="none" stroke="#9db8d8" strokeWidth="2" />
                 <polyline points="2,30 14,14 22,24 32,10 44,30" fill="none" stroke="#9db8d8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -760,9 +773,9 @@ export function WidgetView() {
 
   // —— 风格三:sunset 暖阳三栏(卡片 560×230)——
   return (
-    <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label="牛马计薪器桌面组件">
+    <div className="wv" onPointerDown={handlePointerDown} role="application" aria-label={t('widget.aria.app')}>
       <div className="wv-card wv-sunset">
-        <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label="关闭组件">×</button>
+        <button type="button" className="wv-close" data-no-drag onClick={handleClose} aria-label={t('widget.aria.closeWidget')}>×</button>
         <div className="st-quote">
           <div className="st-quote-head">
             <span className="st-quote-title">
@@ -784,7 +797,7 @@ export function WidgetView() {
                   )
                 })}
               </svg>
-              牛马寄语
+              {t('salary.quoteTitle')}
             </span>
             <span className="st-date">{dateLine(now)}</span>
           </div>
@@ -799,13 +812,13 @@ export function WidgetView() {
                 <rect x="7" y="2.6" width="6" height="3" rx="1.4" fill="#3cb878" stroke="#fff" strokeWidth="1" />
               </svg>
             </span>
-            <span className="st-col-title">今日状态</span>
+            <span className="st-col-title">{t('widget.card.status')}</span>
             <EditIcon onOpen={() => setPickerOpen(true)} />
           </div>
           <StatusBody stateKey={activeKey} sub={subtitle} quip={quip} variant="sunset" />
           <div className="st-foot">
             <div className="st-foot-item">
-              <span>今日工作时长</span>
+              <span>{t('widget.foot.workedHours')}</span>
               <strong>
                 <svg className="st-foot-ico" viewBox="0 0 20 20" aria-hidden="true">
                   <circle cx="10" cy="10" r="7.2" fill="none" stroke="#5a6470" strokeWidth="1.8" />
@@ -816,7 +829,7 @@ export function WidgetView() {
             </div>
             <div className="st-foot-sep" />
             <div className="st-foot-item">
-              <span>时薪（约）</span>
+              <span>{t('widget.foot.hourly')}</span>
               <strong>
                 <svg className="st-foot-ico st-foot-ico-green" viewBox="0 0 20 20" aria-hidden="true">
                   <polyline points="3,14 8,9 11,11.5 17,5.5" fill="none" stroke="#2fa46b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -835,7 +848,7 @@ export function WidgetView() {
                 <path d="M10 6v4.4l3 1.8" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span className="st-col-title">下班倒计时</span>
+            <span className="st-col-title">{t('widget.card.countdown')}</span>
           </div>
           <div className="st-down-mid">
             {counting ? (
@@ -852,7 +865,7 @@ export function WidgetView() {
           </div>
           <div className="st-down-pill">
             <span className="st-pill-ico">☕</span>
-            <span className="st-pill-text">再坚持一下，就能见到自由的晚霞了！</span>
+            <span className="st-pill-text">{t('widget.sunset.note')}</span>
             <svg className="st-pill-arrow" viewBox="0 0 20 12" aria-hidden="true">
               <path d="M2 9 Q6 2 10 6 T18 5" fill="none" stroke="#b8c2d8" strokeWidth="1.6" strokeLinecap="round" />
               <path d="M15 3.5 L18.4 4.8 L16 7.4" fill="none" stroke="#b8c2d8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

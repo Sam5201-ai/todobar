@@ -11,6 +11,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emitTo } from '@tauri-apps/api/event';
 import { addPin } from './store';
+import { t } from '../i18n';
 import type { ScreenCapture } from './types';
 
 export const FULL_KEY = 'shot-full';
@@ -99,7 +100,7 @@ export function loadImageDataUrl(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('图片加载失败'));
+    img.onerror = () => reject(new Error(t('shot.imgLoadFail')));
     img.src = dataUrl;
   });
 }
@@ -158,7 +159,7 @@ export async function finishOverlay(): Promise<void> {
     await Promise.race([
       invoke('finish_capture_overlay'),
       new Promise<never>((_, rej) =>
-        window.setTimeout(() => rej(new Error('finish_capture_overlay 超时(3s未响应)')), 3000),
+        window.setTimeout(() => rej(new Error(t('shot.overlayFinishTimeout'))), 3000),
       ),
     ]);
   } catch {
@@ -218,6 +219,35 @@ export async function startCapture(mode: string): Promise<void> {
       await shotLog(`overlay not visible after attempt ${attempt}, re-emitting`);
     }
     await shotLog('overlay failed to show after 3 attempts');
+    // ★2026-11-20 覆盖层自愈：覆盖窗页面可能在应用启动瞬间加载失败（dev 模式 vite
+    // 冷启动竞态 / WebView2 假死），此前会永久沉默。让 Rust 重载覆盖层 webview
+    // （同 pin 看门狗的「重载 webview 自救」路径），等页面重新挂载后重试一轮。
+    try {
+      await invoke('rescue_capture_overlay');
+      await new Promise((r) => setTimeout(r, 2500));
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await emitTo(OVERLAY_LABEL, 'overlay-show');
+        } catch {
+          /* 投递失败进入下一轮 */
+        }
+        for (let i = 0; i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 150));
+          try {
+            if (await invoke<boolean>('is_overlay_active')) {
+              await shotLog(`overlay shown after rescue (attempt ${attempt})`);
+              return;
+            }
+          } catch {
+            /* 查询失败继续等 */
+          }
+        }
+        await shotLog(`overlay still not visible after rescue attempt ${attempt}`);
+      }
+      await shotLog('overlay rescue exhausted');
+    } catch (e) {
+      await shotLog(`overlay rescue failed: ${String(e)}`);
+    }
     // 主窗未隐藏、屏幕未动,用户可再次触发。
   } catch (e) {
     console.error('startCapture 失败', e);
@@ -260,7 +290,7 @@ export async function pinImage(
       height: rh,
     }),
     new Promise<never>((_, rej) =>
-      window.setTimeout(() => rej(new Error('创建贴图窗口超时(3s未响应)')), 3000),
+      window.setTimeout(() => rej(new Error(t('shot.pinWindowTimeout'))), 3000),
     ),
   ]);
   void shotLog(`pin window label=${label} size=${rw}x${rh} at=(${rx},${ry})`);
@@ -319,7 +349,7 @@ export async function pinFromClipboardOrLast(): Promise<void> {
     source = 'clipboard';
   }
   if (!pngBase64) {
-    void shotLog('pin source MISSING: 无上次截图且剪贴板无图片');
+    void shotLog(t('shot.pinSourceMissing'));
     return;
   }
   void shotLog(`pin source=${source} bytes=${pngBase64.length}`);

@@ -76,12 +76,21 @@ const FILES = [
   ['wallpaper.jpg', 'wallpaper.jpg', 'assets'],
   ['admin/index.html', 'admin/index.html', 'pages'],
   ['assets/site.css', 'assets/site.css', 'assets'],
+  // 下载站多语言:运行时引擎 + 字典(6 个)
+  ['assets/site-i18n.js', 'assets/site-i18n.js', 'assets'],
+  ['assets/i18n/common.js', 'assets/i18n/common.js', 'assets'],
+  ['assets/i18n/index.js', 'assets/i18n/index.js', 'assets'],
+  ['assets/i18n/features.js', 'assets/i18n/features.js', 'assets'],
+  ['assets/i18n/faq.js', 'assets/i18n/faq.js', 'assets'],
+  ['assets/i18n/compare.js', 'assets/i18n/compare.js', 'assets'],
+  ['assets/i18n/changelog.js', 'assets/i18n/changelog.js', 'assets'],
   ['assets/logo.webp', 'assets/logo.webp', 'assets'],
   ['assets/panel-crop.webp', 'assets/panel-crop.webp', 'assets'],
   ['assets/wallpaper.webp', 'assets/wallpaper.webp', 'assets'],
   ...['01-todo', '02-birthday', '03-calculator', '04-huangli', '05-salary', '06-screenshot', '07-notes', '08-clipboard'].map(
     (n) => [`assets/shot-${n}.webp`, `assets/shot-${n}.webp`, 'assets'],
   ),
+  ['assets/shot-09-clothesline.jpg', 'assets/shot-09-clothesline.jpg', 'assets'],
   ...['birthday', 'calculator', 'home-dark', 'home-light', 'huangli', 'panel-crop', 'salary', 'settings-bg'].map(
     (n) => [`screenshots/${n}.png`, `screenshots/${n}.png`, 'assets'],
   ),

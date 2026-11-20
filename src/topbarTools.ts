@@ -11,8 +11,9 @@
  * 367 / 327 / 295 容器查询阈值(容器内容盒 = 面板宽度 − 33)。
  */
 
-import { allows, capsReady, isMac } from './platformCapabilities'
+import { allows, isMac } from './platformCapabilities'
 import type { CapabilityId } from './platformCapabilities'
+import { t, type LocaleKey } from './i18n'
 
 export type TopbarToolId =
   | 'screenshot'
@@ -45,22 +46,22 @@ export type TopbarTool = {
   requires?: CapabilityId
 }
 
-/** 顺序即默认优先级:新工具优先,同步与设置收尾。 */
+/** 顺序即默认优先级:新工具优先,同步与设置收尾。name/tip 为中文参考,展示经 toolName()/toolTip() 走 t()。 */
 export const TOPBAR_TOOLS: TopbarTool[] = [
-  { id: 'screenshot', name: '截图', tip: '截图 · 框选识别', vip: true, gated: true, keyHint: 'Ctrl+Shift+A', requires: 'screenshot' },
-  { id: 'note', name: '便利签', tip: '新建便利签', vip: true, gated: true, keyHint: 'Alt+N' },
-  { id: 'clipboard', name: '剪贴板', tip: '剪贴板历史', vip: true, gated: true, keyHint: 'Ctrl+Shift+V' },
-  { id: 'calculator', name: '计算器', tip: '计算器', vip: false, gated: false, keyHint: '' },
-  { id: 'huangli', name: '黄历', tip: '黄历 · 万年历', vip: false, gated: false, keyHint: '' },
-  { id: 'salary', name: '牛马计薪器', tip: '牛马计薪器', vip: false, gated: false, keyHint: '' },
-  { id: 'recorder', name: '录音机', tip: '录音机', vip: true, gated: false, keyHint: '' },
+  { id: 'screenshot', name: '截图', tip: '截图 · 框选识别', vip: true, gated: true, keyHint: 'Ctrl+Shift+A', requires: 'screenshot' }, // i18n-allow
+  { id: 'note', name: '便利签', tip: '新建便利签', vip: true, gated: true, keyHint: 'Alt+N' }, // i18n-allow
+  { id: 'clipboard', name: '剪贴板', tip: '剪贴板历史', vip: true, gated: true, keyHint: 'Ctrl+Shift+V' }, // i18n-allow
+  { id: 'calculator', name: '计算器', tip: '计算器', vip: false, gated: false, keyHint: '' }, // i18n-allow
+  { id: 'huangli', name: '黄历', tip: '黄历 · 万年历', vip: false, gated: false, keyHint: '' }, // i18n-allow
+  { id: 'salary', name: '牛马计薪器', tip: '牛马计薪器', vip: false, gated: false, keyHint: '' }, // i18n-allow
+  { id: 'recorder', name: '录音机', tip: '录音机', vip: true, gated: false, keyHint: '' }, // i18n-allow
   // 晾衣绳(0.4.65):非会员 / 无闸门,拉新记忆点。放在 sync 前,顶栏装不下时
   // 自动进「⋯ 更多」;老用户经下方 MIGRATE_IDS 显式补进 enabled 保证可达。
-  { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '', requires: 'clothesline' },
+  { id: 'clothesline', name: '晾衣绳', tip: '晾衣绳 · 桌面待办卡片', vip: false, gated: false, keyHint: '', requires: 'clothesline' }, // i18n-allow
   // 归档(2026-11-18):便利签/随手记/番茄的统一归档页。非会员无闸门;
   // 10 个工具 > 槽位上限(≤6),默认排序天然落进「⋯ 更多」,新旧用户默认均不占顶栏槽。
-  { id: 'archive', name: '归档', tip: '归档 · 便利签/随手记/番茄', vip: false, gated: false, keyHint: '' },
-  { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' },
+  { id: 'archive', name: '归档', tip: '归档 · 便利签/随手记/番茄', vip: false, gated: false, keyHint: '' }, // i18n-allow
+  { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' }, // i18n-allow
 ]
 
 export type TopbarToolsPref = {
@@ -73,6 +74,42 @@ export type TopbarToolsPref = {
 export const DEFAULT_TOPBAR_TOOLS: TopbarToolsPref = {
   order: TOPBAR_TOOLS.map((t) => t.id),
   enabled: TOPBAR_TOOLS.map((t) => t.id),
+}
+
+/** 工具显示名 / tooltip 的词条映射(注册表里的 name/tip 仅作中文参考,展示一律经 t())。 */
+const NAME_KEYS: Record<TopbarToolId, LocaleKey> = {
+  screenshot: 'tool.screenshot',
+  note: 'tool.note',
+  clipboard: 'tool.clipboard',
+  calculator: 'tool.calculator',
+  huangli: 'tool.huangli',
+  salary: 'tool.salary',
+  recorder: 'tool.recorder',
+  clothesline: 'tool.clothesline',
+  archive: 'tool.archive',
+  sync: 'tool.sync',
+}
+const TIP_KEYS: Record<TopbarToolId, LocaleKey> = {
+  screenshot: 'tool.screenshot.tip',
+  note: 'tool.note.tip',
+  clipboard: 'tool.clipboard.tip',
+  calculator: 'tool.calculator.tip',
+  huangli: 'tool.huangli.tip',
+  salary: 'tool.salary.tip',
+  recorder: 'tool.recorder.tip',
+  clothesline: 'tool.clothesline.tip',
+  archive: 'tool.archive.tip',
+  sync: 'tool.sync.tip',
+}
+
+/** 工具显示名(当前语言)。 */
+export function toolName(id: TopbarToolId): string {
+  return t(NAME_KEYS[id])
+}
+
+/** 工具 tooltip(当前语言)。 */
+export function toolTip(id: TopbarToolId): string {
+  return t(TIP_KEYS[id])
 }
 
 const ALL_IDS = TOPBAR_TOOLS.map((t) => t.id)
@@ -150,13 +187,13 @@ export function splitTopbarTools(
   pref: TopbarToolsPref,
   panelWidth: number,
 ): { shown: TopbarTool[]; hidden: TopbarTool[]; slots: number } {
-  const ready = capsReady()
   const list = pref.enabled
     .map((id) => BY_ID[id])
     .filter(Boolean)
-    // 能力表就绪前先隐藏受控工具,避免 Mac 首帧闪出截图/晾衣绳;
-    // 就绪后按平台能力表判断。无 requires 的工具始终显示。
-    .filter((t) => !t.requires || (ready && allows(t.requires)))
+    // 仅按平台能力判断：caps() 未加载时已按 UA 回落平台正确表（Win=true /
+    // Mac=false），无需再等 capsReady()。此前用 capsReady() 门控会在 dev 热重载
+    // 或 invoke 卡住时把 Windows 截图入口一并隐藏。无 requires 的工具始终显示。
+    .filter((t) => !t.requires || allows(t.requires))
   const slots = topbarSlots(panelWidth)
   return { shown: list.slice(0, slots), hidden: list.slice(slots), slots }
 }

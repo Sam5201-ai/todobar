@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { VipBadge } from './VipBadge'
 import { isMac } from './platformCapabilities'
+import { t } from './i18n'
 
 // 单独的修饰键(不作为组合主键)。
 const MODIFIER_KEYS = new Set([
@@ -162,9 +163,9 @@ export function ShortcutField({
           type="text"
           className="shot-shortcut-text is-stored"
           value={locked ? '' : displayShortcut(value)}
-          placeholder={locked ? '会员专属' : undefined}
+          placeholder={locked ? t('shortcut.vipOnly') : undefined}
           readOnly
-          title={locked ? '会员专属功能,开通会员后可用' : '双击修改快捷键'}
+          title={locked ? t('shortcut.vipLocked') : t('shortcut.dblClickEdit')}
           onDoubleClick={locked ? () => onLocked?.() : startEdit}
         />
       </div>
@@ -172,7 +173,7 @@ export function ShortcutField({
   }
 
   const display =
-    preview.length > 0 ? `${preview.join('+')}+…` : displayShortcut(draft) || '按下组合键'
+    preview.length > 0 ? `${preview.join('+')}+…` : displayShortcut(draft) || t('shortcut.pressKeys')
 
   return (
     <div className="shot-shortcut-row">
@@ -184,17 +185,17 @@ export function ShortcutField({
             className={`shot-shortcut-text ${conflict ? 'is-conflict' : ''}`}
             value={display}
             readOnly
-            placeholder="按下组合键"
+            placeholder={t('shortcut.pressKeys')}
           />
           <button
             type="button"
             className="shot-edit-btn is-save"
-            title="保存"
+            title={t('common.save')}
             onClick={() => void commit()}
           >
             <Check size={14} />
           </button>
-          <button type="button" className="shot-edit-btn" title="取消" onClick={cancelEdit}>
+          <button type="button" className="shot-edit-btn" title={t('common.cancel')} onClick={cancelEdit}>
             <X size={14} />
           </button>
         </span>

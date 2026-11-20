@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { getMonthCells, getHuangliDetail, hlKey, type HlCell, type HlDetail } from './huangli'
+import { useI18n, type LocaleKey } from './i18n'
 
-const WEEK_HEADERS = ['一', '二', '三', '四', '五', '六', '日']
+/** 周表头(周一→周日,渲染期 t() 取词)。 */
+const WEEK_HEADERS: LocaleKey[] = ['huangli.week.1', 'huangli.week.2', 'huangli.week.3', 'huangli.week.4', 'huangli.week.5', 'huangli.week.6', 'huangli.week.7']
 
 /** 用中文数字渲染年份/月份选择器选项。 */
 function yearOptions(): number[] {
@@ -17,6 +19,7 @@ function yearOptions(): number[] {
  * 自包含组件,工具栏用 sticky 固定在滚动区顶部。
  */
 export function HuangliView() {
+  const { t, locale } = useI18n()
   const now = new Date()
   const todayKey = hlKey(now.getFullYear(), now.getMonth() + 1, now.getDate())
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
@@ -26,7 +29,7 @@ export function HuangliView() {
   const detail: HlDetail = useMemo(() => {
     const [y, m, d] = selectedKey.split('-').map(Number)
     return getHuangliDetail(y, m, d)
-  }, [selectedKey])
+  }, [selectedKey, locale])
 
   const shiftMonth = (delta: number) => {
     setCursor((c) => {
@@ -49,59 +52,59 @@ export function HuangliView() {
       {/* 工具栏:年月筛选 + 回到今天 */}
       <div className="hl-toolbar">
         <div className="hl-nav-group">
-          <button type="button" className="hl-nav-btn" aria-label="上一年" onClick={() => setCursor((c) => ({ ...c, year: c.year - 1 }))}>
+          <button type="button" className="hl-nav-btn" aria-label={t('huangli.prevYear')} onClick={() => setCursor((c) => ({ ...c, year: c.year - 1 }))}>
             <ChevronLeft size={13} />
           </button>
           <select
             className="hl-select"
             value={cursor.year}
             onChange={(e) => setCursor((c) => ({ ...c, year: Number(e.target.value) }))}
-            aria-label="选择年份"
+            aria-label={t('huangli.selectYear')}
           >
             {yearOptions().map((y) => (
               <option key={y} value={y}>
-                {y}年
+                {t('huangli.yearOption', { n: y })}
               </option>
             ))}
           </select>
-          <button type="button" className="hl-nav-btn" aria-label="下一年" onClick={() => setCursor((c) => ({ ...c, year: c.year + 1 }))}>
+          <button type="button" className="hl-nav-btn" aria-label={t('huangli.nextYear')} onClick={() => setCursor((c) => ({ ...c, year: c.year + 1 }))}>
             <ChevronRight size={13} />
           </button>
         </div>
         <div className="hl-nav-group">
-          <button type="button" className="hl-nav-btn" aria-label="上一月" onClick={() => shiftMonth(-1)}>
+          <button type="button" className="hl-nav-btn" aria-label={t('huangli.prevMonth')} onClick={() => shiftMonth(-1)}>
             <ChevronLeft size={13} />
           </button>
           <select
             className="hl-select"
             value={cursor.month}
             onChange={(e) => setCursor((c) => ({ ...c, month: Number(e.target.value) }))}
-            aria-label="选择月份"
+            aria-label={t('huangli.selectMonth')}
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option key={m} value={m}>
-                {m}月
+                {t('huangli.monthOption', { n: m })}
               </option>
             ))}
           </select>
-          <button type="button" className="hl-nav-btn" aria-label="下一月" onClick={() => shiftMonth(1)}>
+          <button type="button" className="hl-nav-btn" aria-label={t('huangli.nextMonth')} onClick={() => shiftMonth(1)}>
             <ChevronRight size={13} />
           </button>
         </div>
         <button type="button" className="hl-today-btn" onClick={gotoToday}>
-          回到今天
+          {t('huangli.today')}
         </button>
       </div>
 
       {/* 月历 */}
-      <div className="hl-grid" role="grid" aria-label={`${cursor.year}年${cursor.month}月黄历`}>
+      <div className="hl-grid" role="grid" aria-label={t('huangli.gridAria', { y: cursor.year, m: cursor.month })}>
         <div className="hl-grid-title">
-          {cursor.year}年{cursor.month}月
+          {t('huangli.yearMonth', { y: cursor.year, m: cursor.month })}
         </div>
         <div className="hl-week-row">
-          {WEEK_HEADERS.map((w) => (
-            <div key={w} className={`hl-week-cell ${w === '六' || w === '日' ? 'is-weekend' : ''}`}>
-              {w}
+          {WEEK_HEADERS.map((w, i) => (
+            <div key={w} className={`hl-week-cell ${i >= 5 ? 'is-weekend' : ''}`}>
+              {t(w)}
             </div>
           ))}
         </div>
@@ -123,6 +126,7 @@ export function HuangliView() {
 }
 
 function DayCell({ cell, selected, onSelect }: { cell: HlCell; selected: boolean; onSelect: () => void }) {
+  const { t } = useI18n()
   const numCls = cell.badgeLegal || cell.weekend ? 'is-red' : ''
   return (
     <button
@@ -137,7 +141,7 @@ function DayCell({ cell, selected, onSelect }: { cell: HlCell; selected: boolean
     >
       {cell.badge && (
         <i className={`hl-badge ${cell.badge === 'work' ? 'is-work' : cell.badgeLegal ? 'is-legal' : 'is-rest'}`}>
-          {cell.badge === 'work' ? '班' : '休'}
+          {cell.badge === 'work' ? t('huangli.badge.work') : t('huangli.badge.rest')}
         </i>
       )}
       <strong className={`hl-day-num ${numCls}`}>{cell.day}</strong>
@@ -173,28 +177,33 @@ function InfoItem({ label, value, wide }: { label: string; value: string; wide?:
 }
 
 function DetailPanel({ detail, isToday }: { detail: HlDetail; isToday: boolean }) {
+  const { t } = useI18n()
+  // 星期:农历库的 weekCn 是中文字符专名,这里按日期换算本地星期再取词条(周日→huangli.week.7)。
+  const dow = new Date(detail.year, detail.month - 1, detail.day).getDay()
+  const week = t(WEEK_HEADERS[(dow + 6) % 7])
   return (
     <div className="hl-detail">
       <div className="hl-detail-banner">
-        {detail.year}年{detail.month}月{detail.day}日 详细信息{isToday ? ' · 今天' : ''}
+        {t('huangli.detailTitle', { y: detail.year, m: detail.month, d: detail.day })}
+        {isToday ? t('huangli.todaySuffix') : ''}
       </div>
 
       {/* 大日期卡 */}
       <div className="hl-big-card">
         <div className="hl-big-head">
-          {detail.year}年 {detail.month}月（{detail.lunarMonthSize}）星期{detail.weekCn}
+          {t('huangli.bigHead', { y: detail.year, m: detail.month, size: detail.lunarMonthSize, week })}
         </div>
         <div className="hl-big-num">{detail.day}</div>
         <div className="hl-big-lunar">{detail.lunarMonthDay}</div>
         <div className="hl-big-ganzhi">
-          {detail.yearGZ}年【{detail.shengXiao}年】 {detail.monthGZ}月 {detail.dayGZ}日
+          {t('huangli.gzLine', { y: detail.yearGZ, sx: detail.shengXiao, m: detail.monthGZ, d: detail.dayGZ })}
         </div>
       </div>
 
       <div className="hl-tags-block">
         {detail.festivals.length > 0 && (
           <div className="hl-tag-row">
-            <i className="hl-tag-label tone-info">节日</i>
+            <i className="hl-tag-label tone-info">{t('huangli.tag.festival')}</i>
             <div className="hl-tags">
               {detail.festivals.map((f) => (
                 <span key={f} className="hl-tag tone-info">
@@ -204,36 +213,43 @@ function DetailPanel({ detail, isToday }: { detail: HlDetail; isToday: boolean }
             </div>
           </div>
         )}
-        <TagRow label="宜" tags={detail.yi} tone="good" />
-        <TagRow label="忌" tags={detail.ji} tone="bad" />
-        <TagRow label="吉神宜趋" tags={detail.jiShen} tone="good" />
-        <TagRow label="凶神宜忌" tags={detail.xiongSha} tone="bad" />
+        <TagRow label={t('huangli.tag.yi')} tags={detail.yi} tone="good" />
+        <TagRow label={t('huangli.tag.ji')} tags={detail.ji} tone="bad" />
+        <TagRow label={t('huangli.tag.jiShen')} tags={detail.jiShen} tone="good" />
+        <TagRow label={t('huangli.tag.xiongSha')} tags={detail.xiongSha} tone="bad" />
       </div>
 
       {/* 详细信息表 */}
       <div className="hl-info-grid">
-        <InfoItem label="生肖" value={detail.shengXiao} />
-        <InfoItem label="星座" value={detail.xingZuo} />
-        <InfoItem label="冲" value={detail.chong} />
-        <InfoItem label="煞" value={detail.sha} />
-        <InfoItem label="彭祖百忌" value={detail.pengZu} wide />
-        <InfoItem label="胎神占方" value={detail.taiZhan} />
-        <InfoItem label="年五行" value={detail.yearNaYin} />
-        <InfoItem label="月五行" value={detail.monthNaYin} />
-        <InfoItem label="日五行" value={detail.dayNaYin} />
-        <InfoItem label="季节" value={detail.season} />
-        <InfoItem label="星宿" value={detail.xiuFull ? `${detail.xiu}宿（${detail.xiuFull}）· ${detail.xiuLuck}` : ''} wide />
-        <InfoItem label="节气" value={detail.jieQiText} wide />
-        <InfoItem label="儒略日" value={String(detail.julianDay)} />
-        <InfoItem label="佛历年" value={detail.buddhistYear} />
-        <InfoItem label="伊斯兰历" value={detail.islamic} />
-        <InfoItem label="六曜" value={detail.liuYao} />
-        <InfoItem label="十二神" value={detail.zhiXing ? `${detail.zhiXing}执位` : ''} />
-        <InfoItem label="喜神方位" value={detail.posXi} />
-        <InfoItem label="财神方位" value={detail.posCai} />
-        <InfoItem label="日禄" value={detail.dayLu} wide />
-        <InfoItem label="数九" value={detail.shuJiu} />
-        <InfoItem label="三伏" value={detail.fu} />
+        <InfoItem label={t('huangli.info.shengXiao')} value={detail.shengXiao} />
+        <InfoItem label={t('huangli.info.xingZuo')} value={detail.xingZuo} />
+        <InfoItem label={t('huangli.info.chong')} value={detail.chong} />
+        <InfoItem label={t('huangli.info.sha')} value={detail.sha} />
+        <InfoItem label={t('huangli.info.pengZu')} value={detail.pengZu} wide />
+        <InfoItem label={t('huangli.info.taiZhan')} value={detail.taiZhan} />
+        <InfoItem label={t('huangli.info.yearNaYin')} value={detail.yearNaYin} />
+        <InfoItem label={t('huangli.info.monthNaYin')} value={detail.monthNaYin} />
+        <InfoItem label={t('huangli.info.dayNaYin')} value={detail.dayNaYin} />
+        <InfoItem label={t('huangli.info.season')} value={detail.season} />
+        <InfoItem
+          label={t('huangli.info.xiu')}
+          value={detail.xiuFull ? t('huangli.value.xiu', { xiu: detail.xiu, full: detail.xiuFull, luck: detail.xiuLuck }) : ''}
+          wide
+        />
+        <InfoItem label={t('huangli.info.jieQi')} value={detail.jieQiText} wide />
+        <InfoItem label={t('huangli.info.julian')} value={String(detail.julianDay)} />
+        <InfoItem label={t('huangli.info.buddhist')} value={detail.buddhistYear} />
+        <InfoItem label={t('huangli.info.islamic')} value={detail.islamic} />
+        <InfoItem label={t('huangli.info.liuYao')} value={detail.liuYao} />
+        <InfoItem
+          label={t('huangli.info.zhiXing')}
+          value={detail.zhiXing ? t('huangli.value.zhiXing', { z: detail.zhiXing }) : ''}
+        />
+        <InfoItem label={t('huangli.info.posXi')} value={detail.posXi} />
+        <InfoItem label={t('huangli.info.posCai')} value={detail.posCai} />
+        <InfoItem label={t('huangli.info.dayLu')} value={detail.dayLu} wide />
+        <InfoItem label={t('huangli.info.shuJiu')} value={detail.shuJiu} />
+        <InfoItem label={t('huangli.info.fu')} value={detail.fu} />
       </div>
     </div>
   )

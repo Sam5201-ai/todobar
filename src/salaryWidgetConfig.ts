@@ -16,6 +16,8 @@
  * 旧键(magazine/card/bar)已废弃,读取时静默映射到最接近的新风格。
  */
 
+import { t, type LocaleKey } from './i18n'
+
 export type WidgetStyle = 'candy' | 'wide' | 'sunset'
 
 export interface SalaryWidgetConfig {
@@ -43,11 +45,30 @@ export const STYLE_SIZES: Record<WidgetStyle, { w: number; h: number }> = {
   sunset: { w: 588, h: 238 }, // 卡片 560×210(寄语卡比右侧卡片宽 15%,压缩中部留白)
 }
 
+/**
+ * 三种风格的注册表(顺序即展示顺序)。
+ * label 仅作未知风格的回退参考(中文参考:candy=奶牛萌卡 / wide=小马宽屏 / sunset=暖阳三栏),
+ * UI 展示一律走 widgetStyleLabel() → t() 查当前语言词条(salaryTheme.*)。
+ */
 export const WIDGET_STYLES: { value: WidgetStyle; label: string }[] = [
-  { value: 'candy', label: '奶牛萌卡' },
-  { value: 'wide', label: '小马宽屏' },
-  { value: 'sunset', label: '暖阳三栏' },
+  { value: 'candy', label: 'Candy Cow' },
+  { value: 'wide', label: 'Pony Wide' },
+  { value: 'sunset', label: 'Warm Sunset' },
 ]
+
+/** 风格 value → 词条 key。 */
+const STYLE_LABEL_KEYS: Record<WidgetStyle, LocaleKey> = {
+  candy: 'salaryTheme.candy',
+  wide: 'salaryTheme.wide',
+  sunset: 'salaryTheme.sunset',
+}
+
+/** 风格显示名(当前语言);未注册风格回退注册表 label。 */
+export function widgetStyleLabel(style: WidgetStyle): string {
+  const k = STYLE_LABEL_KEYS[style]
+  if (k) return t(k)
+  return WIDGET_STYLES.find((s) => s.value === style)?.label ?? style
+}
 
 /** 旧版风格键 → 新风格的兼容映射(0.4.22 及之前的 magazine/card/bar)。 */
 const LEGACY_MAP: Record<string, WidgetStyle> = {

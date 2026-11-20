@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { t } from './i18n'
 
 interface Props {
   children: ReactNode
@@ -54,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
           wordBreak: 'break-all',
         }}
       >
-        <strong>「{this.props.label ?? '应用'}」出现异常,已停止渲染:</strong>
+        <strong>{t('errorBoundary.title', { label: this.props.label ?? 'App' })}</strong>
         <div style={{ marginTop: 6 }}>{error.message}</div>
         {this.state.info && (
           <pre style={{ marginTop: 8, fontSize: 11, color: '#92400e', maxHeight: 180, overflow: 'auto' }}>
@@ -66,7 +67,7 @@ export class ErrorBoundary extends Component<Props, State> {
           onClick={() => this.setState({ error: null, info: '' })}
           style={{ marginTop: 10, padding: '4px 12px', cursor: 'pointer' }}
         >
-          重试
+          {t('common.retry')}
         </button>
       </div>
     )

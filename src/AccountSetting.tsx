@@ -31,10 +31,10 @@ import {
 } from './account'
 import { AUTH_BASE } from './account'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { t, useI18n } from './i18n'
 
 // 会员购买:链动小铺激活码商品页(系统浏览器打开,capabilities 已白名单该域名)
 const PURCHASE_URL = 'https://wzyp.cn/item/w5s7m5'
-const MARQUEE_TEXT = '永久会员￥29.9，一次买断，持续更新，不限设备数量'
 
 type ModalView = 'auth' | 'password' | 'devices' | null
 
@@ -106,7 +106,7 @@ function fileToAvatarDataUrl(file: File): Promise<string> {
       canvas.height = S
       const ctx = canvas.getContext('2d')
       if (!ctx) {
-        reject(new Error('画布不可用'))
+        reject(new Error(t('account.canvasError')))
         return
       }
       const side = Math.min(img.width, img.height)
@@ -122,7 +122,7 @@ function fileToAvatarDataUrl(file: File): Promise<string> {
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error('图片读取失败'))
+      reject(new Error(t('account.imageReadError')))
     }
     img.src = url
   })
@@ -165,6 +165,7 @@ export function AccountSetting({
   /** 登录成功后切换到该账号的独立本地库(账号数据隔离),返回并入的游客数据条数。 */
   onSwitchProfile?: (email: string) => Promise<number>
 }) {
+  const { t } = useI18n()
   const [account, setAccount] = useState<AccountState | null>(() => loadAccount())
   const [modalView, setModalView] = useState<ModalView>(null)
   const [busy, setBusy] = useState(false)
@@ -229,9 +230,9 @@ export function AccountSetting({
       const next = await redeemActivationCode(code)
       setAccount(next)
       setCodeDraft('')
-      setMsg({ kind: 'ok', text: '兑换成功,已升级为会员' })
+      setMsg({ kind: 'ok', text: t('account.redeemOk') })
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message || '兑换失败' })
+      setMsg({ kind: 'err', text: (e as Error).message || t('account.redeemFail') })
     } finally {
       setBusy(false)
     }
@@ -265,13 +266,13 @@ export function AccountSetting({
         setAccount(optimistic)
       }
       // ② 云端静默同步(异步,不阻塞 UI)。失败也保留本地修改,仅提示。
-      setMsg({ kind: 'ok', text: '头像已保存,云端同步中…' })
+      setMsg({ kind: 'ok', text: t('account.avatarSaved') })
       void updateProfile({ avatar: dataUrl })
         .then((next) => {
           setAccount(next)
-          setMsg({ kind: 'ok', text: '头像已更新' })
+          setMsg({ kind: 'ok', text: t('account.avatarUpdated') })
         })
-        .catch((e) => setMsg({ kind: 'err', text: `云端同步失败: ${(e as Error).message}` }))
+        .catch((e) => setMsg({ kind: 'err', text: t('account.cloudSyncFail', { message: (e as Error).message }) }))
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     }
@@ -290,14 +291,14 @@ export function AccountSetting({
         setAccount(optimistic)
       }
       setEditingNick(false)
-      setMsg({ kind: 'ok', text: '昵称已保存,云端同步中…' })
+      setMsg({ kind: 'ok', text: t('account.nickSaved') })
       // ② 云端静默同步(异步)。
       void updateProfile({ nickname: n })
         .then((next) => {
           setAccount(next)
-          setMsg({ kind: 'ok', text: '昵称已更新' })
+          setMsg({ kind: 'ok', text: t('account.nickUpdated') })
         })
-        .catch((e) => setMsg({ kind: 'err', text: `云端同步失败: ${(e as Error).message}` }))
+        .catch((e) => setMsg({ kind: 'err', text: t('account.cloudSyncFail', { message: (e as Error).message }) }))
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     }
@@ -328,13 +329,13 @@ export function AccountSetting({
         <button
           type="button"
           className="vip-marquee"
-          aria-label="了解永久会员"
+          aria-label={t('account.marqueeAria')}
           onClick={() => setPurchaseOpen(true)}
         >
           <span className="vip-marquee-track">
-            <span className="vip-marquee-text">{MARQUEE_TEXT}</span>
+            <span className="vip-marquee-text">{t('account.marquee')}</span>
             <span className="vip-marquee-text" aria-hidden="true">
-              {MARQUEE_TEXT}
+              {t('account.marquee')}
             </span>
           </span>
         </button>
@@ -356,10 +357,10 @@ export function AccountSetting({
             <button
               type="button"
               className="account-avatar-btn"
-              title="点击更换头像"
+              title={t('account.changeAvatarTitle')}
               onClick={() => avatarInputRef.current?.click()}
             >
-              <img src={account.avatar || defaultAvatar} alt="头像" />
+              <img src={account.avatar || defaultAvatar} alt={t('account.avatarAlt')} />
             </button>
             {editingNick ? (
               <div className="account-nick-edit">
@@ -367,7 +368,7 @@ export function AccountSetting({
                   value={nickDraft}
                   maxLength={24}
                   autoFocus
-                  placeholder="昵称"
+                  placeholder={t('account.nickPlaceholder')}
                   onChange={(e) => setNickDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void saveNickname()
@@ -375,17 +376,17 @@ export function AccountSetting({
                   }}
                 />
                 <button type="button" onClick={() => void saveNickname()} disabled={busy}>
-                  保存
+                  {t('common.save')}
                 </button>
                 <button type="button" onClick={() => setEditingNick(false)}>
-                  取消
+                  {t('common.cancel')}
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 className="account-nick"
-                title="点击修改昵称"
+                title={t('account.editNickTitle')}
                 onClick={() => {
                   setNickDraft(account.nickname || '')
                   setEditingNick(true)
@@ -409,9 +410,9 @@ export function AccountSetting({
             <div className="account-email">{account.email}</div>
             <div className="account-status">
               {account.activated
-                ? '已激活 · 永久全功能'
+                ? t('account.activatedFull')
                 : account.trialEndsAt
-                  ? `试用中 · 剩余 ${Math.max(0, Math.ceil((Date.parse(account.trialEndsAt) - Date.now()) / 86_400_000))} 天`
+                  ? t('account.trialDaysLeft', { days: Math.max(0, Math.ceil((Date.parse(account.trialEndsAt) - Date.now()) / 86_400_000)) })
                   : ''}
             </div>
             {!account.activated && (
@@ -419,7 +420,7 @@ export function AccountSetting({
                 <input
                   value={codeDraft}
                   maxLength={40}
-                  placeholder="输入激活码,兑换会员"
+                  placeholder={t('account.codeInputPlaceholder')}
                   onChange={(e) => setCodeDraft(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleRedeem()
@@ -430,7 +431,7 @@ export function AccountSetting({
                   onClick={() => void handleRedeem()}
                   disabled={busy || !codeDraft.trim()}
                 >
-                  兑换
+                  {t('account.redeem')}
                 </button>
                 <button
                   type="button"
@@ -438,32 +439,32 @@ export function AccountSetting({
                   onClick={() => setPurchaseOpen(true)}
                   disabled={busy}
                 >
-                  购买激活码
+                  {t('account.buyCode')}
                 </button>
               </div>
             )}
             <div className="account-actions">
               <button type="button" onClick={() => setModalView('password')} disabled={busy}>
-                修改密码
+                {t('account.changePassword')}
               </button>
               <button type="button" onClick={() => setModalView('devices')} disabled={busy}>
-                设备
+                {t('device.short')}
               </button>
               <button type="button" onClick={() => setShowLogout(true)} disabled={busy}>
-                退出登录
+                {t('account.logout')}
               </button>
             </div>
           </>
         ) : (
           <>
             <div className="account-avatar-static">
-              <img src={defaultAvatar} alt="默认头像" />
+              <img src={defaultAvatar} alt={t('account.defaultAvatarAlt')} />
             </div>
-            <div className="account-nick">未登录</div>
-            <div className="account-email">登录后可多设备云同步</div>
+            <div className="account-nick">{t('store.notLoggedIn')}</div>
+            <div className="account-email">{t('account.loggedOutHint')}</div>
             <div className="account-actions">
               <button type="button" onClick={() => setModalView('auth')}>
-                登录
+                {t('login.title')}
               </button>
             </div>
           </>
@@ -481,17 +482,17 @@ export function AccountSetting({
             className="account-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="确认退出登录"
+            aria-label={t('account.logoutConfirmAria')}
             style={{ maxWidth: 320 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="account-modal-head">
-              <strong>退出登录</strong>
+              <strong>{t('account.logout')}</strong>
               <button
                 type="button"
                 className="account-modal-close"
                 onClick={() => setShowLogout(false)}
-                aria-label="关闭"
+                aria-label={t('common.close')}
               >
                 ✕
               </button>
@@ -504,11 +505,11 @@ export function AccountSetting({
                 margin: '8px 0 16px',
               }}
             >
-              退出后本设备将停止云同步,想再次同步需重新登录。确定退出吗?
+              {t('account.logoutBody')}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button type="button" className="account-link" onClick={() => setShowLogout(false)}>
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -519,7 +520,7 @@ export function AccountSetting({
                   void handleLogout()
                 }}
               >
-                确认退出
+                {t('account.logoutConfirm')}
               </button>
             </div>
           </div>
@@ -540,9 +541,9 @@ export function AccountSetting({
               // 保证云端补齐落在正确的库,换账号登录后互不见对方数据、绝不互传。
               try {
                 const migrated = (await onSwitchProfile?.(acc.email)) ?? 0
-                if (migrated > 0) setMsg({ kind: 'ok', text: `已把本地 ${migrated} 条数据并入账号` })
+                if (migrated > 0) setMsg({ kind: 'ok', text: t('sync.mergedLocal', { count: migrated }) })
               } catch (e) {
-                setMsg({ kind: 'err', text: `切换账号数据失败: ${(e as Error).message}` })
+                setMsg({ kind: 'err', text: t('account.switchFail', { message: (e as Error).message }) })
               }
               onSyncChange({ enabled: true, endpoint: AUTH_BASE, token: acc.token })
             })()
@@ -578,17 +579,20 @@ interface VipBenefit {
   member: string
 }
 
-const VIP_BENEFITS: VipBenefit[] = [
-  { name: '每日新建待办', free: '3 条/日', member: '不限量' },
-  { name: '子任务 · 待办提醒', free: '不可用', member: '支持' },
-  { name: '生日 / 纪念日', free: '仅可查看', member: '不限新增' },
-  { name: '计薪器桌面组件', free: '不可用', member: '可用' },
-  { name: '截图贴图', free: '不可用', member: '可用' },
-  { name: '剪贴板', free: '不可用', member: '可用' },
-  { name: '便利签', free: '不可用', member: '可用' },
-  { name: '录音', free: '不可用', member: '可用' },
-  { name: '云端同步', free: '不可用', member: '自动同步' },
-]
+/** 会员权益对比行文案:随语言变化,渲染时按当前语言取词条。 */
+function vipBenefits(): VipBenefit[] {
+  return [
+    { name: t('account.benefit.dailyTasks'), free: t('account.benefit.free3PerDay'), member: t('account.benefit.unlimited') },
+    { name: t('account.benefit.subtaskRemind'), free: t('account.benefit.unavailable'), member: t('account.benefit.supported') },
+    { name: t('account.benefit.birthdayAnniversary'), free: t('account.benefit.viewOnly'), member: t('account.benefit.unlimitedAdd') },
+    { name: t('account.benefit.salaryWidget'), free: t('account.benefit.unavailable'), member: t('account.benefit.available') },
+    { name: t('account.benefit.screenshotPin'), free: t('account.benefit.unavailable'), member: t('account.benefit.available') },
+    { name: t('feature.clipboard'), free: t('account.benefit.unavailable'), member: t('account.benefit.available') },
+    { name: t('feature.note'), free: t('account.benefit.unavailable'), member: t('account.benefit.available') },
+    { name: t('account.benefit.recorder'), free: t('account.benefit.unavailable'), member: t('account.benefit.available') },
+    { name: t('feature.cloudSync'), free: t('account.benefit.unavailable'), member: t('account.benefit.autoSync') },
+  ]
+}
 
 /** 对比列表的行标记:绿色勾 = 会员可用,灰色叉 = 受限状态。 */
 function VipMark({ ok }: { ok: boolean }) {
@@ -609,13 +613,13 @@ function VipMark({ ok }: { ok: boolean }) {
   )
 }
 
-const VIP_STEPS = [
-  '点击「立即购买」,在链动小铺中完成下单',
-  '支付后在链动小铺获取激活码',
-  '回到本页,把激活码粘贴到兑换框,点击「兑换」即升级会员',
-]
+/** 激活步骤文案:随语言变化,渲染时按当前语言取词条。 */
+function vipSteps(): string[] {
+  return [t('account.vipStep1'), t('account.vipStep2'), t('account.vipStep3')]
+}
 
 function PurchaseSheet({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n()
   const [closing, setClosing] = useState(false)
   const closingRef = useRef(false)
   const [opening, setOpening] = useState(false)
@@ -635,7 +639,7 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
     try {
       await openUrl(PURCHASE_URL)
     } catch (e) {
-      setErr(`打开浏览器失败: ${(e as Error).message}`)
+      setErr(t('account.openBrowserFail', { message: (e as Error).message }))
     } finally {
       setOpening(false)
     }
@@ -651,29 +655,29 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
         className={`sheet vip-sheet ${closing ? 'is-closing' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-label="升级永久会员"
+        aria-label={t('account.vipSheetTitle')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grip" aria-hidden="true" />
-        <button type="button" className="vip-sheet-close" onClick={requestClose} aria-label="关闭">
+        <button type="button" className="vip-sheet-close" onClick={requestClose} aria-label={t('common.close')}>
           ✕
         </button>
-        <div className="sheet-title">升级永久会员</div>
+        <div className="sheet-title">{t('account.vipSheetTitle')}</div>
 
         {/* 权益明细变长后只在内容区滚动,「立即购买」始终吸底可见。 */}
         <div className="vip-sheet-scroll">
           <div className="vip-price">
             <span className="vip-price-num">￥29.9</span>
-            <span className="vip-price-note">永久买断 · 持续迭代</span>
+            <span className="vip-price-note">{t('account.vipPriceNote')}</span>
           </div>
 
-          <div className="vip-benefits" role="table" aria-label="普通用户与永久会员功能对比">
+          <div className="vip-benefits" role="table" aria-label={t('account.vipCompareAria')}>
             <div className="vip-cmp-head" role="row">
-              <span role="columnheader">功能</span>
-              <span role="columnheader">普通用户</span>
-              <span className="vip-cmp-head-member" role="columnheader">永久会员</span>
+              <span role="columnheader">{t('account.vipColFeature')}</span>
+              <span role="columnheader">{t('account.vipColFree')}</span>
+              <span className="vip-cmp-head-member" role="columnheader">{t('account.vipColMember')}</span>
             </div>
-            {VIP_BENEFITS.map((b) => (
+            {vipBenefits().map((b) => (
               <div className="vip-cmp-row" role="row" key={b.name}>
                 <span className="vip-cmp-name" role="cell">{b.name}</span>
                 <span className="vip-cmp-free" role="cell">
@@ -687,13 +691,13 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
               </div>
             ))}
             <div className="vip-cmp-foot" role="row">
-              <span role="cell">更多会员权益持续更新中…</span>
+              <span role="cell">{t('account.vipMoreBenefits')}</span>
             </div>
           </div>
 
           <div className="vip-steps">
-            <div className="vip-steps-title">如何激活</div>
-            {VIP_STEPS.map((s, i) => (
+            <div className="vip-steps-title">{t('account.vipHowToActivate')}</div>
+            {vipSteps().map((s, i) => (
               <div key={s} className="vip-step">
                 <span className="vip-step-num">{i + 1}</span>
                 <span>{s}</span>
@@ -705,7 +709,7 @@ function PurchaseSheet({ onClose }: { onClose: () => void }) {
         </div>
 
         <button type="button" className="vip-buy-btn" onClick={() => void handleBuy()} disabled={opening}>
-          {opening ? '正在打开…' : '立即购买'}
+          {opening ? t('account.opening') : t('account.buyNow')}
         </button>
       </div>
     </div>
@@ -731,6 +735,7 @@ export function AccountModal({
   onLoggedIn: (acc: AccountState) => void
   onPasswordChanged: () => void
 }) {
+  const { t } = useI18n()
   // auth 表单
   const [tab, setTab] = useState<'login' | 'register'>(account ? 'login' : 'login')
   // 「记住账号」(多账号):默认带出最近一次登录的账号;邮箱框点击可下拉切换历史账号。
@@ -783,7 +788,7 @@ export function AccountModal({
   async function handleSendCode(purpose: 'register' | 'reset') {
     setMsg(null)
     if (!email) {
-      setMsg({ kind: 'err', text: '请先填写邮箱' })
+      setMsg({ kind: 'err', text: t('account.errEmailRequired') })
       return
     }
     if (countdown > 0) return
@@ -791,7 +796,7 @@ export function AccountModal({
     try {
       await sendCode(email, purpose)
       setCountdown(60)
-      setMsg({ kind: 'ok', text: '验证码已发送到邮箱(10 分钟内有效)' })
+      setMsg({ kind: 'ok', text: t('account.codeSent') })
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     } finally {
@@ -802,11 +807,11 @@ export function AccountModal({
   async function handleSubmitAuth() {
     setMsg(null)
     if (!email || !password) {
-      setMsg({ kind: 'err', text: '请填写邮箱和密码' })
+      setMsg({ kind: 'err', text: t('account.errEmailPassRequired') })
       return
     }
     if (tab === 'register' && !code) {
-      setMsg({ kind: 'err', text: '请填写邮箱验证码' })
+      setMsg({ kind: 'err', text: t('account.errCodeRequired') })
       return
     }
     setBusy(true)
@@ -836,7 +841,7 @@ export function AccountModal({
   async function handlePassword() {
     setMsg(null)
     if (!email || !password || !code) {
-      setMsg({ kind: 'err', text: '请填写邮箱、验证码和新密码' })
+      setMsg({ kind: 'err', text: t('account.errAllRequired') })
       return
     }
     setBusy(true)
@@ -865,7 +870,7 @@ export function AccountModal({
   async function handleRevokeOthers() {
     if (
       !window.confirm(
-        '将解绑除本机外的所有设备,被解绑的设备需要重新登录。确定继续吗?',
+        t('device.revokeConfirm'),
       )
     )
       return
@@ -874,7 +879,7 @@ export function AccountModal({
       fetchDevices()
         .then((d) => setDevices(d.devices))
         .catch(() => setDevices([]))
-      setMsg({ kind: 'ok', text: '已解绑其他所有设备(保留本机)' })
+      setMsg({ kind: 'ok', text: t('device.revokeOthersDone') })
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     }
@@ -892,12 +897,12 @@ export function AccountModal({
 
   const title =
     view === 'password'
-      ? '修改密码'
+      ? t('account.changePassword')
       : view === 'devices'
-        ? '设备管理'
+        ? t('device.manage')
         : tab === 'login'
-          ? '登录 Tacco'
-          : '注册 Tacco'
+          ? t('account.loginTitle')
+          : t('account.registerTitle')
 
   return (
     <div className="account-modal-overlay" onClick={onClose} role="presentation">
@@ -911,14 +916,14 @@ export function AccountModal({
       >
         <div className="account-modal-head">
           <strong>{title}</strong>
-          <button type="button" className="account-modal-close" onClick={onClose} aria-label="关闭">
+          <button type="button" className="account-modal-close" onClick={onClose} aria-label={t('common.close')}>
             ✕
           </button>
         </div>
 
         {view === 'auth' ? (
           <>
-            <div className="segmented-control" aria-label="登录或注册">
+            <div className="segmented-control" aria-label={t('account.authTabsAria')}>
               <button
                 type="button"
                 className={tab === 'login' ? 'is-selected' : ''}
@@ -927,7 +932,7 @@ export function AccountModal({
                   setMsg(null)
                 }}
               >
-                登录
+                {t('login.title')}
               </button>
               <button
                 type="button"
@@ -937,7 +942,7 @@ export function AccountModal({
                   setMsg(null)
                 }}
               >
-                注册
+                {t('account.registerTab')}
               </button>
             </div>
             {tab === 'register' ? (
@@ -945,10 +950,10 @@ export function AccountModal({
                 <button
                   type="button"
                   className="account-avatar-btn account-avatar-sm"
-                  title="选择头像(可选)"
+                  title={t('account.avatarOptionalTitle')}
                   onClick={() => document.getElementById('account-avatar-input')?.click()}
                 >
-                  <img src={avatar ?? defaultAvatar} alt="头像" />
+                  <img src={avatar ?? defaultAvatar} alt={t('account.avatarAlt')} />
                 </button>
                 <input
                   id="account-avatar-input"
@@ -970,7 +975,7 @@ export function AccountModal({
                   className="account-nick-input"
                   value={nickname}
                   maxLength={24}
-                  placeholder="昵称(选填)"
+                  placeholder={t('account.nickOptionalPlaceholder')}
                   onChange={(e) => setNickname(e.target.value)}
                 />
               </div>
@@ -978,7 +983,7 @@ export function AccountModal({
             {tab === 'login' && savedLogins.length > 0 ? (
               <div style={{ position: 'relative' }}>
                 <Field
-                  label="邮箱"
+                  label={t('account.emailLabel')}
                   value={email}
                   placeholder="you@example.com"
                   onChange={setEmail}
@@ -1003,20 +1008,20 @@ export function AccountModal({
                         }}
                       >
                         <span>{s.email}</span>
-                        {s.email === email.trim() ? <span className="account-saved-check">当前</span> : null}
+                        {s.email === email.trim() ? <span className="account-saved-check">{t('account.currentTag')}</span> : null}
                       </button>
                     ))}
                   </div>
                 ) : null}
               </div>
             ) : (
-              <Field label="邮箱" value={email} placeholder="you@example.com" onChange={setEmail} />
+              <Field label={t('account.emailLabel')} value={email} placeholder="you@example.com" onChange={setEmail} />
             )}
             <Field
-              label="密码"
+              label={t('account.passwordLabel')}
               type="password"
               value={password}
-              placeholder="至少 8 位"
+              placeholder={t('account.passwordPlaceholder')}
               onChange={setPassword}
             />
             {tab === 'login' ? (
@@ -1036,19 +1041,19 @@ export function AccountModal({
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
-                记住账号
+                {t('account.rememberMe')}
               </label>
             ) : null}
             {tab === 'register' ? (
               <div className="account-code-row">
-                <Field label="验证码" value={code} placeholder="邮箱验证码" onChange={setCode} />
+                <Field label={t('account.codeLabel')} value={code} placeholder={t('account.codePlaceholder')} onChange={setCode} />
                 <button
                   type="button"
                   className="sync-now-button account-code-btn"
                   onClick={() => void handleSendCode('register')}
                   disabled={busy || countdown > 0}
                 >
-                  {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                  {countdown > 0 ? `${countdown}s` : t('account.getCode')}
                 </button>
               </div>
             ) : null}
@@ -1058,7 +1063,7 @@ export function AccountModal({
               onClick={handleSubmitAuth}
               disabled={busy}
             >
-              {busy ? '处理中…' : tab === 'register' ? '注册并登录' : '登录'}
+              {busy ? t('dataDir.busy') : tab === 'register' ? t('account.registerAndLogin') : t('login.title')}
             </button>
             <button
               type="button"
@@ -1068,10 +1073,10 @@ export function AccountModal({
                 onOpenReset()
               }}
             >
-              忘记密码?
+              {t('account.forgotPassword')}
             </button>
             <div className="sync-status" style={{ fontSize: 11 }}>
-              登录后自动开启云同步,支持多设备登录
+              {t('account.loginHint')}
             </div>
             {msgEl}
           </>
@@ -1079,23 +1084,23 @@ export function AccountModal({
 
         {view === 'password' ? (
           <>
-            <Field label="邮箱" value={email} placeholder="注册邮箱" onChange={setEmail} />
+            <Field label={t('account.emailLabel')} value={email} placeholder={t('account.registeredEmailPlaceholder')} onChange={setEmail} />
             <div className="account-code-row">
-              <Field label="验证码" value={code} placeholder="邮箱验证码" onChange={setCode} />
+              <Field label={t('account.codeLabel')} value={code} placeholder={t('account.codePlaceholder')} onChange={setCode} />
               <button
                 type="button"
                 className="sync-now-button account-code-btn"
                 onClick={() => void handleSendCode('reset')}
                 disabled={busy || countdown > 0}
               >
-                {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                {countdown > 0 ? `${countdown}s` : t('account.getCode')}
               </button>
             </div>
             <Field
-              label="新密码"
+              label={t('account.newPasswordLabel')}
               type="password"
               value={password}
-              placeholder="至少 8 位"
+              placeholder={t('account.passwordPlaceholder')}
               onChange={setPassword}
             />
             <button
@@ -1104,10 +1109,10 @@ export function AccountModal({
               onClick={handlePassword}
               disabled={busy}
             >
-              {busy ? '提交中…' : '确认修改'}
+              {busy ? t('feedback.submitting') : t('account.confirmChange')}
             </button>
             <div className="sync-status" style={{ fontSize: 11 }}>
-              修改成功后所有设备需重新登录
+              {t('account.passwordChangedHint')}
             </div>
             {msgEl}
           </>
@@ -1116,9 +1121,9 @@ export function AccountModal({
         {view === 'devices' ? (
           <>
             {devices === null ? (
-              <div className="sync-status">加载中…</div>
+              <div className="sync-status">{t('common.loading')}</div>
             ) : devices.length === 0 ? (
-              <div className="sync-status">暂无设备</div>
+              <div className="sync-status">{t('device.empty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {devices.map((d) => (
@@ -1135,11 +1140,11 @@ export function AccountModal({
                   >
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>
-                        {d.deviceName || '未命名设备'}
-                        {d.current ? ' (本机)' : ''}
+                        {d.deviceName || t('device.untitled')}
+                        {d.current ? t('device.currentSuffix') : ''}
                       </div>
                       <div style={{ fontSize: 11, opacity: 0.6 }}>
-                        最近活跃 {new Date(d.lastSeenAt).toLocaleString('zh-CN')}
+                        {t('device.lastActive', { time: new Date(d.lastSeenAt).toLocaleString('zh-CN') })}
                         {d.deviceId ? ` · ID ${d.deviceId.slice(0, 8)}` : ''}
                       </div>
                     </div>
@@ -1150,7 +1155,7 @@ export function AccountModal({
                         style={{ width: 'auto', margin: 0, padding: '4px 10px' }}
                         onClick={() => void handleRevoke(d.token)}
                       >
-                        解绑
+                        {t('device.revoke')}
                       </button>
                     ) : null}
                   </div>
@@ -1162,10 +1167,10 @@ export function AccountModal({
                     style={{ width: 'auto', margin: 0, padding: '6px 12px' }}
                     onClick={() => void handleRevokeOthers()}
                   >
-                    解绑其他所有设备(保留本机)
+                    {t('device.revokeOthers')}
                   </button>
                 ) : null}
-                <div className="sync-status">可在任意设备登录,解绑不再需要的设备即可</div>
+                <div className="sync-status">{t('device.hint')}</div>
               </div>
             )}
             {msgEl}
