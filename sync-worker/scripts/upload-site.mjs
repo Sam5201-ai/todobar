@@ -95,8 +95,8 @@ const FILES = [
     (n) => [`screenshots/${n}.png`, `screenshots/${n}.png`, 'assets'],
   ),
   ['Tacco-setup.exe', 'Tacco-setup.exe', 'exe'],
-  ['Tacco_0.4.82_aarch64.dmg', 'Tacco_0.4.82_aarch64.dmg', 'exe'],
-  ['Tacco_0.4.82_x64.dmg', 'Tacco_0.4.82_x64.dmg', 'exe'],
+  ['Tacco_0.4.84_aarch64.dmg', 'Tacco_0.4.84_aarch64.dmg', 'exe'],
+  ['Tacco_0.4.84_x64.dmg', 'Tacco_0.4.84_x64.dmg', 'exe'],
 ]
 
 const args = process.argv.slice(2)
