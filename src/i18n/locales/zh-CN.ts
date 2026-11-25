@@ -63,6 +63,7 @@ const zhCN = {
   'feature.restoreCloud': '恢复云端数据',
   'feature.note': '便利签',
   'feature.clipboard': '剪贴板',
+  'feature.quickNote': '随手记',
 
   // —— 设备(account.ts / AccountSetting.tsx) ——
   'device.thisDevice': '此设备',
@@ -99,6 +100,8 @@ const zhCN = {
   'tool.clothesline.tip': '晾衣绳 · 桌面待办卡片',
   'tool.archive.tip': '归档 · 便利签/随手记/番茄',
   'tool.sync.tip': '立即同步到云端',
+  'tool.quickNote': '随手记',
+  'tool.quickNote.tip': '新建随手记',
 
   // —— 顶栏 / 更多菜单(App.tsx) ——
   'topbar.more': '更多工具',
@@ -144,6 +147,8 @@ const zhCN = {
   'toast.shortcut.clipboardUpdated': '剪贴板快捷键已更新',
   'toast.shortcut.archiveFail': '归档快捷键注册失败',
   'toast.shortcut.archiveUpdated': '归档快捷键已更新',
+  'toast.shortcut.quickNoteFail': '随手记快捷键注册失败',
+  'toast.shortcut.quickNoteUpdated': '随手记快捷键已更新',
 
   // —— 设置页 · 窗口位置 / dock.ts 显示器标签 ——
   'dock.primary': '主屏',
@@ -270,6 +275,8 @@ const zhCN = {
   'shortcut.newNote': '新建便利签',
   'shortcut.openClipboard': '打开剪贴板',
   'shortcut.openArchive': '打开归档',
+  'shortcut.dupArchive': '与「打开归档」快捷键重复',
+  'shortcut.quickNote': '新建随手记',
   'shortcut.hint': '双击编辑框即可修改',
   'shortcut.hintGlobal': '双击编辑框即可修改；与下方截图 / 贴图同属全局快捷键，请勿设置成相同组合',
 
@@ -540,6 +547,8 @@ const zhCN = {
 
   // —— 日期 / 时间弹层(SheetDatePicker / SheetDateTimePicker / BirthdaySheet) ——
   'datePick.placeholder': '选择日期',
+  'date.pickTitle': '选择日期',
+  'date.pickYear': '年',
   'datePick.hour': '时',
   'datePick.minute': '分',
   'datePick.month': '月',
@@ -1067,11 +1076,11 @@ const zhCN = {
   // ＋ 菜单
   'clothesline.menu.addAria': '新增卡片',
   'clothesline.menu.head': '挂一张到晾衣绳',
-  'clothesline.menu.newNote': '▤ 新建便利签',
+  'clothesline.menu.newNote': '▤ 便利签',
   'clothesline.menu.newNoteSub': '创建即挂绳 · 桌面同款',
   'clothesline.menu.text': '✎ 随手记',
   'clothesline.menu.textSub': '标题 + 正文 + 颜色',
-  'clothesline.menu.timer': '◷ 计时 / 番茄',
+  'clothesline.menu.timer': '◷ 番茄计时',
   'clothesline.menu.timerSub': '{n} 分',
   'clothesline.menu.record': '◉ 一键录音',
   'clothesline.menu.recordSub': '挂绳即录',
@@ -1150,6 +1159,9 @@ const zhCN = {
   'clothesline.compose.textPlaceholder': '比如：灵感、待办…',
   'clothesline.compose.errTaskName': '任务名称必填，请填写后再挂上',
   'clothesline.compose.errTitle': '标题必填，请填写后再挂上',
+  'clothesline.compose.errRetry': '挂上失败，请重试',
+  'clothesline.compose.vipStyleLocked': '会员专属样式，请升级会员后再重试',
+  'clothesline.toast.freeCardLimit': '非会员用户仅支持最多添加12个卡片',
   'clothesline.compose.direction': '计时方式',
   'clothesline.compose.duration': '时长（1–720 分钟，下次自动带出）',
   'clothesline.compose.minutesUnit': '分钟',
@@ -1162,6 +1174,10 @@ const zhCN = {
   'clothesline.compose.styleCan': '罐头',
   'clothesline.compose.styleBoard': '黑板',
   'clothesline.compose.styleMarquee': '灯牌',
+  'clothesline.compose.styleTomato': '番茄',
+  'clothesline.compose.stylePocket': '口袋怀表',
+  'clothesline.compose.styleHourglass': '沙漏',
+  'clothesline.compose.styleMoon': '月相',
   'clothesline.compose.remindCheck': '结束时弹系统提醒',
   'clothesline.compose.bodyLabel': '正文',
   'clothesline.compose.bodyPlaceholder': '写点什么，Ctrl+Enter 挂上去',
@@ -1411,6 +1427,8 @@ const zhCN = {
   'archive.kind.timer': '番茄计时',
   'archive.kind.shot': '截图',
   'archive.filter.all': '全部',
+  'archive.catAll': '全部分类',
+  'archive.catNone': '未分类',
   'archive.dirUp': '正计时',
   'archive.dirDown': '倒计时',
   'archive.timerSummary': '已计时 {n} 分钟 · {dir}',
@@ -1588,6 +1606,29 @@ const zhCN = {
   'huangli.value.zhiXing': '{z}执位',
   'huangli.date.ymd': '{y}年{m}月{d}日',
   'huangli.jieqi.cycle': '{name} 第{n}天(距下一个节气“{next}”,还有{remain}天)',
+  // —— 全局速记（随手记）录入窗（QuickNoteWindow.tsx，2026-11-22） ——
+  'quickNote.title': '新建随手记',
+  'quickNote.closeAria': '关闭',
+  'quickNote.errEmpty': '写点什么再保存吧',
+  'quickNote.defaultTitle': '随手记',
+  'quickNote.category': '分类',
+  'quickNote.catPlaceholder': '分类名',
+  'quickNote.catNew': '新建分类',
+  'quickNote.titlePlaceholder': '标题（可留空）',
+  'quickNote.bodyPlaceholder': '记录你的灵感、想法……',
+  'quickNote.hang': '挂到晾衣绳',
+  'quickNote.archive': '保存归档（Enter）',
+  'quickNote.bold': '加粗',
+  'quickNote.italic': '倾斜',
+  'quickNote.underline': '下划线',
+  'quickNote.strike': '删除线',
+  'quickNote.color': '字体颜色',
+  'quickNote.catFull': '分类最多 8 个，无法继续添加',
+  'quickNote.saveEdit': '保存修改',
+  'quickNote.editTitle': '编辑随手记',
+  'quickNote.catDelete': '删除分类',
+  'archive.edit': '编辑',
+
 } as const
 
 export default zhCN

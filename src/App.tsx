@@ -21,6 +21,7 @@ import {
   Mic,
   PanelRightClose,
   PanelRightOpen,
+  PenLine,
   Plus,
   RefreshCw,
   Search,
@@ -62,6 +63,11 @@ import { t, useI18n, getLocale, type LocaleKey } from './i18n'
 import ScreenshotSettingsPanel from './screenshot/ScreenshotSettingsPanel'
 import { ShortcutField } from './ShortcutField'
 import { applyArchiveShortcut, applyNoteShortcut, initArchiveShortcutTrigger } from './notes/shortcuts'
+import {
+  applyQuickNoteShortcut,
+  initQuickNoteTrigger,
+  openQuickNoteWindow,
+} from './quickNote/shortcuts'
 import { useNotesBridge } from './notes/useNotesBridge'
 import { applyClipboardShortcut, clipboardOpenWindow, clipboardSetActive } from './clipboard'
 import { getSettings as getScreenshotSettings } from './screenshot/store'
@@ -149,6 +155,7 @@ import {
   CL_OPEN_TASK,
   CL_OPEN_SETTINGS,
   CL_OPEN_ARCHIVE,
+  CL_ARCHIVE_LANDED,
   CL_RECORDER_CMD,
   CL_RECORDER_STATE,
   type ClRecorderCmd,
@@ -193,6 +200,109 @@ type HandleDragState = {
 /** 悬停自动展开:移入把手的防误触延时 / 展开态移出窗口的防抖收起延时。 */
 const HOVER_EXPAND_DELAY_MS = 180
 const HOVER_COLLAPSE_DELAY_MS = 300
+
+// ===== [0.4.85] 贴边迁移实测校正闭环 =====
+// 背景:applyBounds 隔帧三连写可能被打断(典型:换边瞬移后光标落窗外 →
+// hoverAutoExpand 定时收起 → effect 重跑 token++),或单次 invoke 失败。
+// 混合 DPI 下残留矩形会被 Windows 按旧屏口径缩放 → 面板裁切 = 用户反馈的
+// 「切换贴边方向后窗口显示不完整」。旧自愈机制(签名轮询)只比对计算几何,
+// dockGeomRef 又在写入前就登记了新值,发现不了这种背离 → 错误状态永久滞留。
+//
+// 底线:任何写入失败/被缩放,最多 4s 被 4s 轮询的实测比对发现并强制重迁,
+// 且补写有「连续两轮偏差一致才写 + 轮次上限」双保险,绝不与 OS 拉扯死循环。
+
+/** 窗口矩形容差(物理像素):位置 4px / 尺寸 2px,吸收 outerPosition 的口径噪声与圆整误差。 */
+const DOCK_VERIFY_POS_TOL = 4
+const DOCK_VERIFY_SIZE_TOL = 2
+
+/** 最近一次窗口矩形写入时间(模块级:校正器与 4s 轮询共用,写后 1.5s 内轮询跳过实测)。 */
+let dockLastWriteAt = 0
+
+/** dock 迁移链路诊断日志:落 ~/.ticktask/logs/app.log,便于远程定位用户侧问题。 */
+function dockLog(message: string) {
+  void import('@tauri-apps/api/core')
+    .then(({ invoke }) => invoke('app_log', { message: `[dock] ${message}` }))
+    .catch(() => undefined)
+}
+
+/** 实测原生窗口矩形(物理像素);拿不到(窗口异常/已销毁)返回 null,调用方按「无法判定」跳过。 */
+async function dockMeasureRect(): Promise<DockRect | null> {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    const appWindow = getCurrentWindow()
+    const [position, size] = await Promise.all([
+      appWindow.outerPosition(),
+      appWindow.outerSize(),
+    ])
+    if (!position || !size) return null
+    return { x: position.x, y: position.y, width: size.width, height: size.height }
+  } catch {
+    return null
+  }
+}
+
+function dockRectMatches(target: DockRect, actual: DockRect): boolean {
+  return (
+    Math.abs(actual.x - target.x) <= DOCK_VERIFY_POS_TOL &&
+    Math.abs(actual.y - target.y) <= DOCK_VERIFY_POS_TOL &&
+    Math.abs(actual.width - target.width) <= DOCK_VERIFY_SIZE_TOL &&
+    Math.abs(actual.height - target.height) <= DOCK_VERIFY_SIZE_TOL
+  )
+}
+
+/**
+ * 迁移写入后的实测校正:读真实窗口矩形,与目标矩形不符才补写。
+ *
+ * 防振荡规则(勿删):偏差必须「连续两轮实测完全一致」才补写——单次偏差可能是
+ * WM_DPICHANGED 正在收敛的中间态,立刻补写会与 OS 互相拉扯;连续相同偏差才
+ * 说明写入真的丢了。总轮次上限 6,超限只记日志,等 4s 轮询兜底,绝不死循环。
+ *
+ * isStale:几何已被新迁移接管(dockGeomRef / layoutKey 变化)时中止。isOpen
+ * 开关不改变这两个值,所以悬停收起触发的快路径重跑(零写入)不会打断校正。
+ */
+async function verifyDockBounds(
+  geom: DockGeometry,
+  target: DockRect,
+  isStale: () => boolean,
+): Promise<void> {
+  const nextFrame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  let prevDeviation = ''
+  for (let round = 0; round < 6; round += 1) {
+    if (isStale()) return
+    const actual = await dockMeasureRect()
+    if (!actual) return
+    if (dockRectMatches(target, actual)) {
+      if (prevDeviation) dockLog(`bounds corrected on ${geom.monitorName ?? 'monitor'}`)
+      return
+    }
+    const deviation = `${actual.x},${actual.y} ${actual.width}x${actual.height}`
+    if (deviation !== prevDeviation) {
+      // 偏差仍在变化:OS 可能在做 DPI 收敛,只记录等下一轮,不写。
+      prevDeviation = deviation
+      await nextFrame()
+      continue
+    }
+    dockLog(
+      `bounds mismatch (stable), rewriting: measured ${deviation}, want ${target.x},${target.y} ${target.width}x${target.height}`,
+    )
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('set_main_window_bounds', {
+        x: target.x,
+        y: target.y,
+        width: target.width,
+        height: target.height,
+      })
+    } catch {
+      return
+    }
+    dockLastWriteAt = performance.now()
+    prevDeviation = ''
+    await nextFrame()
+  }
+  dockLog('bounds verify gave up after retries; waiting for 4s watchdog')
+}
 
 function sortTasks(taskList: Task[]) {
   return [...taskList].sort((a, b) => {
@@ -385,7 +495,10 @@ function App() {
   const { t, locale } = useI18n()
   // 会员权限:未登录 / 试用过期未激活 = 受限(云端同步、计薪组件、子任务、
   // 单日新建上限、提醒、生日纪念日均按此判定)。登录或激活后自动重渲染放行。
-  const { fullAccess, account } = useAccount()
+  const { fullAccess, account, showVip } = useAccount()
+  // 快捷键监听只挂一次，用 ref 保存最新会员态供回调实时判定（避免重复挂载累积 listen）。
+  const fullAccessRef = useRef(fullAccess)
+  fullAccessRef.current = fullAccess
   const [isNative] = useState(() => isTauriRuntime())
   // 启动默认展开:此前默认收起,冷启动首帧只有贴边把手;在混合 DPI 或窗口尚未
   // 完成几何校正时把手会被裁出视口,表现为「托盘已有图标、桌面却什么都没有」,
@@ -449,6 +562,8 @@ function App() {
   >(null)
   const selectedChipRef = useRef<HTMLButtonElement | null>(null)
   const dateStripRef = useRef<HTMLDivElement | null>(null)
+  // 日期条滚轮监听的卸载函数（在 rAF 内挂载，effect 清理时用）
+  const wheelCleanupRef = useRef<(() => void) | null>(null)
 
   // 记节日 tab 的弹窗状态:null = 关闭;'new-birthday'/'new-anniversary' = 新建;其余为要编辑的记录 id
   const [birthdaySheet, setBirthdaySheet] = useState<'new-birthday' | 'new-anniversary' | string | null>(null)
@@ -500,7 +615,119 @@ function App() {
     return () => cancelAnimationFrame(raf)
   }, [activeTab, selectedDateKey])
 
+  // ★2026-11-25 问题4：日待办日期条支持鼠标滚轮横向滑动。此前只能在日期条两端
+  // 点击滚动（溢出区域无按钮，hover 也不滚）。滚轮的纵向增量映射为 scrollLeft；
+  // 必须用原生非 passive 监听——React 的 onWheel 在根容器上是 passive 的，
+  // preventDefault 不生效，页面会跟着竖向滚动。
+  useEffect(() => {
+    if (activeTab !== 'day') return
+    const raf = requestAnimationFrame(() => {
+      const strip = dateStripRef.current
+      if (!strip) return
+      const onWheel = (e: WheelEvent) => {
+        const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+        if (delta === 0) return
+        e.preventDefault()
+        strip.scrollLeft += delta
+      }
+      strip.addEventListener('wheel', onWheel, { passive: false })
+      wheelCleanupRef.current = () => strip.removeEventListener('wheel', onWheel)
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      wheelCleanupRef.current?.()
+      wheelCleanupRef.current = null
+    }
+  }, [activeTab])
+
   const todayKey = dayKeyOf(new Date())
+
+  // ——— ★2026-11-23 跨日自动跟随（常驻进程跨天后日待办仍选中昨天的修复）———
+  // 触发器：分钟级巡检（开销：每 60s 一次字符串比较，可忽略）+ 窗口转可见/聚焦
+  // 补检（覆盖「次日再次展开工具」场景）。dayKey 变化即判定跨日：
+  // - 日待办：仅当用户停留在「旧今天」时自动切到新今天；若用户当时特意选了
+  //   其他日期（明天 / 历史），尊重选择不跳动；
+  // - 周/月视图：仅当**当前正停在该视图**且锚点页不含新今天（跨周/跨月）时
+  //   重置锚点，否则新今天的格子会在视野外。
+  // todayKey 本身每次渲染都重算，日期条「今天」高亮天然正确，这里只补选中态。
+  const todayKeyRef = useRef(todayKey)
+  const selectedDateKeyRef = useRef(selectedDateKey)
+  selectedDateKeyRef.current = selectedDateKey
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
+  const weekAnchorRef = useRef(weekAnchor)
+  weekAnchorRef.current = weekAnchor
+  useEffect(() => {
+    const check = () => {
+      const tk = dayKeyOf(new Date())
+      if (tk === todayKeyRef.current) return
+      const prev = todayKeyRef.current
+      todayKeyRef.current = tk
+      if (selectedDateKeyRef.current === prev) setSelectedDateKey(tk)
+      if (activeTabRef.current === 'week') {
+        const mon = mondayOf(new Date()).getTime()
+        if (mon !== weekAnchorRef.current) setWeekAnchor(mon)
+      } else if (activeTabRef.current === 'month') {
+        const d = new Date()
+        setMonthCursor((c) =>
+          c.year === d.getFullYear() && c.month === d.getMonth()
+            ? c
+            : { year: d.getFullYear(), month: d.getMonth() },
+        )
+      }
+    }
+    const iv = window.setInterval(check, 60_000)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    return () => {
+      window.clearInterval(iv)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onVis)
+    }
+  }, [])
+
+  // ——— ★2026-11-24 周/月待办「点击筛选栏 → 底部日期弹窗 → 定位所选日期」———
+  // rangeSheet = 当前打开的弹窗归属（week/month，null 关闭）；rangeJump = 待滚动
+  // 定位的日期组（组标题挂 data-date）。选择后先切锚点再入队 jump，同一渲染批次
+  // 更新 → effect 里 rAF 时 DOM 已是新分组，按 rect 差值只滚列表容器自身
+  // （不用 scrollIntoView：会连带滚所有可滚动祖先，见上方日期条教训）。
+  const [rangeSheet, setRangeSheet] = useState<null | 'week' | 'month'>(null)
+  const [rangeJump, setRangeJump] = useState<{ key: string } | null>(null)
+  const rangeListRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!rangeJump) return
+    const raf = requestAnimationFrame(() => {
+      const container = rangeListRef.current
+      const el = container?.querySelector<HTMLElement>(`[data-date="${rangeJump.key}"]`)
+      if (container && el) {
+        const cRect = container.getBoundingClientRect()
+        const eRect = el.getBoundingClientRect()
+        container.scrollTop += eRect.top - cRect.top - 10
+      }
+      setRangeJump(null)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [rangeJump])
+  /** 弹窗选定日期：切到该日期所在周/月，并入队滚动定位。 */
+  const pickJumpDate = (key: string) => {
+    const d = parseDayKey(key)
+    if (rangeSheet === 'week') {
+      setWeekAnchor(mondayOf(d).getTime())
+    } else if (rangeSheet === 'month') {
+      setMonthCursor({ year: d.getFullYear(), month: d.getMonth() })
+    }
+    setRangeJump({ key })
+    setRangeSheet(null)
+  }
+
+  // 主窗收起是纯 CSS 平移（组件不卸载），弹窗 state 会残留导致再展开时仍显示。
+  // 跟随 isOpen：收起即关闭日期弹窗（添加事项弹窗由既有逻辑处理，这里只管本弹窗）。
+  useEffect(() => {
+    if (!isOpen) setRangeSheet(null)
+  }, [isOpen])
 
   // ---- 同步:顶部图标 + toast 反馈 -------------------------------------------
 
@@ -819,6 +1046,11 @@ function App() {
   const [archiveOpen, setArchiveOpen] = useState(false)
   /** 归档条目总数（ArchiveView 上报），渲染在顶栏 actions 插槽。 */
   const [archiveCount, setArchiveCount] = useState(0)
+  /** ★2026-11-22 归档飞入反馈：会话内落地次数 + 脉冲触发键（顶栏归档角标）。 */
+  const [archiveLanded, setArchiveLanded] = useState(0)
+  const [archivePulseKey, setArchivePulseKey] = useState(0)
+  /** 归档页打开态的实时镜像：角标监听在归档页打开时不再累加（避免清零后又冒出数字）。 */
+  const archiveOpenRef = useRef(false)
   const openArchivePage = () => {
     // 与其余独立页面互斥,避免多个绝对定位 PageShell 叠加。
     setIsSettingsOpen(false)
@@ -828,6 +1060,8 @@ function App() {
     setRecorderOpen(false)
     setClotheslineOpen(false)
     setArchiveOpen(true)
+    archiveOpenRef.current = true
+    setArchiveLanded(0) // 进入归档页即视为已读：角标清零
     setIsOpen(true) // 主窗若收起则展开
     trackPage('archive')
   }
@@ -843,6 +1077,42 @@ function App() {
     void initArchiveShortcutTrigger(() => openArchivePage())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // ★2026-11-22 全局速记（随手记）：会员专属，默认 Ctrl+Shift+Y。
+  // 非会员注销快捷键（与剪贴板同策略：fullAccess ? 快捷键 : ''）。
+  useEffect(() => {
+    void applyQuickNoteShortcut(fullAccess ? settings.quickNoteShortcut : '').then((r) => {
+      if (!r.ok) console.warn('[quickNote] 快捷键注册失败:', r.error)
+    })
+  }, [settings.quickNoteShortcut, fullAccess])
+  useEffect(() => {
+    // 快捷键触发 → 会员闸门 → 打开桌面录入窗；监听只挂一次，闸门在回调内实时读 fullAccessRef。
+    void initQuickNoteTrigger(() => {
+      if (!fullAccessRef.current) {
+        handleLocked(t('tool.quickNote'))
+        return
+      }
+      void openQuickNoteWindow(true)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // ★2026-11-22 归档飞入落地：绳窗/速记窗动画结束后广播 → 顶栏归档角标 +1 并脉冲。
+  // 监听只挂一次，setState 全是稳定 setter（与归档快捷键触发同一策略）。
+  useEffect(() => {
+    let un: (() => void) | undefined
+    void listen(CL_ARCHIVE_LANDED, () => {
+      // 归档页正打开 = 用户已看到归档内容，不再累加未读角标。
+      if (archiveOpenRef.current) return
+      setArchiveLanded((n) => n + 1)
+      setArchivePulseKey((n) => n + 1)
+    }).then((u) => {
+      un = u
+    }).catch(() => undefined)
+    return () => un?.()
+  }, [])
+  // ref 始终跟随归档页真实开合，兜底任何新增的关闭路径。
+  useEffect(() => {
+    archiveOpenRef.current = archiveOpen
+  }, [archiveOpen])
   // ＋ 菜单第 7 行常驻置顶开关的真源镜像(写入只走 clothesline_set_always_on_top)。
   // 挂载即读磁盘真源(不硬编码 true)，并监听绳窗右键 / 其它入口的置顶变更，
   // 保证 ＋ 菜单显示与窗口实际置顶态始终一致。
@@ -888,6 +1158,12 @@ function App() {
       setCalculatorOpen(false)
       setSalaryOpen(false)
       setRecorderOpen(false)
+      // ★修复：归档页与其他独立页面同为 .page-panel(absolute inset:0 z-index:20)，
+      //   且 DOM 顺序在设置页之后。先前只关了上面几页却漏了归档，导致归档页打开过时
+      //   再点「晾衣绳设置」，设置页虽 open 却被归档页整块盖住 → 看起来「点了没反应」。
+      //   与 openArchivePage() 的互斥逻辑对齐：这里也要关归档并复位角标镜像。
+      setArchiveOpen(false)
+      archiveOpenRef.current = false
       setClotheslineOpen(true)
       setIsOpen(true)
     })
@@ -1048,8 +1324,9 @@ function App() {
     note: formatShortcut(settings.noteShortcut),
     clipboard: formatShortcut(settings.clipboardShortcut),
     archive: formatShortcut(settings.archiveShortcut),
+    quickNote: formatShortcut(settings.quickNoteShortcut),
     sync: lastSyncLabel ? t('sync.syncedAt', { time: lastSyncLabel }) : '',
-  }), [settings.noteShortcut, settings.clipboardShortcut, settings.archiveShortcut, lastSyncLabel, locale])
+  }), [settings.noteShortcut, settings.clipboardShortcut, settings.archiveShortcut, settings.quickNoteShortcut, lastSyncLabel, locale])
 
   // 侧栏收起时菜单不该残留;点击菜单外 / Esc 关闭(带 StrictMode 卸载守卫)。
   useEffect(() => {
@@ -1119,6 +1396,11 @@ function App() {
       case 'archive':
         // ★2026-11-18 归档：独立页互斥 + 展开主窗 + 打开归档页。
         openArchivePage()
+        break
+      case 'quickNote':
+        // ★2026-11-22 全局速记（随手记）：会员闸门已在上方统一拦截，
+        // 这里直接唤起桌面居中录入窗。
+        void openQuickNoteWindow(true)
         break
       case 'sync':
         onHeaderSync()
@@ -1687,13 +1969,32 @@ function App() {
     if (!isNative) return
     let cancelled = false
     const check = async () => {
+      // 动画 / 迁移进行中不测量:窗口矩形本来就在变,实测只会误报。
+      if (dockAnimatingRef.current) return
       const g = await resolveDockTarget(settings.targetMonitor, settings.dockSide, {
         panelWidth: settings.panelWidth,
         tabWidth: settings.tabWidth,
       })
       if (cancelled || !g) return
       const prev = dockGeomRef.current
-      if (prev && dockSignature(prev) === dockSignature(g) && prev.fallback === g.fallback) return
+      if (prev && dockSignature(prev) === dockSignature(g) && prev.fallback === g.fallback) {
+        // [0.4.85] 实测兜底:计算几何没变 ≠ 窗口矩形没丢。迁移三连写被打断 /
+        // invoke 失败 / 被 DPI 缩放吃掉时,签名对比发现不了(登记已是新值),
+        // 这里读真实矩形,发现背离就清 appliedDockRef 强制按「迁移」重写。
+        if (!didNativeLayout.current) return
+        if (performance.now() - dockLastWriteAt < 1500) return
+        const target = dockFrame(g, 1)
+        const actual = await dockMeasureRect()
+        if (cancelled || !actual) return
+        if (!dockRectMatches(target, actual)) {
+          dockLog(
+            `watchdog drift: measured ${actual.x},${actual.y} ${actual.width}x${actual.height}, want ${target.x},${target.y} ${target.width}x${target.height}; forcing relocation`,
+          )
+          appliedDockRef.current = null
+          setDockTick((t) => t + 1)
+        }
+        return
+      }
       setDockTick((t) => t + 1)
     }
     const timer = window.setInterval(() => void check(), 4000)
@@ -1809,18 +2110,25 @@ function App() {
         }
         if (!alive()) return
 
-        const prevGeom = dockGeomRef.current
-        dockGeomRef.current = geom
-        // 只在几何真的变化时更新 state,避免每次开关都重渲染整个 App。
-        if (
-          !prevGeom ||
-          dockSignature(prevGeom) !== dockSignature(geom) ||
-          prevGeom.fallback !== geom.fallback
-        ) {
-          setDockGeom(geom)
+        /**
+         * [0.4.85] 几何登记:ref + state + 视口三件套一起更新。
+         * ⚠️ 只允许在窗口矩形写入成功后调用 —— 此前在写入前就登记,写入被打断/
+         * 失败时 dockGeomRef 已是新值,签名轮询对比不出异常,错误矩形永久滞留。
+         */
+        const registerDockGeom = (g: DockGeometry) => {
+          const prevG = dockGeomRef.current
+          dockGeomRef.current = g
+          // 只在几何真的变化时更新 state,避免每次开关都重渲染整个 App。
+          if (
+            !prevG ||
+            dockSignature(prevG) !== dockSignature(g) ||
+            prevG.fallback !== g.fallback
+          ) {
+            setDockGeom(g)
+          }
+          setViewportWidth(g.fullCssWidth)
+          setViewportHeight(g.fullCssHeight)
         }
-        setViewportWidth(geom.fullCssWidth)
-        setViewportHeight(geom.fullCssHeight)
 
         // 窗口始终是完整展开矩形;收起只是 CSS 把内容层平移出可视区。
         const fullRect = dockFrame(geom, 1)
@@ -1835,12 +2143,20 @@ function App() {
           applied.geom.windowWidth !== geom.windowWidth ||
           applied.geom.closedWidth !== geom.closedWidth ||
           applied.geom.targetHeight !== geom.targetHeight
+        if (relocated) {
+          dockLog(
+            `relocate: side ${applied?.geom.side ?? '?'}→${geom.side}, monitor ${applied?.geom.monitorKey ?? '?'}→${geom.monitorKey}, target ${fullRect.x},${fullRect.y} ${fullRect.width}x${fullRect.height}`,
+          )
+        }
 
         if (!didNativeLayout.current) {
           didNativeLayout.current = true
           // 启动同样会跨 DPI(主屏创建 → 用户选的副屏),单次写入会被缩放吃掉。
           // 注意:即使中途 effect 已被取消,下面也必须把窗口显示出来(启动时
           // visible:false),否则会卡在黑屏,只能等 Rust 看门狗兜底。
+          // ⚠️ 启动路径保留「先登记后写入」的原时序(0.4.44 残影修复:
+          // 定位 → 双 rAF → show),写入失败由 4s 轮询实测兜底重迁。
+          registerDockGeom(geom)
           await applyBounds(fullRect)
           // [0.4.44] 窗口 visible:false 启动,等「定位完成 + 双 rAF 首帧绘制」
           // 后再显示,否则会以系统默认位置闪现 1.5~2.5s。
@@ -1853,6 +2169,7 @@ function App() {
           }
           appliedDockRef.current = { geom }
           dockSettingsKeyRef.current = layoutKey
+          dockLastWriteAt = performance.now()
           markAnimating(false)
           return
         }
@@ -1864,9 +2181,22 @@ function App() {
           // Windows 跨不同 DPI 显示器会按「逻辑尺寸」重新缩放窗口,首次写入常被
           // 吃掉,连写三次按新屏物理像素校正(修掉「切到副屏仍是主屏尺寸」)。
           if (!(await applyBounds(fullRect))) return
+          // [0.4.85] 写入成功后才登记几何(见 registerDockGeom 注释)。被取消时
+          // dockGeomRef 保持旧值,签名轮询 4s 内会发现差异并重试迁移。
+          registerDockGeom(geom)
           appliedDockRef.current = { geom }
           dockSettingsKeyRef.current = layoutKey
           markAnimating(false)
+          dockLastWriteAt = performance.now()
+          // [0.4.85] 实测校正闭环:动画结束后读真实矩形,偏差连续两轮一致才补写。
+          // 故意不绑 effect token:悬停收起会立刻重跑本 effect(快路径零写入),
+          // 不能让它打断校正;isStale 负责在几何真的再变化时中止。
+          window.setTimeout(() => {
+            void verifyDockBounds(geom, fullRect, () =>
+              dockGeomRef.current !== geom ||
+              dockSettingsKeyRef.current !== layoutKey,
+            )
+          }, settings.motionMs + 200)
           if (isOpen) await appWindow.setFocus()
           return
         }
@@ -1874,6 +2204,7 @@ function App() {
         // 布局签名变了但几何没变(如显示器插拔后同名屏重新接入):不做任何窗口
         // API 调用,只登记签名,动画继续由 CSS 承担。
         if (!alive()) return
+        registerDockGeom(geom)
         appliedDockRef.current = { geom }
         dockSettingsKeyRef.current = layoutKey
         if (isOpen) void appWindow.setFocus()
@@ -2008,7 +2339,17 @@ function App() {
       if (timer !== null) return
       timer = window.setTimeout(() => {
         timer = null
-        if (!dragState.current && !dockAnimatingRef.current) setIsOpen(false)
+        if (!dragState.current && !dockAnimatingRef.current) {
+          setIsOpen(false)
+          return
+        }
+        if (dockAnimatingRef.current) {
+          // [0.4.85] 动画/迁移期间既不打断也不丢弃:换边瞬移会让光标落到窗外
+          // 触发 mouseout,此刻若直接 setIsOpen(false) 会打断迁移三连写(混合
+          // DPI 下残留被缩放的错误矩形 = 「切换贴边后显示不完整」)。跳过本轮,
+          // 动画结束后再补一次判定;拖拽中的收起仍按原行为丢弃。
+          schedule()
+        }
       }, HOVER_COLLAPSE_DELAY_MS)
     }
     const cancel = () => {
@@ -2519,7 +2860,10 @@ function App() {
         <PageShell
           open={archiveOpen}
           title={t('page.archive')}
-          onClose={() => setArchiveOpen(false)}
+          onClose={() => {
+            archiveOpenRef.current = false
+            setArchiveOpen(false)
+          }}
           actions={<span className="arch-total">{archiveCount} {t('common.items')}</span>}
         >
           <ErrorBoundary label="归档">
@@ -2563,6 +2907,13 @@ function App() {
                       <TopbarToolIcon id={tool.id} />
                       {tool.id === 'recorder' && recorderActive ? (
                         <i className="rec-dot" aria-hidden="true" />
+                      ) : null}
+                      {tool.id === 'archive' && archiveLanded > 0 ? (
+                        <i
+                          key={archivePulseKey}
+                          className="arch-land-badge"
+                          aria-hidden="true"
+                        >{archiveLanded}</i>
                       ) : null}
                     </button>
                   )
@@ -2617,6 +2968,9 @@ function App() {
                   menuRef={moreMenuRef}
                   topmost={clTopmost}
                   onToggleTopmost={toggleClTopmost}
+                  archiveLanded={archiveLanded}
+                  archivePulseKey={archivePulseKey}
+                  vipBadge={showVip}
                 />
               ) : null}
             </header>
@@ -2685,7 +3039,20 @@ function App() {
                     >
                       <ChevronLeft size={15} />
                     </button>
-                    <div className="range-nav-label">
+                    <div
+                      className="range-nav-label is-clickable"
+                      role="button"
+                      tabIndex={0}
+                      title={t('date.pickTitle')}
+                      aria-label={t('date.pickTitle')}
+                      onClick={() => setRangeSheet('week')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setRangeSheet('week')
+                        }
+                      }}
+                    >
                       <strong>{weekRangeLabel.isCurrent ? t('week.thisWeek') : t('week.aWeek')}</strong>
                       <em>{weekRangeLabel.text}</em>
                     </div>
@@ -2725,7 +3092,20 @@ function App() {
                     >
                       <ChevronLeft size={15} />
                     </button>
-                    <div className="range-nav-label">
+                    <div
+                      className="range-nav-label is-clickable"
+                      role="button"
+                      tabIndex={0}
+                      title={t('date.pickTitle')}
+                      aria-label={t('date.pickTitle')}
+                      onClick={() => setRangeSheet('month')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setRangeSheet('month')
+                        }
+                      }}
+                    >
                       <strong>{monthLabel}</strong>
                     </div>
                     <button
@@ -2757,7 +3137,12 @@ function App() {
               )}
             </div>
 
-            <div className="sidebar-scroll main-scroll">
+            {/* ★2026-11-24 周/月筛选栏点击 → 底部日期选择弹窗（选完自动切周/月并滚动定位） */}
+            {rangeSheet && (
+              <RangeDateSheet onPick={pickJumpDate} onClose={() => setRangeSheet(null)} />
+            )}
+
+            <div className="sidebar-scroll main-scroll" ref={rangeListRef}>
               {activeTab === 'day' && (
                 <div className="tree-list list-anim" key={selectedDateKey}>
                   {dayTop.length === 0 ? (
@@ -2781,7 +3166,8 @@ function App() {
                   {weekGroups.map((group) =>
                     group.items.length > 0 ? (
                       <div className="range-group" key={group.key}>
-                        <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
+                        {/* data-date：筛选栏弹窗选日期后的滚动定位锚点 */}
+                        <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`} data-date={group.key}>
                           <span>{group.label}</span>
                           <div className="range-group-actions">
                             <em>{group.items.filter((item) => !item.done).length} {t('common.pending')}</em>
@@ -2817,7 +3203,11 @@ function App() {
                 <>
                   {monthGroups.map((group) => (
                     <div className="range-group" key={group.key}>
-                      <div className={`range-group-title ${group.isToday ? 'is-today' : ''}`}>
+                      {/* data-date：筛选栏弹窗选日期后的滚动定位锚点（undated 组无日期不挂） */}
+                      <div
+                        className={`range-group-title ${group.isToday ? 'is-today' : ''}`}
+                        data-date={group.key === 'undated' ? undefined : group.key}
+                      >
                         <span>{group.label}</span>
                         <div className="range-group-actions">
                           <em>{group.items.filter((item) => !item.done).length} {t('common.pending')}</em>
@@ -3200,6 +3590,8 @@ function TopbarToolIcon({ id, size = 16 }: { id: TopbarToolId; size?: number }) 
       return <Shirt size={size} />
     case 'archive':
       return <Archive size={size} />
+    case 'quickNote':
+      return <PenLine size={size} />
     case 'sync':
       return <RefreshCw size={size} />
     default:
@@ -3220,6 +3612,10 @@ function TopbarMoreMenu({
   menuRef,
   topmost,
   onToggleTopmost,
+  archiveLanded,
+  archivePulseKey,
+  /** ★2026-11-23 需求：VIP 角标只在「非会员且试用过期未激活」时显示（useAccount().showVip）。 */
+  vipBadge,
 }: {
   hidden: TopbarTool[]
   shortcutLabels: Partial<Record<TopbarToolId, string>>
@@ -3229,6 +3625,10 @@ function TopbarMoreMenu({
   /** 晾衣绳置顶开关(0.4.65):＋菜单第 7 行常驻,不可隐藏、不进配置页(R85 单一真源)。 */
   topmost: boolean
   onToggleTopmost: () => void
+  /** ★2026-11-22 归档飞入反馈：会话内落地次数 + 脉冲触发键。 */
+  archiveLanded: number
+  archivePulseKey: number
+  vipBadge: boolean
 }) {
   const { t } = useI18n()
   return (
@@ -3247,7 +3647,10 @@ function TopbarMoreMenu({
         >
           <TopbarToolIcon id={tool.id} size={15} />
           <span className="nm">{toolName(tool.id)}</span>
-          {tool.vip ? <span className="tm-vip">{t('common.vip')}</span> : null}
+          {tool.id === 'archive' && archiveLanded > 0 ? (
+            <i key={archivePulseKey} className="arch-land-badge" aria-hidden="true">{archiveLanded}</i>
+          ) : null}
+          {tool.vip && vipBadge ? <span className="tm-vip">{t('common.vip')}</span> : null}
           {shortcutLabels[tool.id] ? <span className="kd">{shortcutLabels[tool.id]}</span> : null}
         </button>
       ))}
@@ -4127,6 +4530,58 @@ async function commitArchiveShortcut(
   onToast?.('ok', t('toast.shortcut.archiveUpdated'))
 }
 
+/** 全局速记（随手记）快捷键冲突校验（与其余全局键 / 截图贴图 / 系统保留冲突则拦截）。 */
+function quickNoteShortcutConflict(
+  draft: string,
+  toggleShortcut: string,
+  noteShortcut: string,
+  clipboardShortcut: string,
+  archiveShortcut: string,
+): string | null {
+  if (!draft.trim()) return t('shortcut.empty')
+  const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+  if (WINDOW_SHORTCUT_RESERVED.some((r) => norm(r) === norm(draft))) {
+    return t('shortcut.reserved')
+  }
+  if (norm(draft) === norm(toggleShortcut)) return t('shortcut.dupToggle')
+  if (norm(draft) === norm(noteShortcut)) return t('shortcut.dupNote')
+  if (norm(draft) === norm(clipboardShortcut)) return t('shortcut.dupClipboard')
+  if (norm(draft) === norm(archiveShortcut)) return t('shortcut.dupArchive')
+  try {
+    const shot = getScreenshotSettings()
+    for (const s of [shot.shotShortcut, shot.pinShortcut, shot.exitShortcut]) {
+      if (norm(s) === norm(draft)) return t('shortcut.dupScreenshot')
+    }
+  } catch {
+    /* 读取失败忽略 */
+  }
+  const main = draft.split('+').pop()?.trim() ?? ''
+  if (
+    !main ||
+    ['control', 'ctrl', 'commandorcontrol', 'command', 'cmd', 'alt', 'shift', 'super', 'meta'].includes(
+      main.toLowerCase(),
+    )
+  ) {
+    return t('shortcut.needMainKey')
+  }
+  return null
+}
+
+/** 保存全局速记快捷键：**先注册成功、再写进设置**（与其余快捷键同顺序）。 */
+async function commitQuickNoteShortcut(
+  v: string,
+  onChange: (patch: Partial<SidebarSettings>) => void,
+  onToast?: (kind: 'ok' | 'err', text: string) => void,
+) {
+  const r = await applyQuickNoteShortcut(v)
+  if (!r.ok) {
+    onToast?.('err', r.error || t('toast.shortcut.quickNoteFail'))
+    return
+  }
+  onChange({ quickNoteShortcut: v })
+  onToast?.('ok', t('toast.shortcut.quickNoteUpdated'))
+}
+
 /** 同步间隔选项的显示文案(值 → 词条 key;label 存库的是纯数值)。 */
 const SYNC_INTERVAL_LABEL: Record<number, LocaleKey> = {
   1800: 'sync.interval.1800',
@@ -4493,6 +4948,24 @@ function SidebarSettingsPanel({
             archiveShortcutConflict(draft, settings.toggleWindowShortcut, settings.noteShortcut, settings.clipboardShortcut)
           }
           onCommit={(v) => void commitArchiveShortcut(v, onChange, onToast)}
+        />
+        {/* ★2026-11-22 全局速记（随手记）：会员专属，默认 Ctrl+Shift+Y。 */}
+        <ShortcutField
+          label={t('shortcut.quickNote')}
+          value={settings.quickNoteShortcut}
+          conflictFor={(draft) =>
+            quickNoteShortcutConflict(
+              draft,
+              settings.toggleWindowShortcut,
+              settings.noteShortcut,
+              settings.clipboardShortcut,
+              settings.archiveShortcut,
+            )
+          }
+          onCommit={(v) => void commitQuickNoteShortcut(v, onChange, onToast)}
+          locked={!fullAccess}
+          onLocked={() => onLocked?.(t('feature.quickNote'))}
+          vip={showVip}
         />
         <p className="settings-hint">
           {caps().screenshot ? t('shortcut.hintGlobal') : t('shortcut.hint')}
@@ -5318,6 +5791,143 @@ function SheetDatePicker({
           popPortalHost(),
         )}
     </>
+  )
+}
+
+/**
+ * ★2026-11-24 周/月待办筛选栏点击唤起的**底部日期选择弹窗**。
+ * 三段选择：年（今年与过去两年）/ 月 / 日；可选范围 = [今天-2年, 今天]
+ * （需求明确「支持选择过去 2 年的日期」，未来日期禁用）。点选日期即确认关闭，
+ * 由父级 pickJumpDate 切锚点并入队滚动定位。条件挂载：每次打开重置到今天年月。
+ */
+function RangeDateSheet({
+  onPick,
+  onClose,
+}: {
+  onPick: (dayKey: string) => void
+  onClose: () => void
+}) {
+  const now = new Date()
+  const minDate = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate())
+  const years = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()]
+  const [view, setView] = useState({ y: now.getFullYear(), m: now.getMonth() })
+  const minKey = dayKeyOf(minDate)
+  const maxKey = dayKeyOf(now)
+  // 月导航边界：最早 = 今天-2年的当月，最晚 = 本月
+  const canPrev =
+    view.y > minDate.getFullYear() ||
+    (view.y === minDate.getFullYear() && view.m > minDate.getMonth())
+  const canNext =
+    view.y < now.getFullYear() ||
+    (view.y === now.getFullYear() && view.m < now.getMonth())
+  const shiftMonth = (delta: number) => {
+    setView((v) => {
+      const d = new Date(v.y, v.m + delta, 1)
+      return { y: d.getFullYear(), m: d.getMonth() }
+    })
+  }
+  // 42 格月历（周一起始），前后用相邻月份补齐——与 SheetDatePicker 同款布局
+  const firstDow = (new Date(view.y, view.m, 1).getDay() + 6) % 7
+  const cells: Date[] = []
+  for (let i = 0; i < 42; i += 1) cells.push(new Date(view.y, view.m, 1 - firstDow + i))
+
+  // Esc 关闭（与 SheetDatePicker 行为一致）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // ★2026-11-24 三版：添加事项弹窗同款骨架 + 提醒日期弹层同款的**月历网格**——
+  // 顶部年份胶囊快选（今年与过去两年）+ ‹ › 月导航 + 7 列日历；
+  // 范围仍锁定 [今天-2年, 今天]，界外日期禁用。功能与定位逻辑不变。
+  return (
+    <div className="sheet-backdrop" onClick={onClose} role="dialog" aria-label={t('date.pickTitle')}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" />
+        <div className="range-sheet-head">
+          <strong className="sheet-title">{t('date.pickTitle')}</strong>
+          <button type="button" className="range-sheet-close" aria-label={t('common.close')} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="rdp-years">
+          {years.map((yy) => (
+            <button
+              key={yy}
+              type="button"
+              className={`rs-chip ${yy === view.y ? 'is-active' : ''}`}
+              onClick={() =>
+                setView((v) => ({
+                  y: yy,
+                  m:
+                    yy === now.getFullYear()
+                      ? Math.min(v.m, now.getMonth())
+                      : yy === minDate.getFullYear()
+                        ? Math.max(v.m, minDate.getMonth())
+                        : v.m,
+                }))
+              }
+            >
+              {yy}
+            </button>
+          ))}
+        </div>
+        <div className="rdp-nav">
+          <button
+            type="button"
+            className="range-nav-button"
+            disabled={!canPrev}
+            aria-label={t('month.prevAria')}
+            onClick={() => shiftMonth(-1)}
+          >
+            ‹
+          </button>
+          <span className="rdp-nav-title">
+            {t('date.monthYear', { year: view.y, month: view.m + 1 })}
+          </span>
+          <button
+            type="button"
+            className="range-nav-button"
+            disabled={!canNext}
+            aria-label={t('month.nextAria')}
+            onClick={() => shiftMonth(1)}
+          >
+            ›
+          </button>
+        </div>
+        <div className="rdp-grid">
+          {WEEKDAY_SHORT_KEYS.map((w) => (
+            <span key={w} className="rdp-wd">
+              {t(w)}
+            </span>
+          ))}
+          {cells.map((d) => {
+            const k = dayKeyOf(d)
+            const disabled = k < minKey || k > maxKey
+            return (
+              <button
+                key={k}
+                type="button"
+                disabled={disabled}
+                className={[
+                  'rdp-day',
+                  d.getMonth() === view.m ? '' : 'is-out',
+                  k === maxKey ? 'is-today' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => onPick(k)}
+              >
+                {d.getDate()}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 

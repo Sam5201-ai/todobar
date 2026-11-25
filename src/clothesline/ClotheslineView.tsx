@@ -45,6 +45,8 @@ import {
   CL_OPEN_SETTINGS,
   CL_OPEN_ARCHIVE,
   CL_ARCHIVE_CARD,
+  CL_ARCHIVE_LANDED,
+  type ClArchiveLanded,
   CL_CREATE_NOTE,
   CL_EDIT_NOTE_ITEM,
   CL_SETTINGS_CHANGED,
@@ -71,8 +73,13 @@ import {
 import type { RecorderStatus } from '../recorder'
 import { copyText } from '../clipboard'
 import { useAccount } from '../membership'
+import { addCategory, loadCategories, loadLastCategory, removeCategory, saveLastCategory } from '../quickNote/categories'
+import { RichText, RICH_PREFIX, hasRichMarkup, isRichText, richToPlain, sanitizeRichHtml } from '../utils/richtext'
 import { t, useI18n } from '../i18n'
 import './clothesline.css'
+// ★2026-11-24 问题3：随手记新建/编辑弹窗复用全局速记窗的 qn 系样式（标题输入/工具行/正文/分类），
+// 视觉与交互以全局速记的随手记弹窗为准（仅按钮文案不同）。
+import '../quickNote/quick-note.css'
 
 const lsLog = (msg: string) => {
   try {
@@ -134,11 +141,16 @@ function hashPose(id: string): { tilt: number; windPhase: number } {
   return { tilt: +(u * 4 - 2).toFixed(2), windPhase: +(u * Math.PI * 2).toFixed(3) }
 }
 
-/** ★2026-11-17 需求1：番茄卡样式 7 选 1 的可选键。
+/** ★2026-11-17 需求1：番茄卡样式的可选键。
  *  paper=经典（旧 minimal/glass 继续按经典视觉渲染，弹窗编辑时归入经典）；
  *  watch=黄铜怀表 / ticket=站台车票 / lcd=像素掌机 / can=番茄罐头 /
- *  board=咖啡小黑板 / marquee=剧场灯牌 —— 与 preview/clothesline-timer-card-designs.html 对应。 */
-const TIMER_STYLE_KEYS = ['paper', 'watch', 'ticket', 'lcd', 'can', 'board', 'marquee'] as const
+ *  board=咖啡小黑板 / marquee=剧场灯牌 —— 与 preview/clothesline-timer-card-designs.html 对应。
+ *  ★2026-11-23 异形卡 4 选：tomato=番茄 / pocket=口袋怀表 / hourglass=沙漏 / moon=月相 ——
+ *  与 preview/timer-shape-final-reference.html 定稿逐笔一致（SVG 异形卡面）。 */
+const TIMER_STYLE_KEYS = [
+  'paper', 'watch', 'ticket', 'lcd', 'can', 'board', 'marquee',
+  'tomato', 'pocket', 'hourglass', 'moon',
+] as const
 type TimerStyleKey = (typeof TIMER_STYLE_KEYS)[number]
 
 /** 引用源是否已失效（原便利签/贴图/剪贴板/待办/本地图被删或路径丢失）。
@@ -206,8 +218,51 @@ function readNoteLite(id: string | null): NoteLite | null {
   }
 }
 
-/** 卡片呈现内容。外部引用失效只降级占位，卡本身保留原槽位。
- *  模块级函数在渲染期被调用，直接用导入的 t() 取词（组件随 locale 变化重渲染）。 */
+/** ★2026-11-23 需求：番茄计时弹窗样式选项表（后 7 种 = 会员专属）。
+ *  受限用户（非会员且试用过期未激活）：点击不选中并 toast 提示；showVip 时右上角挂 VIP 角标。 */
+const TIMER_STYLE_OPTS: { key: TimerStyleKey; label: Parameters<typeof t>[0]; vipOnly?: boolean }[] = [
+  { key: 'paper', label: 'clothesline.compose.stylePaper' },
+  { key: 'watch', label: 'clothesline.compose.styleWatch' },
+  { key: 'ticket', label: 'clothesline.compose.styleTicket' },
+  { key: 'lcd', label: 'clothesline.compose.styleLcd', vipOnly: true },
+  { key: 'can', label: 'clothesline.compose.styleCan' },
+  { key: 'board', label: 'clothesline.compose.styleBoard', vipOnly: true },
+  { key: 'marquee', label: 'clothesline.compose.styleMarquee', vipOnly: true },
+  { key: 'tomato', label: 'clothesline.compose.styleTomato', vipOnly: true },
+  { key: 'pocket', label: 'clothesline.compose.stylePocket', vipOnly: true },
+  { key: 'hourglass', label: 'clothesline.compose.styleHourglass', vipOnly: true },
+  { key: 'moon', label: 'clothesline.compose.styleMoon', vipOnly: true },
+]
+
+/** ★2026-11-24 问题3/4：随手记弹窗（绳窗新建/编辑）复用全局速记窗的富文本工具行
+ *  （B/I/U/S/字体颜色，execCommand）。与速记窗一致：onMouseDown preventDefault 保住
+ *  编辑器选区，命令才能作用在已选中文字上。 */
+function QnToolbarRow({ onFmt }: { onFmt: (cmd: string, value?: string) => void }) {
+  return (
+    <div className="qn-toolbar">
+      <button type="button" className="qn-fmt" aria-label={t('quickNote.bold')} onMouseDown={(e) => e.preventDefault()} onClick={() => onFmt('bold')}>
+        <b>B</b>
+      </button>
+      <button type="button" className="qn-fmt" aria-label={t('quickNote.italic')} onMouseDown={(e) => e.preventDefault()} onClick={() => onFmt('italic')}>
+        <i>I</i>
+      </button>
+      <button type="button" className="qn-fmt" aria-label={t('quickNote.underline')} onMouseDown={(e) => e.preventDefault()} onClick={() => onFmt('underline')}>
+        <u>U</u>
+      </button>
+      <button type="button" className="qn-fmt" aria-label={t('quickNote.strike')} onMouseDown={(e) => e.preventDefault()} onClick={() => onFmt('strikeThrough')}>
+        <s>S</s>
+      </button>
+      <input
+        type="color"
+        className="qn-color"
+        aria-label={t('quickNote.color')}
+        defaultValue="#2c2c2a"
+        onChange={(e) => onFmt('foreColor', e.target.value)}
+      />
+    </div>
+  )
+}
+
 function cardCopy(card: ClotheslineCard): { title: string; text: string; missing: boolean } {
   if (refBroken(card)) {
     return { title: t('clothesline.card.refDeletedTitle'), text: t('clothesline.card.refDeletedText'), missing: true }
@@ -240,9 +295,13 @@ function cardCopy(card: ClotheslineCard): { title: string; text: string; missing
   //   用户自定义过的标题原样保留，没有标题时回落到类型默认值。
   //   「W×H」尺寸文案仍从源头不再写入、渲染期剥离存量。
   if (card.kind === 'shot' || card.kind === 'pin' || card.kind === 'image') {
-    const fallbackTitle = card.kind === 'shot' ? t('clothesline.card.kindShot') : card.kind === 'pin' ? t('clothesline.card.kindPin') : t('clothesline.card.kindImage')
     const legacyText = /^\d+×\d+$/.test(card.text) ? '' : card.text
-    return { title: title || fallbackTitle, text: legacyText, missing: false }
+    // ★2026-11-23 需求2：截图/贴图/图片卡不再回落默认标题「截图/贴图/图片」——
+    //   只有用户编辑时写入的 title/text 才上卡（此前曾按反馈恢复过默认标题，本次按
+    //   用户最新要求再次去掉）。存量卡里已写入数据的默认标题如何剥离：
+    //   title 若等于类型默认词也视为空（避免老卡一直顶着「截图」）。
+    const stockTitle = title === t('clothesline.card.kindShot') || title === t('clothesline.card.kindPin') || title === t('clothesline.card.kindImage') ? '' : title
+    return { title: stockTitle, text: legacyText, missing: false }
   }
   return { title, text: card.text, missing: false }
 }
@@ -316,116 +375,6 @@ const cardTextFormat = (card: ClotheslineCard): TextFormat => ({
   bodyItalic: !!card.body_italic,
 })
 
-/** 弹窗「字体格式」段的一行（字号步进 ±0.5px，范围 8~28）。 */
-function FmtRow(props: {
-  label: string
-  size: number | null
-  defSize: number
-  bold: boolean
-  italic: boolean
-  onSize: (v: number | null) => void
-  onBold: (v: boolean) => void
-  onItalic: (v: boolean) => void
-}) {
-  const cur = props.size ?? props.defSize
-  return (
-    <div className="cl-modal-fmt-row">
-      <span className="cl-modal-fmt-label">{props.label}</span>
-      <button
-        type="button"
-        className="cl-modal-fmt-step"
-        aria-label={t('clothesline.fmt.stepDown', { label: props.label })}
-        onClick={() => props.onSize(Math.max(8, Math.round((cur - 0.5) * 2) / 2))}
-      >
-        −
-      </button>
-      <span className="cl-modal-fmt-val">{props.size == null ? t('clothesline.fmt.defaultSize') : `${props.size}px`}</span>
-      <button
-        type="button"
-        className="cl-modal-fmt-step"
-        aria-label={t('clothesline.fmt.stepUp', { label: props.label })}
-        onClick={() => props.onSize(Math.min(28, Math.round((cur + 0.5) * 2) / 2))}
-      >
-        ＋
-      </button>
-      <button
-        type="button"
-        className={`cl-modal-fmt-tgl${props.bold ? ' is-on' : ''}`}
-        title={t('clothesline.fmt.bold')}
-        aria-pressed={props.bold}
-        onClick={() => props.onBold(!props.bold)}
-      >
-        B
-      </button>
-      <button
-        type="button"
-        className={`cl-modal-fmt-tgl cl-modal-fmt-tgl-i${props.italic ? ' is-on' : ''}`}
-        title={t('clothesline.fmt.italic')}
-        aria-pressed={props.italic}
-        onClick={() => props.onItalic(!props.italic)}
-      >
-        I
-      </button>
-    </div>
-  )
-}
-
-/** 弹窗「字体格式」段：字体族下拉 + 标题/内容两行（新建随手记 / 编辑随手记共用）。 */
-function FmtSection(props: { fmt: TextFormat; onChange: (f: TextFormat) => void }) {
-  const { fmt, onChange } = props
-  const set = (p: Partial<TextFormat>) => onChange({ ...fmt, ...p })
-  return (
-    <div className="cl-modal-fmt">
-      <div className="cl-modal-fmt-head">
-        <span>{t('clothesline.fmt.head')}</span>
-        <button
-          type="button"
-          className="cl-modal-fmt-reset"
-          onClick={() => onChange({ ...TEXT_FMT_DEFAULT })}
-        >
-          {t('clothesline.fmt.reset')}
-        </button>
-      </div>
-      <select
-        className="cl-modal-fmt-family"
-        value={fmt.family}
-        onChange={(e) => set({ family: e.target.value })}
-        title={t('clothesline.fmt.family')}
-      >
-        <option value="">{t('clothesline.fmt.familyDefault')}</option>
-        <option value="'Microsoft YaHei'">{t('clothesline.fmt.familyYahei')}</option>
-        <option value="SimSun">{t('clothesline.fmt.familySong')}</option>
-        <option value="SimHei">{t('clothesline.fmt.familyHei')}</option>
-        <option value="KaiTi">{t('clothesline.fmt.familyKai')}</option>
-        <option value="'Noto Sans SC'">{t('clothesline.fmt.familyNoto')}</option>
-        <option value="Arial">Arial</option>
-        <option value="'Times New Roman'">Times New Roman</option>
-        <option value="Consolas">Consolas</option>
-      </select>
-      <FmtRow
-        label={t('clothesline.fmt.titleLabel')}
-        size={fmt.titleSize}
-        defSize={12.5}
-        bold={fmt.titleBold}
-        italic={fmt.titleItalic}
-        onSize={(v) => set({ titleSize: v })}
-        onBold={(v) => set({ titleBold: v })}
-        onItalic={(v) => set({ titleItalic: v })}
-      />
-      <FmtRow
-        label={t('clothesline.fmt.bodyLabel')}
-        size={fmt.bodySize}
-        defSize={10}
-        bold={fmt.bodyBold}
-        italic={fmt.bodyItalic}
-        onSize={(v) => set({ bodySize: v })}
-        onBold={(v) => set({ bodyBold: v })}
-        onItalic={(v) => set({ bodyItalic: v })}
-      />
-    </div>
-  )
-}
-
 /** 计时卡：结束时间写盘，重启后续算而非重开（wallclock）。 */
 function timerText(card: ClotheslineCard, now: number): string {
   if (card.end_at == null) return fmtTimerBody(card.elapsed_before_pause_ms || 0)
@@ -494,6 +443,10 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
   // ★一键录音：卡上标题行内编辑（null=非编辑态）。录音卡状态 5Hz 刷新，
   //   输入框是受控组件，重渲染不影响正在输入的内容。
   const [audioTitleEdit, setAudioTitleEdit] = useState<string | null>(null)
+  // ★2026-11-23 需求1：图片卡比例钳制（竖图 3:4 / 横图 4:3）。img onLoad 读
+  //   naturalWidth/Height 求原始宽高比并钳制后落 state（hook 必须在组件顶层），
+  //   .cl-photo 以 inline aspect-ratio 定形；加载完成前回落自然比例。
+  const [imgRatio, setImgRatio] = useState(0)
 
   if (card.kind === 'timer') {
     const frozen = card.end_at == null
@@ -518,6 +471,27 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
         </button>
         <button type="button" onClick={() => onTimerAction('reset')}>{t('clothesline.card.reset')}</button>
         <button type="button" onClick={() => onTimerAction('plus5')}>{t('clothesline.card.plus5')}</button>
+      </div>
+    )
+    // ★2026-11-23 异形计时卡公共件：悬停浮现的玻璃操作钮（❚❚/▶ ↺ +5′）+ 形内文案。
+    // shapeTitle 截断 8 字防溢出形内胶囊；shapeSub 运行中显示方向、暂停/结束显示状态。
+    const shapeTitle = copy.title.length > 8 ? `${copy.title.slice(0, 8)}…` : copy.title
+    const shapeSub = frozen || ended ? statusText : dirText
+    const shapeLong = !!timer && timer.split(':').length > 2
+    const shapeDone = ended ? ' is-done' : ''
+    const shapePaused = frozen ? ' is-paused' : ''
+    const shapeBtns = (
+      <div className="cl-shape-btns" onPointerDown={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          data-tip={frozen ? t('clothesline.card.resume') : t('clothesline.card.pause')}
+          aria-label={frozen ? t('clothesline.card.resume') : t('clothesline.card.pause')}
+          onClick={() => onTimerAction(frozen ? 'resume' : 'pause')}
+        >
+          {frozen ? '▶' : '❚❚'}
+        </button>
+        <button type="button" data-tip={t('clothesline.card.reset')} aria-label={t('clothesline.card.reset')} onClick={() => onTimerAction('reset')}>↺</button>
+        <button type="button" data-tip={t('clothesline.card.plus5')} aria-label={t('clothesline.card.plus5')} onClick={() => onTimerAction('plus5')}>+5′</button>
       </div>
     )
     if (isClassic) {
@@ -654,6 +628,225 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           </span>
           {timerBtns}
           <span className="cl-eb-foot">{statusText} · {dirText}</span>
+        </div>
+      )
+    }
+    if (tstyle === 'tomato') {
+      // ★2026-11-23 异形计时卡① 番茄：白瓷表盘 + 红弧=剩余（C=289），
+      // 完成整果转金（cl-shape-gold）+ 右上对勾徽标。与定稿方案A 逐笔一致；
+      // 绳窗铁律：内容层零 CSS animation（进度弧纯 strokeDashoffset 内联样式）。
+      const uid = card.id.slice(-6)
+      return (
+        <div className={`cl-face cl-shape is-tomato${shapeDone}${shapePaused}`}>
+          <svg className="cl-shape-svg" viewBox="0 0 218 252" aria-hidden="true">
+            <defs>
+              <radialGradient id={`tmB-${uid}`} cx="35%" cy="26%" r="85%">
+                <stop offset="0" stopColor="#ff8a70" />
+                <stop offset=".45" stopColor="#e84433" />
+                <stop offset=".85" stopColor="#c22c1e" />
+                <stop offset="1" stopColor="#9e2015" />
+              </radialGradient>
+              <radialGradient id={`tmG-${uid}`} cx="35%" cy="26%" r="85%">
+                <stop offset="0" stopColor="#ffdf8a" />
+                <stop offset=".5" stopColor="#eda43c" />
+                <stop offset="1" stopColor="#b06f1c" />
+              </radialGradient>
+              <clipPath id={`tmC-${uid}`}>
+                <path d="M109 34 C68 30 30 64 30 120 C30 174 66 208 109 208 C152 208 188 174 188 120 C188 64 150 30 109 34 Z" />
+              </clipPath>
+            </defs>
+            {/* ★2026-11-23 反馈2：SVG 顶部补挂绳（y0 → 果蒂），卡顶即绳下，夹子咬住挂绳 */}
+            <line x1="109" y1="0" x2="109" y2="14" stroke="#c9ac77" strokeWidth="2" />
+            <path d="M109 34 C68 30 30 64 30 120 C30 174 66 208 109 208 C152 208 188 174 188 120 C188 64 150 30 109 34 Z" fill={`url(#tmB-${uid})`} />
+            <g clipPath={`url(#tmC-${uid})`}>
+              <rect className="cl-shape-gold" x="30" y="30" width="158" height="180" fill={`url(#tmG-${uid})`} />
+            </g>
+            <ellipse cx="78" cy="72" rx="30" ry="15" fill="#ffffff" opacity=".32" transform="rotate(-16 78 72)" />
+            <path d="M109 34 C104 26 100 20 104 12" stroke="#3e8a4c" strokeWidth="5" strokeLinecap="round" fill="none" />
+            <g fill="#3f9e4d">
+              <path d="M109 36 C96 28 80 30 72 42 C86 42 100 44 109 48 Z" />
+              <path d="M109 36 C122 28 138 30 146 42 C132 42 118 44 109 48 Z" />
+              <path d="M109 36 C102 24 88 18 76 24 C88 30 102 36 109 42 Z" fill="#2e7d32" />
+              <path d="M109 36 C116 24 130 18 142 24 C130 30 116 36 109 42 Z" fill="#2e7d32" />
+            </g>
+            <circle cx="109" cy="128" r="54" fill="#fff9f5" />
+            <circle className="cl-shape-track" cx="109" cy="128" r="46" strokeWidth="8" />
+            <circle
+              className="cl-shape-arc"
+              cx="109"
+              cy="128"
+              r="46"
+              strokeWidth="8"
+              strokeDasharray="289"
+              style={{ strokeDashoffset: 289 * (1 - ratio) }}
+              transform="rotate(-90 109 128)"
+            />
+            <text className={`cl-shape-time${shapeLong ? ' is-long' : ''}`} x="109" y="127" textAnchor="middle">{timer ?? '--:--'}</text>
+            <text className="cl-shape-sub" x="109" y="152" textAnchor="middle">{shapeSub}</text>
+            <rect className="cl-shape-pill" x="55" y="188" width="108" height="22" rx="11" />
+            <text className="cl-shape-title" x="109" y="203" textAnchor="middle">{shapeTitle}{pinMark}</text>
+            <g className="cl-shape-badge" transform="rotate(12 186 34)">
+              <circle cx="186" cy="34" r="14" fill="#2bb673" />
+              <path d="M180 34 L184.5 38.5 L192.5 29.5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </g>
+          </svg>
+          {shapeBtns}
+        </div>
+      )
+    }
+    if (tstyle === 'pocket') {
+      // ② 口袋怀表：吊环挂夹下 + 黄铜表壳 + 表盘外弧=剩余（C=421）+ 12 刻度 + 铭牌。
+      const uid = card.id.slice(-6)
+      return (
+        <div className={`cl-face cl-shape is-pocket${shapeDone}${shapePaused}`}>
+          <svg className="cl-shape-svg" viewBox="0 0 206 248" aria-hidden="true">
+            <defs>
+              <linearGradient id={`pwC-${uid}`} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#f6dc9c" />
+                <stop offset=".5" stopColor="#dcae52" />
+                <stop offset="1" stopColor="#a97b2b" />
+              </linearGradient>
+            </defs>
+            {/* ★2026-11-23 反馈2：SVG 顶部补挂绳（y0 → 吊环顶），夹子咬住挂绳 */}
+            <line x1="103" y1="0" x2="103" y2="13" stroke="#c9ac77" strokeWidth="2" />
+            <circle cx="103" cy="24" r="12" fill="none" stroke={`url(#pwC-${uid})`} strokeWidth="6" />
+            <rect x="94" y="34" width="18" height="14" rx="5" fill={`url(#pwC-${uid})`} />
+            <circle cx="103" cy="134" r="88" fill={`url(#pwC-${uid})`} />
+            <circle cx="103" cy="134" r="76" fill="#fffdf4" />
+            <circle className="cl-shape-track" cx="103" cy="134" r="67" strokeWidth="10" />
+            <circle
+              className="cl-shape-arc"
+              cx="103"
+              cy="134"
+              r="67"
+              strokeWidth="10"
+              strokeDasharray="421"
+              style={{ strokeDashoffset: 421 * (1 - ratio) }}
+              transform="rotate(-90 103 134)"
+            />
+            <g stroke="#c4b083" strokeWidth="2" strokeLinecap="round">
+              <line x1="103" y1="72" x2="103" y2="80" />
+              <line x1="103" y1="188" x2="103" y2="196" />
+              <line x1="41" y1="134" x2="49" y2="134" />
+              <line x1="157" y1="134" x2="165" y2="134" />
+              <line x1="59.5" y1="90.5" x2="65" y2="96" />
+              <line x1="141" y1="172" x2="146.5" y2="177.5" />
+              <line x1="146.5" y1="90.5" x2="141" y2="96" />
+              <line x1="65" y1="172" x2="59.5" y2="177.5" />
+            </g>
+            <text className={`cl-shape-time${shapeLong ? ' is-long' : ''}`} x="103" y="136" textAnchor="middle">{timer ?? '--:--'}</text>
+            <text className="cl-shape-sub" x="103" y="158" textAnchor="middle">{shapeSub}</text>
+            <rect className="cl-shape-pill" x="55" y="176" width="96" height="20" rx="10" />
+            <text className="cl-shape-title" x="103" y="190" textAnchor="middle">{shapeTitle}{pinMark}</text>
+            <g className="cl-shape-badge" transform="rotate(12 179 46)">
+              <circle cx="179" cy="46" r="14" fill="#2bb673" />
+              <path d="M173 46 L177.5 50.5 L185.5 41.5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </g>
+          </svg>
+          {shapeBtns}
+        </div>
+      )
+    }
+    if (tstyle === 'hourglass') {
+      // ③ 沙漏：上腔沙=剩余（满 51px）、下腔沙=流逝（满 87px），静态流沙虚线；
+      // 木吊牌放标题 + 时间。倒计时上沙减少；正计时下沙累积（语义自动成立）。
+      const uid = card.id.slice(-6)
+      const sandRemain = card.timer_direction === 'countup' ? 1 - ratio : ratio
+      const sandProg = 1 - sandRemain
+      return (
+        <div className={`cl-face cl-shape is-hourglass${shapeDone}${shapePaused}`}>
+          <svg className="cl-shape-svg" viewBox="0 0 190 240" aria-hidden="true">
+            <defs>
+              <linearGradient id={`hgW-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#c99a5f" />
+                <stop offset="1" stopColor="#8d6437" />
+              </linearGradient>
+              <linearGradient id={`hgS-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#f2cf7e" />
+                <stop offset="1" stopColor="#d9a640" />
+              </linearGradient>
+              <clipPath id={`hgT-${uid}`}><path d="M42 22 H148 C148 52 116 62 95 68 C74 62 42 52 42 22 Z" /></clipPath>
+              <clipPath id={`hgB-${uid}`}><path d="M95 71 C116 77 148 87 148 118 L148 158 L42 158 L42 118 C42 87 74 77 95 71 Z" /></clipPath>
+            </defs>
+            {/* ★2026-11-23 反馈2：SVG 顶部补挂绳（y0 → 顶木条） */}
+            <line x1="95" y1="0" x2="95" y2="9" stroke="#c9ac77" strokeWidth="2" />
+            <path d="M42 22 H148 C148 52 116 62 95 68 C74 62 42 52 42 22 Z" fill="rgba(210,224,248,.10)" stroke="rgba(190,205,235,.45)" strokeWidth="2" />
+            <path d="M95 71 C116 77 148 87 148 118 L148 158 L42 158 L42 118 C42 87 74 77 95 71 Z" fill="rgba(210,224,248,.10)" stroke="rgba(190,205,235,.45)" strokeWidth="2" />
+            <g clipPath={`url(#hgT-${uid})`}>
+              <rect x="42" y={70 - 51 * sandRemain} width="106" height={Math.max(0, 51 * sandRemain)} fill={`url(#hgS-${uid})`} />
+            </g>
+            {/* ★2026-11-23 反馈1：流沙滴漏动效。用 SMIL <animate> 而非 CSS animation ——
+                SMIL 时钟独立于 React 重渲染（5Hz tick 不会重启动画，绳窗铁律不破）；
+                暂停/结束时卸载 <animate> 即停流。 */}
+            <line className="cl-shape-stream" x1="95" y1="68" x2="95" y2="112" strokeDasharray="4 4">
+              {!frozen && !ended && (
+                <animate attributeName="stroke-dashoffset" from="0" to="-8" dur="0.9s" repeatCount="indefinite" />
+              )}
+            </line>
+            <g clipPath={`url(#hgB-${uid})`}>
+              <rect x="42" y={158 - 87 * sandProg} width="106" height={Math.max(0, 87 * sandProg)} fill={`url(#hgS-${uid})`} />
+            </g>
+            <rect x="34" y="8" width="122" height="14" rx="7" fill={`url(#hgW-${uid})`} />
+            <rect x="34" y="158" width="122" height="14" rx="7" fill={`url(#hgW-${uid})`} />
+            <line x1="95" y1="172" x2="95" y2="182" stroke="#8d6437" strokeWidth="2" />
+            <rect x="42" y="182" width="106" height="52" rx="10" fill={`url(#hgW-${uid})`} />
+            <text className="cl-shape-title" x="95" y="200" textAnchor="middle">{shapeTitle}{pinMark}</text>
+            <text className={`cl-shape-time${shapeLong ? ' is-long' : ''}`} x="95" y="224" textAnchor="middle">{timer ?? '--:--'}</text>
+            <g className="cl-shape-badge" transform="rotate(12 160 16)">
+              <circle cx="160" cy="16" r="13" fill="#2bb673" />
+              <path d="M154.5 16 L158.5 20 L166 12.5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </g>
+          </svg>
+          {shapeBtns}
+        </div>
+      )
+    }
+    if (tstyle === 'moon') {
+      // ④ 月相：深夜蓝星球盘 + 星光点缀 + 金弧沿边缘扫过=剩余（C=465）；
+      // 与口袋怀表形成一明一暗对照。完成弧光熄灭 + 对勾徽标。
+      const uid = card.id.slice(-6)
+      return (
+        <div className={`cl-face cl-shape is-moon${shapeDone}${shapePaused}`}>
+          <svg className="cl-shape-svg" viewBox="0 0 210 246" aria-hidden="true">
+            <defs>
+              <radialGradient id={`mnN-${uid}`} cx="38%" cy="30%" r="85%">
+                <stop offset="0" stopColor="#3c4a78" />
+                <stop offset=".7" stopColor="#242d4c" />
+                <stop offset="1" stopColor="#161c30" />
+              </radialGradient>
+            </defs>
+            {/* ★2026-11-23 反馈2：SVG 顶部补挂绳（y0 → 月盘顶 y36），夹子咬住挂绳 */}
+            <line x1="105" y1="0" x2="105" y2="38" stroke="#c9ac77" strokeWidth="2" />
+            <circle cx="105" cy="118" r="82" fill={`url(#mnN-${uid})`} stroke="rgba(140,160,220,.3)" />
+            <circle cx="85" cy="94" r="54" fill="#f2c766" opacity=".10" />
+            <g fill="#cdd7f5">
+              <circle cx="58" cy="76" r="1.6" opacity=".8" />
+              <circle cx="152" cy="82" r="2" opacity=".9" />
+              <circle cx="72" cy="162" r="1.5" opacity=".7" />
+              <circle cx="146" cy="152" r="1.4" opacity=".7" />
+            </g>
+            <path d="M148 74 L148 90 M140 82 L156 82" stroke="#e8d9a0" strokeWidth="1.6" strokeLinecap="round" opacity=".85" />
+            <circle className="cl-shape-track" cx="105" cy="118" r="74" strokeWidth="8" />
+            <circle
+              className="cl-shape-arc"
+              cx="105"
+              cy="118"
+              r="74"
+              strokeWidth="8"
+              strokeDasharray="465"
+              style={{ strokeDashoffset: 465 * (1 - ratio) }}
+              transform="rotate(-90 105 118)"
+            />
+            <text className={`cl-shape-time${shapeLong ? ' is-long' : ''}`} x="105" y="114" textAnchor="middle">{timer ?? '--:--'}</text>
+            <text className="cl-shape-sub" x="105" y="140" textAnchor="middle">{shapeSub}</text>
+            <rect className="cl-shape-pill" x="60" y="156" width="90" height="22" rx="11" />
+            <text className="cl-shape-title" x="105" y="171" textAnchor="middle">{shapeTitle}{pinMark}</text>
+            <g className="cl-shape-badge" transform="rotate(12 176 44)">
+              <circle cx="176" cy="44" r="14" fill="#2bb673" />
+              <path d="M170 44 L174.5 48.5 L182.5 39.5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </g>
+          </svg>
+          {shapeBtns}
         </div>
       )
     }
@@ -962,6 +1155,7 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
             role="button"
             tabIndex={0}
             aria-label={t('clothesline.photo.aria')}
+            style={imgRatio > 0 ? { aspectRatio: String(imgRatio) } : undefined}
             onClick={(e) => {
               e.stopPropagation()
               onPreview(card)
@@ -977,7 +1171,23 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
                 onPreview(card)
               }
             }}
-          ><img src={thumb} alt={t('clothesline.photo.alt')} draggable={false} /></div>
+          >
+            <img
+              src={thumb}
+              alt={t('clothesline.photo.alt')}
+              draggable={false}
+              onLoad={(e) => {
+                // ★2026-11-23 需求1：原始宽高比钳制在 [3:4, 4:3] ——
+                // 竖长截图统一 3:4、横宽截图统一 4:3，不再按原比例无限拉伸卡高；
+                // 超出范围的图片由 object-fit:contain 在钳制框内居中留白。
+                const el = e.currentTarget
+                if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                  const r = el.naturalWidth / el.naturalHeight
+                  setImgRatio(Math.min(Math.max(r, 3 / 4), 4 / 3))
+                }
+              }}
+            />
+          </div>
         ) : (
           <div className="cl-photo-empty">
             <div className="cl-mini-shot">
@@ -1006,10 +1216,17 @@ function CardFace({ card, copy, thumb, timer, ratio, audio, onAudioAction, onRen
           <span className="cl-letter-badge" aria-hidden="true">✎</span>
           <span className="cl-letter-headtxt">
             {copy.title ? <span className="cl-caption">{copy.title}</span> : null}
-            <span className="cl-letter-date">{fmtCardDate(card.created_at)}</span>
+            <span className="cl-letter-date">
+              {fmtCardDate(card.created_at)}
+              {card.category?.trim() ? (
+                <span className="cl-letter-cat">{card.category.trim()}</span>
+              ) : null}
+            </span>
           </span>
         </div>
-        {copy.text ? <div className="cl-txt">{copy.text}</div> : null}
+        {/* ★2026-11-24 随手记支持富文本（'@@RICH@@'前缀 + 白名单净化 HTML）；
+            纯文本走原样渲染，换行仍由 .cl-txt 的 pre-wrap 承接 */}
+        {copy.text ? <RichText className="cl-txt" text={copy.text} /> : null}
         {pinMark ? <span className="cl-letter-sign">{pinMark.trim()}</span> : null}
         <span className="cl-letter-bar" aria-hidden="true" />
       </div>
@@ -1835,7 +2052,7 @@ export function ClotheslineView() {
   const cardsRef = useRef(cards)
 
   // ———————————————————— 阶段 4：卡片内容与操作 ————————————————————
-  const { fullAccess } = useAccount()
+  const { fullAccess, showVip } = useAccount()
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const [notesTick, setNotesTick] = useState(0)
   const [nowTick, setNowTick] = useState(() => Date.now())
@@ -1852,16 +2069,31 @@ export function ClotheslineView() {
     text: string
     /** ★批12：随手记卡的字体格式（undefined=非随手记卡，不显示该段）。 */
     fmt?: TextFormat
+    /** ★2026-11-23 随手记分类（仅 text 卡有值，与全局速记窗共享分类表）。 */
+    category?: string
+    cats?: string[]
+    newCat?: string
+    addingCat?: boolean
   } | null>(null)
   const [composeText, setComposeText] = useState('')
+  /** ★2026-11-23 随手记分类：与全局速记窗共享同一份分类表（同源 localStorage）。 */
+  const [composeCats, setComposeCats] = useState<string[]>(loadCategories)
+  const [composeCategory, setComposeCategory] = useState('')
+  const [composeNewCat, setComposeNewCat] = useState('')
+  const [composeAddingCat, setComposeAddingCat] = useState(false)
   const [composeMinutes, setComposeMinutes] = useState('25')
   const [undoCard, setUndoCard] = useState<{ id: string; label: string } | null>(null)
   /** ★2026-11-18 归档：便利签/随手记/番茄卡 × → 「归档 / 删除」两选弹窗的目标卡。 */
   const [takedownConfirm, setTakedownConfirm] = useState<ClotheslineCard | null>(null)
+  /** ★2026-11-22 归档飞出动画：正在飞出的卡片 + 终点位移（飞出结束才真正归档）。
+   *  dx/dy 按 dockSide 动态算到工具窗所在的屏幕边缘，故每次点击时现算。 */
+  const [archiveFly, setArchiveFly] = useState<{ id: string; dx: number; dy: number } | null>(null)
   /** 退场动画标记:关闭确认弹窗先播 140ms 缩退动画再卸载,避免「瞬间消失」的卡顿感。 */
   const [takedownClosing, setTakedownClosing] = useState(false)
   // ★批15：撤销条 3 秒自动关闭（原 10 秒，用户反馈显示时间过长）。
   const UNDO_TOAST_MS = 3_000
+  /** ★2026-11-22 归档飞出动画时长（与 clothesline.css .is-archive-fly 的 0.46s 一致）。 */
+  const ARCHIVE_FLY_MS = 460
   const [hint, setHint] = useState('')
   // ★批14：toast 锚定卡片的逻辑坐标（null=回落：水平居中 + 面板底部，沿用 CSS）。
   const [hintX, setHintX] = useState<number | null>(null)
@@ -2156,7 +2388,9 @@ export function ClotheslineView() {
         flash(t('clothesline.toast.hung'))
         return card
       } catch (e) {
-        flash(e instanceof Error ? e.message : String(e))
+        const msg = e instanceof Error ? e.message : String(e)
+        // ★2026-11-23 需求：非会员满额时统一 toast 文案（会员仍显示 Rust 原始错误）。
+        flash(!fullAccess && msg.includes('最多挂') ? t('clothesline.toast.freeCardLimit') : msg)
         return null
       }
     },
@@ -2377,6 +2611,22 @@ export function ClotheslineView() {
               return
             }
             if (mode === 'archive') {
+              // ★2026-11-22 同窗飞出：先给卡片挂飞出 class，动画结束再落库，
+              // 否则 clArchiveCard 广播 CL_CARDS_CHANGED 会把卡从 DOM 移除、飞不起来。
+              // 终点按 dockSide 动态算到工具窗所在的屏幕边缘（对齐确认过的预览），
+              // 不再写死 180px 右上 —— 那时工具窗靠左时方向是反的、距离也太短。
+              const el = document.querySelector(`[data-cl-card-id="${card.id}"]`)
+              const r = el?.getBoundingClientRect()
+              const cx = r ? r.left + r.width / 2 : window.innerWidth / 2
+              const cy = r ? r.top + r.height / 2 : 60
+              const targetX = readDockSide() === 'right' ? window.innerWidth - 24 : 24
+              const targetY = 48 // 顶栏归档图标高度附近
+              setArchiveFly({
+                id: card.id,
+                dx: Math.round(targetX - cx),
+                dy: Math.round(targetY - cy),
+              })
+              await new Promise((r) => window.setTimeout(r, ARCHIVE_FLY_MS))
               if (card.kind === 'note') {
                 // 绳上便利签卡 = 桌面便利签的引用 → 主窗编排「一体归档」（note + card）。
                 void emit(CL_ARCHIVE_CARD, {
@@ -2389,6 +2639,9 @@ export function ClotheslineView() {
                 await clArchiveCard(card.id)
                 setCards((prev) => prev.filter((c) => c.id !== card.id))
               }
+              setArchiveFly(null)
+              // 飞入落地 → 主窗顶栏归档角标 +1 脉冲（预览里的「到达反馈」）。
+              void emit(CL_ARCHIVE_LANDED, { source: 'rope' } satisfies ClArchiveLanded).catch(() => undefined)
               flash(t('clothesline.toast.archived'))
             } else {
               // 删除 = 永久删除（弹窗本身即确认，无撤销）：软删 + 立即物理清除两连击。
@@ -2450,18 +2703,34 @@ export function ClotheslineView() {
    *  （标题 + 内容两栏）；其余类型保持原有行内编辑。 */
   const openCardEditor = useCallback((card: ClotheslineCard) => {
     setEditing(null)
+    const isText = card.kind === 'text'
     setEditModal({
       id: card.id,
       title: card.title,
+      // ★2026-11-24 问题4：text 卡保留原始正文（富文本含 @@RICH@@ 前缀），编辑弹窗
+      // 用富文本编辑器整段还原（格式与全局速记一致）；非 text 卡仍是纯文本 textarea。
       text: card.text,
       // ★批12：随手记卡带字体格式编辑段（其余类型不显示）。
-      fmt: card.kind === 'text' ? cardTextFormat(card) : undefined,
+      fmt: isText ? cardTextFormat(card) : undefined,
+      // ★2026-11-23：随手记卡带出分类编辑（共享分类表，每次打开重新读取）。
+      category: isText ? (card.category ?? '') : undefined,
+      cats: isText ? loadCategories() : undefined,
+      newCat: '',
+      addingCat: false,
     })
   }, [])
 
   const commitEditModal = useCallback(async () => {
     const m = editModal
     if (!m) return
+    // ★2026-11-24 问题4：text 卡正文由富文本编辑器提供，落库格式与全局速记一致。
+    let body = m.text
+    if (m.fmt) {
+      const editor = editEditorRef.current
+      const rawHtml = editor?.innerHTML ?? ''
+      const plain = (editor?.innerText ?? m.text).trim()
+      body = hasRichMarkup(rawHtml) ? RICH_PREFIX + sanitizeRichHtml(rawHtml) : plain
+    }
     // ★批12：随手记字体格式增量补丁（DoubleOption：null=清空回默认）。
     //   加粗默认开 → true 时清空（走默认 800）；关闭时显式写 false。
     const f = m.fmt
@@ -2476,8 +2745,10 @@ export function ClotheslineView() {
           body_italic: f.bodyItalic ? true : null,
         }
       : {}
+    // ★2026-11-23：随手记卡的分类增量补丁（仅 text 卡带 category）。
+    const catPatch: CardPatch = m.fmt ? { category: (m.category ?? '').trim() || null } : {}
     try {
-      const updated = await clUpdateCard(m.id, { title: m.title.trim(), text: m.text, ...fmtPatch })
+      const updated = await clUpdateCard(m.id, { title: m.title.trim(), text: body, ...fmtPatch, ...catPatch })
       setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
       setEditModal(null)
       flash(t('clothesline.toast.saved'))
@@ -2485,6 +2756,17 @@ export function ClotheslineView() {
       flash(e instanceof Error ? e.message : String(e))
     }
   }, [editModal, flash, setCards])
+
+  // ★2026-11-24 问题4：编辑弹窗（text 卡）打开时把原始正文一次性还原进富文本编辑器。
+  useEffect(() => {
+    if (!editModal?.fmt) return
+    const el = editEditorRef.current
+    if (!el) return
+    const raw = editModal.text
+    if (isRichText(raw)) el.innerHTML = sanitizeRichHtml(raw.slice(RICH_PREFIX.length))
+    else el.textContent = raw
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editModal?.id])
 
   /** 番茄卡上的暂停 / 继续 / 重置 / +5 分（原型 .tm-btns）。
    *  ⚠️ 全部走 clUpdateCard 增量写盘，Rust 单一写锁不变；fired_at 清空避免重复通知。 */
@@ -2884,6 +3166,36 @@ export function ClotheslineView() {
   const [composeErr, setComposeErr] = useState('')
   /** ★2026-11-15 反馈4：编辑既有番茄卡时记录目标卡 id（null=新增）。 */
   const [composeEditId, setComposeEditId] = useState<string | null>(null)
+
+  // ★2026-11-24 问题3/4：随手记弹窗（新建/编辑）复用全局速记的富文本正文编辑器
+  //（contentEditable + qn 工具行）。editorRef 的 innerHTML 是正文真源，composeText /
+  // editModal.text 只是 innerText 镜像（供空值校验与依赖数组），落库前统一走
+  // hasRichMarkup → '@@RICH@@' + 净化 HTML 的存储格式（与全局速记完全一致）。
+  const composeEditorRef = useRef<HTMLDivElement>(null)
+  const editEditorRef = useRef<HTMLDivElement>(null)
+  // openComposer('text', init) 预填的原始正文（富文本卡含 @@RICH@@ 前缀），
+  // 弹窗切到 text 分支后由 effect 一次性还原进编辑器。
+  const composeEditorInitRef = useRef('')
+  const styleWithCssOnceRef = useRef(false)
+  if (!styleWithCssOnceRef.current) {
+    styleWithCssOnceRef.current = true
+    document.execCommand('styleWithCSS', false, 'true')
+  }
+  const syncComposeText = useCallback(
+    () => setComposeText(composeEditorRef.current?.innerText ?? ''),
+    [],
+  )
+  const composeFmt = useCallback((cmd: string, value?: string) => {
+    composeEditorRef.current?.focus()
+    document.execCommand(cmd, false, value)
+    setComposeText(composeEditorRef.current?.innerText ?? '')
+  }, [])
+  const editFmt = useCallback((cmd: string, value?: string) => {
+    editEditorRef.current?.focus()
+    document.execCommand(cmd, false, value)
+    setEditModal((m) => (m ? { ...m, text: editEditorRef.current?.innerText ?? '' } : m))
+  }, [])
+
   const submitCompose = useCallback(async () => {
     if (composing === 'timer') {
       if (!composeTitle.trim()) {
@@ -2930,24 +3242,33 @@ export function ClotheslineView() {
         card_style: composeStyle,
         remind: composeRemind,
       })
+      // ★2026-11-23 需求：满额失败走 toast 提示（addCard 内已按会员态映射文案），
+      //   不再在弹窗内联显示「挂上失败」；toast 层级已提到弹窗之上保证可见。
       if (ok) setComposing(null)
       return
     }
-    const text = composeText.trim()
+    // ★2026-11-24 问题3/4：正文改由富文本编辑器（qn 系）提供，落库格式与全局速记一致：
+    // 有真实格式标记 → '@@RICH@@' + 净化 HTML；纯文本/纯换行 → 纯文本。
+    const editor = composeEditorRef.current
+    const plain = (editor?.innerText ?? composeText).trim()
     if (!composeTitle.trim()) {
       setComposeErr(t('clothesline.compose.errTitle'))
       return
     }
     setComposeErr('')
-    if (!text) {
+    if (!plain) {
       setComposing(null)
       return
     }
+    const rawHtml = editor?.innerHTML ?? ''
+    const body = hasRichMarkup(rawHtml) ? RICH_PREFIX + sanitizeRichHtml(rawHtml) : plain
     const ok = await addCard('text', {
       title: composeTitle.trim(),
-      text,
+      text: body,
       card_color: composeColor || null,
       card_style: composeTextStyle,
+      // ★2026-11-23：随手记分类（与全局速记窗共享，保存即记住供下次带出）。
+      category: composeCategory.trim() || null,
       // ★批12：字体格式（创建 = 完整卡对象；null 字段 = 默认）。
       title_size: composeFormat.titleSize,
       body_size: composeFormat.bodySize,
@@ -2958,11 +3279,26 @@ export function ClotheslineView() {
       body_italic: composeFormat.bodyItalic,
     })
     if (ok) {
+      saveLastCategory(composeCategory.trim())
       setComposeText('')
+      if (composeEditorRef.current) composeEditorRef.current.innerHTML = ''
       setComposeTitle('')
       setComposing(null)
     }
-  }, [composing, composeEditId, composeMinutes, composeTitle, composeDirection, composeColor, composeStyle, composeTextStyle, composeFormat, composeRemind, composeText, addCard, clUpdateCard, flash, setCards, setNowTick, setComposing, setComposeText])
+  }, [composing, composeEditId, composeMinutes, composeTitle, composeDirection, composeColor, composeStyle, composeTextStyle, composeFormat, composeRemind, composeText, composeCategory, addCard, clUpdateCard, flash, setCards, setNowTick, setComposing, setComposeText])
+
+  // ★2026-11-24：compose text 弹窗打开时，把 openComposer 暂存的 init 原文一次性
+  // 还原进编辑器（富文本剥 @@RICH@@ 前缀 + 净化；纯文本 textContent；无 init 清空）。
+  useEffect(() => {
+    if (composing !== 'text') return
+    const el = composeEditorRef.current
+    if (!el) return
+    const raw = composeEditorInitRef.current
+    if (raw && isRichText(raw)) el.innerHTML = sanitizeRichHtml(raw.slice(RICH_PREFIX.length))
+    else if (raw) el.textContent = raw
+    else el.innerHTML = ''
+    composeEditorInitRef.current = ''
+  }, [composing])
 
   /** ★2026-11-15 需求5/6：打开添加/编辑弹窗（桌面居中）。番茄钟默认带出上次时长。
    *  ★反馈4：传入 init（既有卡）时预填该卡设置并把弹窗切到「编辑」模式
@@ -2997,11 +3333,21 @@ export function ClotheslineView() {
       setComposeTextStyle(init && (init.card_style === 'tape' || init.card_style === 'night') ? init.card_style : 'mist')
       // ★批12：字体格式预填（编辑既有卡带出；新建回默认）。
       setComposeFormat(init ? cardTextFormat(init) : { ...TEXT_FMT_DEFAULT })
+      // ★2026-11-23：分类表每次打开重新读（可能与速记窗间有新增）；
+      //  编辑带出卡片自身分类，新建则默认带出上次选中的分类。
+      const cats = loadCategories()
+      setComposeCats(cats)
+      setComposeCategory(init ? (init.category ?? '') : loadLastCategory())
+      setComposeNewCat('')
+      setComposeAddingCat(false)
     }
     setComposeTitle(init?.title ?? '')
     // ★2026-11-17 问题3：番茄卡不再支持自定义卡色（弹窗已隐藏色板），预填恒空。
     setComposeColor(kind === 'timer' ? '' : (init?.card_color ?? ''))
-    setComposeText(init?.text ?? '')
+    // ★2026-11-24 问题3/4：正文真源是 contentEditable 编辑器；init 原文暂存，
+    // 弹窗切到 text 分支后由 effect 还原（富文本剥前缀 + 净化，纯文本 textContent）。
+    composeEditorInitRef.current = init?.text ?? ''
+    setComposeText(init ? richToPlain(init.text) : '')
     setAddSheetOpen(false)
     setComposing(kind)
   }, [setAddSheetOpen, setComposeColor, setComposeDirection, setComposeMinutes, setComposeRemind, setComposeStyle, setComposeTextStyle, setComposeText, setComposeTitle])
@@ -4017,9 +4363,10 @@ export function ClotheslineView() {
             posedCards.map(({ card, pose, broken, copy, thumb, timer, ratio, noteColor }, index) => (
               <div
                 key={card.id}
+                data-cl-card-id={card.id}
                 /* ★根因A：清风摆动只挂这一层（整张卡绕夹点摆），相位是稳定 CSS 变量，
                    不是每次 render 新建的 inline animationDelay → 重渲染绝不重启动画。 */
-                className={`cl-card-sway ${dragVisual?.id === card.id ? 'is-still' : ''}`}
+                className={`cl-card-sway ${dragVisual?.id === card.id ? 'is-still' : ''} ${archiveFly?.id === card.id ? 'is-archive-fly' : ''}`}
                 style={{
                   // ★0.4.80 方案A：倾角变量必须设在外壳层 —— 全部 transform / 摆动动画
                   // 已移到 .cl-card-sway，CSS 变量只向下继承，父层读不到子元素上的 --cl-rot。
@@ -4028,6 +4375,10 @@ export function ClotheslineView() {
                   // 垂直摆正，不再东晃西倒；清风开时保留 ±2° 随机静置倾角。
                   '--cl-wind-delay': `-${pose.windPhase.toFixed(2)}s`,
                   '--cl-rot': settings.wind_effect ? `${pose.tilt}deg` : '0deg',
+                  // ★2026-11-22 归档飞出终点（相对卡片当前位置，点击时按 dockSide 现算）。
+                  ...(archiveFly?.id === card.id
+                    ? { '--fly-x': `${archiveFly.dx}px`, '--fly-y': `${archiveFly.dy}px` }
+                    : {}),
                 } as CSSProperties}
             >
               {/* ★批10-3 根因修复：木夹必须放在 .cl-card **外层**（sway 直接子元素）。
@@ -4325,19 +4676,17 @@ export function ClotheslineView() {
       {composing ? (
         <div
           ref={modalRef}
-          className="cl-modal"
+          className="cl-modal cl-modal-anim"
           data-cl-hit="1"
           onPointerDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
         >
           <span className="cl-modal-title">{composing === 'timer' ? (composeEditId ? t('clothesline.compose.editTimer') : t('clothesline.compose.addTimer')) : (composeEditId ? t('clothesline.compose.editText') : t('clothesline.compose.addText'))}</span>
-          <div className="cl-modal-row">
-            <span className="cl-modal-label">
-              {composing === 'timer' ? t('clothesline.compose.taskNameLabel') : t('clothesline.compose.titleLabel')}
-            </span>
+          {composing === 'text' ? (
+            // ★2026-11-24 问题3：随手记标题输入与全局速记同款（qn-input，无行标签）。
             <input
-              className="cl-modal-input"
               autoFocus
+              className="qn-input"
               value={composeTitle}
               onChange={(e) => { setComposeTitle(e.target.value); if (composeErr) setComposeErr('') }}
               onKeyDown={(e) => {
@@ -4347,10 +4696,30 @@ export function ClotheslineView() {
                   void submitCompose()
                 }
               }}
-              placeholder={composing === 'timer' ? t('clothesline.compose.taskPlaceholder') : t('clothesline.compose.textPlaceholder')}
+              placeholder={t('clothesline.compose.textPlaceholder')}
             />
-            {composeErr ? <span className="cl-modal-err">{composeErr}</span> : null}
-          </div>
+          ) : (
+            <div className="cl-modal-row">
+              <span className="cl-modal-label">
+                {composing === 'timer' ? t('clothesline.compose.taskNameLabel') : t('clothesline.compose.titleLabel')}
+              </span>
+              <input
+                className="cl-modal-input"
+                autoFocus
+                value={composeTitle}
+                onChange={(e) => { setComposeTitle(e.target.value); if (composeErr) setComposeErr('') }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setComposing(null)
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void submitCompose()
+                  }
+                }}
+                placeholder={composing === 'timer' ? t('clothesline.compose.taskPlaceholder') : t('clothesline.compose.textPlaceholder')}
+              />
+            </div>
+          )}
+          {composeErr ? <span className="cl-modal-err">{composeErr}</span> : null}
           {composing === 'timer' ? (
             <>
               <div className="cl-modal-row">
@@ -4415,55 +4784,24 @@ export function ClotheslineView() {
               <div className="cl-modal-row">
                 <span className="cl-modal-label">{t('clothesline.compose.style')}</span>
                 <div className="cl-modal-seg is-7">
-                  <button
-                    type="button"
-                    className={composeStyle === 'paper' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('paper')}
-                  >
-                    {t('clothesline.compose.stylePaper')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'watch' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('watch')}
-                  >
-                    {t('clothesline.compose.styleWatch')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'ticket' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('ticket')}
-                  >
-                    {t('clothesline.compose.styleTicket')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'lcd' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('lcd')}
-                  >
-                    {t('clothesline.compose.styleLcd')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'can' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('can')}
-                  >
-                    {t('clothesline.compose.styleCan')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'board' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('board')}
-                  >
-                    {t('clothesline.compose.styleBoard')}
-                  </button>
-                  <button
-                    type="button"
-                    className={composeStyle === 'marquee' ? 'is-active' : ''}
-                    onClick={() => setComposeStyle('marquee')}
-                  >
-                    {t('clothesline.compose.styleMarquee')}
-                  </button>
+                  {TIMER_STYLE_OPTS.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      className={composeStyle === s.key ? 'is-active' : ''}
+                      onClick={() => {
+                        // ★2026-11-23 会员闸门：受限用户点会员样式 → toast，不选中。
+                        if (s.vipOnly && !fullAccess) {
+                          flash(t('clothesline.compose.vipStyleLocked'))
+                          return
+                        }
+                        setComposeStyle(s.key)
+                      }}
+                    >
+                      {t(s.label)}
+                      {s.vipOnly && showVip ? <i className="cl-vip-tag">VIP</i> : null}
+                    </button>
+                  ))}
                 </div>
               </div>
               <label className="cl-modal-check">
@@ -4474,6 +4812,29 @@ export function ClotheslineView() {
                 />
                 {t('clothesline.compose.remindCheck')}
               </label>
+            </>
+          ) : composing === 'text' ? (
+            // ★2026-11-24 问题3：随手记正文 = 全局速记同款富文本编辑器（qn 工具行 +
+            // contentEditable），弹窗样式与内容以全局速记的随手记弹窗为准。
+            <>
+              <QnToolbarRow onFmt={composeFmt} />
+              <div
+                ref={composeEditorRef}
+                className="qn-textarea qn-in-modal"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-multiline
+                data-placeholder={t('clothesline.compose.bodyPlaceholder')}
+                onInput={syncComposeText}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setComposing(null)
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    void submitCompose()
+                  }
+                }}
+              />
             </>
           ) : (
             <div className="cl-modal-row">
@@ -4493,6 +4854,82 @@ export function ClotheslineView() {
               />
             </div>
           )}
+          {/* ★2026-11-23 随手记分类：与全局速记窗共享同一份分类表（同源 localStorage）。
+              单选 chip + 内联新建，最多 8 个、名称 ≤8 字；取消选中清除记忆。
+              ★2026-11-24 问题3：分类行改用全局速记的 qn 系样式（视觉一致）。 */}
+          {composing === 'text' ? (
+            <div className="qn-cats">
+              <span className="qn-cats-label">{t('quickNote.category')}</span>
+              <div className="qn-cats-chips">
+                {composeCats.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    className={`qn-chip ${composeCategory === c ? 'is-active' : ''}`}
+                    onClick={() => {
+                      const next = composeCategory === c ? '' : c
+                      setComposeCategory(next)
+                      saveLastCategory(next)
+                    }}
+                  >
+                    {c}
+                    {/* ★2026-11-25 问题2：分类可删除（与全局速记窗一致） */}
+                    <span
+                      role="button"
+                      aria-label={t('quickNote.catDelete')}
+                      title={t('quickNote.catDelete')}
+                      className="qn-chip-x"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = removeCategory(c)
+                        setComposeCats(next)
+                        if (composeCategory === c) {
+                          setComposeCategory('')
+                          saveLastCategory('')
+                        }
+                      }}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+                {composeAddingCat ? (
+                  <input
+                    className="qn-cat-input"
+                    value={composeNewCat}
+                    autoFocus
+                    maxLength={8}
+                    placeholder={t('quickNote.catPlaceholder')}
+                    onChange={(e) => setComposeNewCat(e.target.value)}
+                    onBlur={() => {
+                      // ★2026-11-24 问题5：addCategory 内部已读最新表；满额给出提示
+                      const { cats: next, name, reason } = addCategory(composeCats, composeNewCat)
+                      if (name) {
+                        setComposeCats(next)
+                        setComposeCategory(name)
+                        saveLastCategory(name)
+                      } else if (reason === 'full') {
+                        flash(t('quickNote.catFull'))
+                      }
+                      setComposeNewCat('')
+                      setComposeAddingCat(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') {
+                        setComposeAddingCat(false)
+                        setComposeNewCat('')
+                      }
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="qn-chip qn-chip-add" onClick={() => setComposeAddingCat(true)}>
+                    ＋ {t('quickNote.catNew')}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null}
           {/* ★2026-11-15 反馈批9：随手记创建时可选卡片样式（晨雾 / 胶带 / 墨夜）。
               墨夜磁贴以左侧竖条取自定义卡色，胶带样式以卡色作纸底。
               ★批19：此行仅随手记显示 —— 番茄钟分支内已有「纸感/极简/玻璃」样式行，
@@ -4545,16 +4982,25 @@ export function ClotheslineView() {
             </div>
           </div>
           ) : null}
-          {/* ★批12：随手记创建弹窗的字体格式段（标题/内容独立字号 + 字体 + 加粗/倾斜）。 */}
+          {/* ★2026-11-24 问题3：qn 富文本工具行已取代字体格式段；按钮与全局速记弹窗
+              同款（仅文案不同：保存 / 取消）。其余类型保持原按钮。 */}
           {composing === 'text' ? (
-            <FmtSection fmt={composeFormat} onChange={setComposeFormat} />
-          ) : null}
-          <div className="cl-edit-actions">
-            <button type="button" onClick={() => void submitCompose()}>
-              {composeEditId ? t('common.save') : t('clothesline.compose.submitAdd')}
-            </button>
-            <button type="button" onClick={() => setComposing(null)}>{t('common.cancel')}</button>
-          </div>
+            <div className="qn-actions">
+              <button type="button" className="qn-btn qn-btn-hang" onClick={() => void submitCompose()}>
+                {composeEditId ? t('common.save') : t('clothesline.compose.submitAdd')}
+              </button>
+              <button type="button" className="qn-btn qn-btn-archive" onClick={() => setComposing(null)}>
+                {t('common.cancel')}
+              </button>
+            </div>
+          ) : (
+            <div className="cl-edit-actions">
+              <button type="button" onClick={() => void submitCompose()}>
+                {composeEditId ? t('common.save') : t('clothesline.compose.submitAdd')}
+              </button>
+              <button type="button" onClick={() => setComposing(null)}>{t('common.cancel')}</button>
+            </div>
+          )}
         </div>
       ) : null}
       {/* ★2026-11-15 反馈3：截图 / 贴图 / 图片 / 随手记卡的居中编辑弹窗
@@ -4563,7 +5009,7 @@ export function ClotheslineView() {
       {editModal ? (
         <div
           ref={modalRef}
-          className="cl-modal"
+          className="cl-modal cl-modal-anim"
           data-cl-hit="1"
           onPointerDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
@@ -4571,50 +5017,168 @@ export function ClotheslineView() {
           <div className="cl-modal-head">
             <span className="cl-modal-title">{t('clothesline.edit.title')}</span>
           </div>
-          <label className="cl-modal-row">
-            <span className="cl-modal-label">{t('clothesline.edit.titleLabel')}</span>
-            <input
-              autoFocus
-              className="cl-modal-input"
-              value={editModal.title}
-              onChange={(e) => setEditModal((m) => (m ? { ...m, title: e.target.value } : m))}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setEditModal(null)
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void commitEditModal()
-                }
-              }}
-              placeholder={t('clothesline.edit.titlePlaceholder')}
-            />
-          </label>
-          <div className="cl-modal-row">
-            <span className="cl-modal-label">{t('clothesline.edit.contentLabel')}</span>
-            <textarea
-              className="cl-modal-textarea"
-              value={editModal.text}
-              onChange={(e) => setEditModal((m) => (m ? { ...m, text: e.target.value } : m))}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setEditModal(null)
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault()
-                  void commitEditModal()
-                }
-              }}
-              placeholder={t('clothesline.edit.contentPlaceholder')}
-            />
-          </div>
-          {/* ★批12：随手记编辑弹窗的字体格式段（仅随手记卡显示）。 */}
           {editModal.fmt ? (
-            <FmtSection
-              fmt={editModal.fmt}
-              onChange={(f) => setEditModal((m) => (m ? { ...m, fmt: f } : m))}
-            />
+            // ★2026-11-24 问题3/4：随手记编辑弹窗复用全局速记的 qn 系样式（标题输入 /
+            // 富文本工具行 / 正文编辑器），正文格式与全局速记新建保存的完全一致。
+            <>
+              <input
+                autoFocus
+                className="qn-input"
+                value={editModal.title}
+                onChange={(e) => setEditModal((m) => (m ? { ...m, title: e.target.value } : m))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditModal(null)
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void commitEditModal()
+                  }
+                }}
+                placeholder={t('clothesline.edit.titlePlaceholder')}
+              />
+              <QnToolbarRow onFmt={editFmt} />
+              <div
+                ref={editEditorRef}
+                className="qn-textarea qn-in-modal"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-multiline
+                data-placeholder={t('clothesline.edit.contentPlaceholder')}
+                onInput={(e) => setEditModal((m) => (m ? { ...m, text: e.currentTarget.innerText } : m))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditModal(null)
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    void commitEditModal()
+                  }
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <label className="cl-modal-row">
+                <span className="cl-modal-label">{t('clothesline.edit.titleLabel')}</span>
+                <input
+                  autoFocus
+                  className="cl-modal-input"
+                  value={editModal.title}
+                  onChange={(e) => setEditModal((m) => (m ? { ...m, title: e.target.value } : m))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setEditModal(null)
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void commitEditModal()
+                    }
+                  }}
+                  placeholder={t('clothesline.edit.titlePlaceholder')}
+                />
+              </label>
+              <div className="cl-modal-row">
+                <span className="cl-modal-label">{t('clothesline.edit.contentLabel')}</span>
+                <textarea
+                  className="cl-modal-textarea"
+                  value={editModal.text}
+                  onChange={(e) => setEditModal((m) => (m ? { ...m, text: e.target.value } : m))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setEditModal(null)
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault()
+                      void commitEditModal()
+                    }
+                  }}
+                  placeholder={t('clothesline.edit.contentPlaceholder')}
+                />
+              </div>
+            </>
+          )}
+          {/* ★2026-11-23 随手记编辑弹窗的分类段（仅 text 卡；与全局速记窗共享分类表）。
+              位置与新建弹窗一致：正文编辑框下方。
+              ★2026-11-24 问题3：分类行改用全局速记的 qn 系样式（视觉一致）。 */}
+          {editModal.fmt ? (
+            <div className="qn-cats">
+              <span className="qn-cats-label">{t('quickNote.category')}</span>
+              <div className="qn-cats-chips">
+                {(editModal.cats ?? []).map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    className={`qn-chip ${editModal.category === c ? 'is-active' : ''}`}
+                    onClick={() => setEditModal((m) => {
+                      if (!m) return m
+                      const next = m.category === c ? '' : c
+                      saveLastCategory(next)
+                      return { ...m, category: next }
+                    })}
+                  >
+                    {c}
+                    {/* ★2026-11-25 问题2：分类可删除（与全局速记窗一致） */}
+                    <span
+                      role="button"
+                      aria-label={t('quickNote.catDelete')}
+                      title={t('quickNote.catDelete')}
+                      className="qn-chip-x"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = removeCategory(c)
+                        if (editModal.category === c) {
+                          saveLastCategory('')
+                          setEditModal((m) => (m ? { ...m, category: '' } : m))
+                        }
+                        setEditModal((m) => (m ? { ...m, cats: next } : m))
+                      }}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+                {editModal.addingCat ? (
+                  <input
+                    className="qn-cat-input"
+                    value={editModal.newCat ?? ''}
+                    autoFocus
+                    maxLength={8}
+                    placeholder={t('quickNote.catPlaceholder')}
+                    onChange={(e) => setEditModal((m) => (m ? { ...m, newCat: e.target.value } : m))}
+                    onBlur={() => setEditModal((m) => {
+                      if (!m) return m
+                      const { cats: next, name, reason } = addCategory(m.cats ?? [], m.newCat ?? '')
+                      if (name) {
+                        saveLastCategory(name)
+                        return { ...m, cats: next, category: name, newCat: '', addingCat: false }
+                      }
+                      if (reason === 'full') flash(t('quickNote.catFull'))
+                      return { ...m, newCat: '', addingCat: false }
+                    })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') setEditModal((m) => (m ? { ...m, addingCat: false, newCat: '' } : m))
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="qn-chip qn-chip-add" onClick={() => setEditModal((m) => (m ? { ...m, addingCat: true } : m))}>
+                    ＋ {t('quickNote.catNew')}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : null}
-          <div className="cl-edit-actions">
-            <button type="button" onClick={() => void commitEditModal()}>{t('common.save')}</button>
-            <button type="button" onClick={() => setEditModal(null)}>{t('common.cancel')}</button>
-          </div>
+          {/* ★2026-11-24 问题3：字体格式段移除（qn 富文本工具行取代）；按钮与全局速记
+              弹窗同款（仅文案不同：保存 / 取消）。非随手记卡保持原按钮。 */}
+          {editModal.fmt ? (
+            <div className="qn-actions">
+              <button type="button" className="qn-btn qn-btn-hang" onClick={() => void commitEditModal()}>
+                {t('common.save')}
+              </button>
+              <button type="button" className="qn-btn qn-btn-archive" onClick={() => setEditModal(null)}>
+                {t('common.cancel')}
+              </button>
+            </div>
+          ) : (
+            <div className="cl-edit-actions">
+              <button type="button" onClick={() => void commitEditModal()}>{t('common.save')}</button>
+              <button type="button" onClick={() => setEditModal(null)}>{t('common.cancel')}</button>
+            </div>
+          )}
         </div>
       ) : null}
 

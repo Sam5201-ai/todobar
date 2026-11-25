@@ -26,6 +26,7 @@ export type TopbarToolId =
   | 'sync'
   | 'clothesline'
   | 'archive'
+  | 'quickNote'
 
 export type TopbarTool = {
   id: TopbarToolId
@@ -61,6 +62,9 @@ export const TOPBAR_TOOLS: TopbarTool[] = [
   // 归档(2026-11-18):便利签/随手记/番茄的统一归档页。非会员无闸门;
   // 10 个工具 > 槽位上限(≤6),默认排序天然落进「⋯ 更多」,新旧用户默认均不占顶栏槽。
   { id: 'archive', name: '归档', tip: '归档 · 便利签/随手记/番茄', vip: false, gated: false, keyHint: '' }, // i18n-allow
+  // 全局速记（随手记,2026-11-22）：会员专属,快捷键唤起桌面居中录入框。
+  // 放在 sync 前,默认排序 > 槽位上限 → 进「⋯ 更多」,老用户经 MIGRATE_IDS 补进 enabled。
+  { id: 'quickNote', name: '随手记', tip: '新建随手记', vip: true, gated: true, keyHint: 'Ctrl+Shift+Y' }, // i18n-allow
   { id: 'sync', name: '同步', tip: '立即同步到云端', vip: false, gated: false, keyHint: '' }, // i18n-allow
 ]
 
@@ -87,6 +91,7 @@ const NAME_KEYS: Record<TopbarToolId, LocaleKey> = {
   recorder: 'tool.recorder',
   clothesline: 'tool.clothesline',
   archive: 'tool.archive',
+  quickNote: 'tool.quickNote',
   sync: 'tool.sync',
 }
 const TIP_KEYS: Record<TopbarToolId, LocaleKey> = {
@@ -99,6 +104,7 @@ const TIP_KEYS: Record<TopbarToolId, LocaleKey> = {
   recorder: 'tool.recorder.tip',
   clothesline: 'tool.clothesline.tip',
   archive: 'tool.archive.tip',
+  quickNote: 'tool.quickNote.tip',
   sync: 'tool.sync.tip',
 }
 
@@ -126,7 +132,7 @@ const BY_ID = Object.fromEntries(TOPBAR_TOOLS.map((t) => [t.id, t])) as Record<
  * ⚠️ 不升 SIDEBAR_SETTINGS_KEY(升 key 会让磁盘并发回灌覆盖主题/宽度/快捷键)。
  * 只在 rawEnabled 非空数组(老用户确实配置过)时追加;新用户 rawEnabled=null 走全启用。
  */
-const MIGRATE_IDS: TopbarToolId[] = ['clothesline', 'archive']
+const MIGRATE_IDS: TopbarToolId[] = ['clothesline', 'archive', 'quickNote']
 
 /**
  * 归一化:过滤未知 id / 去重 / 补齐后加的工具 / 保证至少启用 1 个。

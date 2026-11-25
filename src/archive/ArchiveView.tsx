@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { listen } from '@tauri-apps/api/event'
 import { currentMonitor } from '@tauri-apps/api/window'
-import { RotateCcw, Trash2 } from 'lucide-react'
+import { RotateCcw, SquarePen, Trash2 } from 'lucide-react'
 import {
   clDeleteArchived,
   clListArchived,
@@ -23,6 +23,7 @@ import {
   type ClotheslineCard,
 } from '../clothesline/bridge'
 import { getNotes, removeNote, unarchiveNote, type Note } from '../notes/store'
+import { isRichText, richToPlain, RichText } from '../utils/richtext'
 import { invoke } from '@tauri-apps/api/core'
 import { t, useI18n, type LocaleKey } from '../i18n'
 import './archive.css'
@@ -43,6 +44,8 @@ type ArchiveEntry = {
   origin: 'rope' | 'desktop' | 'both'
   cardId?: string
   noteId?: string
+  /** 随手记分类（仅 kind==='text' 有值；用于「随手记」tab 下的分组筛选）。 */
+  category?: string | null
 }
 
 /** 便签结构化事项 → 归档页展示用的轻量快照。 */
@@ -109,6 +112,8 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
   const [cards, setCards] = useState<ClotheslineCard[]>([])
   const [notesTick, setNotesTick] = useState(0)
   const [filter, setFilter] = useState<'all' | EntryKind>('all')
+  /** 「随手记」tab 下的分类筛选（'all'=全部分类 / '__none__'=未分类 / 其他=分类名）。 */
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   /** 展开详情的条目（单开手风琴）：便利签/随手记点击可看完整内容。 */
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
@@ -216,6 +221,7 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
         archivedAt: card.archived_at ?? card.updated_at,
         origin: 'rope',
         cardId: card.id,
+        category: card.kind === 'text' ? card.category ?? null : undefined,
       })
     }
     for (const note of archivedNotes) {
@@ -241,10 +247,24 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
     return c
   }, [entries])
 
-  const visible = useMemo(
-    () => (filter === 'all' ? entries : entries.filter((e) => e.kind === filter)),
-    [entries, filter],
-  )
+  /** 「随手记」tab 下按分类聚合（去重 + 计数），空分类不出现。 */
+  const textCategories = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const e of entries) {
+      if (e.kind !== 'text') continue
+      const key = e.category?.trim() || '__none__'
+      c.set(key, (c.get(key) ?? 0) + 1)
+    }
+    return c
+  }, [entries])
+
+  const visible = useMemo(() => {
+    let list = filter === 'all' ? entries : entries.filter((e) => e.kind === filter)
+    if (filter === 'text' && categoryFilter !== 'all') {
+      list = list.filter((e) => (e.category?.trim() || '__none__') === categoryFilter)
+    }
+    return list
+  }, [entries, filter, categoryFilter])
 
   // 总数上报给 PageShell 顶栏（actions 插槽渲染「N 条」胶囊）。
   useEffect(() => {
@@ -364,10 +384,27 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
     }
   }, [])
 
+  /** ★2026-11-24 问题2：随手记条目的「编辑」——把整卡 JSON 传给 Rust，唤起（或复用）
+   *  全局速记独立窗口进入编辑模式（quick_note_open_for_edit → take_pending_edit）。 */
+  const handleEdit = useCallback(
+    (e: ArchiveEntry) => {
+      if (!e.cardId) return
+      const card = cards.find((c) => c.id === e.cardId)
+      if (!card) return
+      void invoke('quick_note_open_for_edit', { card }).catch(() => undefined)
+    },
+    [cards],
+  )
+
   // 筛选或数据变化时收起已展开的详情，避免展开态错位。
   useEffect(() => {
     setExpandedKey(null)
   }, [filter, entries])
+
+  // 切换离开「随手记」tab 时重置分类筛选，避免隐藏状态导致其他 tab 空列表。
+  useEffect(() => {
+    if (filter !== 'text') setCategoryFilter('all')
+  }, [filter])
 
   return (
     <div className="arch-root">
@@ -384,6 +421,31 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
           </button>
         ))}
       </div>
+
+      {/* ★2026-11-22 随手记分类分组筛选：仅选中「随手记」tab 时显示。 */}
+      {filter === 'text' && textCategories.size > 0 ? (
+        <div className="arch-filters arch-filters-sub">
+          <button
+            type="button"
+            className={`arch-chip ${categoryFilter === 'all' ? 'is-active' : ''}`}
+            onClick={() => setCategoryFilter('all')}
+          >
+            {t('archive.catAll')} <em>{counts.text}</em>
+          </button>
+          {[...textCategories.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, n]) => (
+              <button
+                type="button"
+                key={cat}
+                className={`arch-chip ${categoryFilter === cat ? 'is-active' : ''}`}
+                onClick={() => setCategoryFilter(cat)}
+              >
+                {cat === '__none__' ? t('archive.catNone') : cat} <em>{n}</em>
+              </button>
+            ))}
+        </div>
+      ) : null}
 
       {visible.length === 0 ? (
         <div className="arch-empty">
@@ -416,6 +478,9 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
                     <span className="arch-badge" style={{ background: KIND_META[e.kind].color }}>
                       {t(KIND_META[e.kind].label)}
                     </span>
+                    {e.kind === 'text' && e.category?.trim() ? (
+                      <span className="arch-cat-tag">{e.category.trim()}</span>
+                    ) : null}
                     <span className="arch-time">
                       {timeLabel(e.archivedAt)} · {t(ORIGIN_LABEL[e.origin])}
                     </span>
@@ -462,6 +527,17 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
                             </div>
                           ))}
                         </div>
+                      ) : isRichText(e.summary) ? (
+                        // ★2026-11-24 富文本随手记：详情完整渲染（加粗/倾斜/颜色/划线等）
+                        <div
+                          className="arch-item-detail is-rich"
+                          onClick={(ev) => {
+                            ev.stopPropagation()
+                            setExpandedKey(null)
+                          }}
+                        >
+                          <RichText text={e.summary} />
+                        </div>
                       ) : (
                         <div
                           className="arch-item-detail"
@@ -476,12 +552,30 @@ export default function ArchiveView({ onCountChange }: { onCountChange?: (n: num
                       <div className="arch-item-detail-tip">{t('archive.collapseTip')}</div>
                     </>
                   ) : e.summary ? (
-                    <div className="arch-item-summary" title={e.summary}>
-                      {e.summary}
-                    </div>
+                    isRichText(e.summary) ? (
+                      // ★2026-11-24 富文本收起态：拍平为行内结构后 line-clamp 5 行
+                      <RichText
+                        className="arch-item-summary"
+                        text={e.summary}
+                        flatten
+                        title={richToPlain(e.summary)}
+                      />
+                    ) : (
+                      <div className="arch-item-summary" title={e.summary}>
+                        {e.summary}
+                      </div>
+                    )
                   ) : null}
                 </div>
                 <div className="arch-item-actions">
+                  {e.kind === 'text' && e.cardId ? (
+                    // ★2026-11-24 问题2：随手记条目 hover 多一个「编辑」按钮 ——
+                    // 在桌面打开全局速记编辑弹窗（恢复/删除保持不变）。
+                    <button type="button" className="arch-act" onClick={() => handleEdit(e)}>
+                      <SquarePen size={11} />
+                      {t('archive.edit')}
+                    </button>
+                  ) : null}
                   <button type="button" className="arch-act" onClick={() => handleRestore(e)}>
                     <RotateCcw size={11} />
                     {t('archive.restore')}

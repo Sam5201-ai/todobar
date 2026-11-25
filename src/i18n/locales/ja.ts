@@ -55,6 +55,7 @@ const ja: Record<LocaleKey, string> = {
   'feature.restoreCloud': 'クラウドから復元',
   'feature.note': '付箋',
   'feature.clipboard': 'クリップボード',
+  'feature.quickNote': 'クイックメモ',
 
   // —— デバイス(account.ts / AccountSetting.tsx) ——
   'device.thisDevice': 'このデバイス',
@@ -90,6 +91,8 @@ const ja: Record<LocaleKey, string> = {
   'tool.clothesline.tip': '物干し竿 · デスクトップタスクカード',
   'tool.archive.tip': 'アーカイブ · 付箋/メモ/ポモドーロ',
   'tool.sync.tip': '今すぐクラウドへ同期',
+  'tool.quickNote': 'クイックメモ',
+  'tool.quickNote.tip': '新しいクイックメモ',
 
   'topbar.more': 'その他のツール',
   'topbar.moreCount': 'その他のツール ({count})',
@@ -133,6 +136,8 @@ const ja: Record<LocaleKey, string> = {
   'toast.shortcut.clipboardUpdated': 'クリップボードのショートカットを更新しました',
   'toast.shortcut.archiveFail': 'アーカイブのショートカット登録に失敗しました',
   'toast.shortcut.archiveUpdated': 'アーカイブのショートカットを更新しました',
+  'toast.shortcut.quickNoteFail': 'クイックメモのショートカット登録に失敗しました',
+  'toast.shortcut.quickNoteUpdated': 'クイックメモのショートカットを更新しました',
 
   'dock.primary': 'メインディスプレイ',
   'dock.secondary': 'サブディスプレイ',
@@ -253,6 +258,8 @@ const ja: Record<LocaleKey, string> = {
   'shortcut.newNote': '付箋を作成',
   'shortcut.openClipboard': 'クリップボードを開く',
   'shortcut.openArchive': 'アーカイブを開く',
+  'shortcut.dupArchive': '「アーカイブを開く」ショートカットと重複しています',
+  'shortcut.quickNote': '新しいクイックメモ',
   'shortcut.hint': 'ボックスをダブルクリックで編集できます',
   'shortcut.hintGlobal': 'ボックスをダブルクリックで編集できます。下のスクリーンショット / ピンと同じグローバルショートカットのため、同じ組み合わせは設定しないでください',
 
@@ -511,6 +518,8 @@ const ja: Record<LocaleKey, string> = {
 
   // —— 日付 / 時刻ポップオーバー(SheetDatePicker / SheetDateTimePicker / BirthdaySheet) ——
   'datePick.placeholder': '日付を選択',
+  'date.pickTitle': '日付を選択',
+  'date.pickYear': '年',
   'datePick.hour': '時',
   'datePick.minute': '分',
   'datePick.month': '月',
@@ -1121,6 +1130,9 @@ const ja: Record<LocaleKey, string> = {
   'clothesline.compose.textPlaceholder': '例：アイデア、TODO…',
   'clothesline.compose.errTaskName': 'タスク名は必須です。入力してから掛けてください',
   'clothesline.compose.errTitle': 'タイトルは必須です。入力してから掛けてください',
+  'clothesline.compose.errRetry': 'カードを掛けられませんでした。もう一度お試しください',
+  'clothesline.compose.vipStyleLocked': 'メンバー限定スタイルです。アップグレード後にお試しください',
+  'clothesline.toast.freeCardLimit': '無料ユーザーが追加できるカードは最大12枚です',
   'clothesline.compose.direction': '計測方式',
   'clothesline.compose.duration': '長さ（1〜720 分、次回自動で引き継ぎ）',
   'clothesline.compose.minutesUnit': '分',
@@ -1133,6 +1145,10 @@ const ja: Record<LocaleKey, string> = {
   'clothesline.compose.styleCan': '缶詰',
   'clothesline.compose.styleBoard': '黒板',
   'clothesline.compose.styleMarquee': 'マーキー',
+  'clothesline.compose.styleTomato': 'トマト',
+  'clothesline.compose.stylePocket': 'ポケットウォッチ',
+  'clothesline.compose.styleHourglass': '砂時計',
+  'clothesline.compose.styleMoon': 'ムーンフェイズ',
   'clothesline.compose.remindCheck': '終了時にシステム通知',
   'clothesline.compose.bodyLabel': '本文',
   'clothesline.compose.bodyPlaceholder': '何か書いて、Ctrl+Enter で掛ける',
@@ -1382,6 +1398,8 @@ const ja: Record<LocaleKey, string> = {
   'archive.kind.timer': 'ポモドーロ',
   'archive.kind.shot': 'スクリーンショット',
   'archive.filter.all': 'すべて',
+  'archive.catAll': 'すべてのカテゴリ',
+  'archive.catNone': '未分類',
   'archive.dirUp': 'カウントアップ',
   'archive.dirDown': 'カウントダウン',
   'archive.timerSummary': '計測 {n} 分 · {dir}',
@@ -1559,6 +1577,29 @@ const ja: Record<LocaleKey, string> = {
   'huangli.value.zhiXing': '{z}執位',
   'huangli.date.ymd': '{y}年{m}月{d}日',
   'huangli.jieqi.cycle': '{name} {n}日目(次の節気「{next}」まであと{remain}日)',
+  // —— クイックメモ入力窗 ——
+  'quickNote.title': '新しいクイックメモ',
+  'quickNote.closeAria': '閉じる',
+  'quickNote.errEmpty': '内容を入力してから保存してください',
+  'quickNote.defaultTitle': 'クイックメモ',
+  'quickNote.category': 'カテゴリ',
+  'quickNote.catPlaceholder': 'カテゴリ名',
+  'quickNote.catNew': 'カテゴリを追加',
+  'quickNote.titlePlaceholder': 'タイトル（任意）',
+  'quickNote.bodyPlaceholder': 'アイデアを記録…',
+  'quickNote.hang': '洗濯物に留める',
+  'quickNote.archive': 'アーカイブに保存（Enter）',
+  'quickNote.bold': '太字',
+  'quickNote.italic': '斜体',
+  'quickNote.underline': '下線',
+  'quickNote.strike': '打ち消し線',
+  'quickNote.color': '文字色',
+  'quickNote.catFull': 'カテゴリは最大8個です',
+  'quickNote.saveEdit': '変更を保存',
+  'quickNote.editTitle': 'メモを編集',
+  'quickNote.catDelete': 'カテゴリを削除',
+  'archive.edit': '編集',
+
 }
 
 export default ja

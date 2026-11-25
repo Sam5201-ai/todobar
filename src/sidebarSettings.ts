@@ -109,6 +109,8 @@ export type SidebarSettings = {
   clipboardShortcut: string
   /** 打开归档页的全局快捷键,默认 Alt+A(2026-11-18 归档)。 */
   archiveShortcut: string
+  /** 全局速记（随手记）录入窗的全局快捷键,默认 CommandOrControl+Shift+Y。 */
+  quickNoteShortcut: string
   /** 首页顶栏快捷入口:完整顺序 + 勾选启用的工具(设置按钮固定,不参与配置)。 */
   topbarTools: TopbarToolsPref
   /** 悬停自动展开:收起时光标移入把手区域自动展开,移出窗口自动收起。 */
@@ -139,6 +141,7 @@ export const defaultSidebarSettings: SidebarSettings = {
   noteShortcut: 'Alt+N',
   clipboardShortcut: 'CommandOrControl+Shift+V',
   archiveShortcut: 'Alt+A',
+  quickNoteShortcut: 'CommandOrControl+Shift+Y',
   topbarTools: { ...DEFAULT_TOPBAR_TOOLS },
   hoverAutoExpand: true,
   dockSide: 'right',
@@ -222,6 +225,10 @@ function sanitizeSettings(value: Partial<SidebarSettings>): SidebarSettings {
       typeof value.archiveShortcut === 'string' && value.archiveShortcut.trim().length > 0
         ? value.archiveShortcut
         : defaultSidebarSettings.archiveShortcut,
+    quickNoteShortcut:
+      typeof value.quickNoteShortcut === 'string' && value.quickNoteShortcut.trim().length > 0
+        ? value.quickNoteShortcut
+        : defaultSidebarSettings.quickNoteShortcut,
     topbarTools: sanitizeTopbarTools(value.topbarTools ?? defaultSidebarSettings.topbarTools),
     hoverAutoExpand:
       value.hoverAutoExpand ?? defaultSidebarSettings.hoverAutoExpand,

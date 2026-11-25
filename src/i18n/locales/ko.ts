@@ -55,6 +55,7 @@ const ko: Record<LocaleKey, string> = {
   'feature.restoreCloud': '클라우드에서 복원',
   'feature.note': '스티커 메모',
   'feature.clipboard': '클립보드',
+  'feature.quickNote': '빠른 메모',
 
   // —— 기기(account.ts / AccountSetting.tsx) ——
   'device.thisDevice': '이 기기',
@@ -90,6 +91,8 @@ const ko: Record<LocaleKey, string> = {
   'tool.clothesline.tip': '빨랫줄 · 데스크톱 작업 카드',
   'tool.archive.tip': '보관함 · 메모/수첩/뽀모도로',
   'tool.sync.tip': '지금 클라우드에 동기화',
+  'tool.quickNote': '빠른 메모',
+  'tool.quickNote.tip': '새 빠른 메모',
 
   'topbar.more': '더 많은 도구',
   'topbar.moreCount': '더 많은 도구 ({count})',
@@ -133,6 +136,8 @@ const ko: Record<LocaleKey, string> = {
   'toast.shortcut.clipboardUpdated': '클립보드 단축키가 업데이트되었습니다',
   'toast.shortcut.archiveFail': '보관함 단축키 등록에 실패했습니다',
   'toast.shortcut.archiveUpdated': '보관함 단축키가 업데이트되었습니다',
+  'toast.shortcut.quickNoteFail': '빠른 메모 단축키 등록 실패',
+  'toast.shortcut.quickNoteUpdated': '빠른 메모 단축키가 업데이트되었습니다',
 
   'dock.primary': '기본 디스플레이',
   'dock.secondary': '보조 디스플레이',
@@ -253,6 +258,8 @@ const ko: Record<LocaleKey, string> = {
   'shortcut.newNote': '새 스티커 메모',
   'shortcut.openClipboard': '클립보드 열기',
   'shortcut.openArchive': '보관함 열기',
+  'shortcut.dupArchive': '"보관함 열기" 단축키와 중복됩니다',
+  'shortcut.quickNote': '새 빠른 메모',
   'shortcut.hint': '입력창을 더블클릭하면 수정할 수 있습니다',
   'shortcut.hintGlobal': '입력창을 더블클릭하면 수정할 수 있습니다. 아래 스크린샷 / 핀과 같은 전역 단축키이므로 같은 조합으로 설정하지 마세요',
 
@@ -511,6 +518,8 @@ const ko: Record<LocaleKey, string> = {
 
   // —— 날짜 / 시간 팝오버(SheetDatePicker / SheetDateTimePicker / BirthdaySheet) ——
   'datePick.placeholder': '날짜 선택',
+  'date.pickTitle': '날짜 선택',
+  'date.pickYear': '년',
   'datePick.hour': '시',
   'datePick.minute': '분',
   'datePick.month': '월',
@@ -1121,6 +1130,9 @@ const ko: Record<LocaleKey, string> = {
   'clothesline.compose.textPlaceholder': '예: 아이디어, 할 일…',
   'clothesline.compose.errTaskName': '작업 이름은 필수예요. 입력 후 걸어 주세요',
   'clothesline.compose.errTitle': '제목은 필수예요. 입력 후 걸어 주세요',
+  'clothesline.compose.errRetry': '걸기에 실패했어요. 다시 시도해 주세요',
+  'clothesline.compose.vipStyleLocked': '멤버 전용 스타일이에요. 멤버십 업그레이드 후 다시 시도해 주세요',
+  'clothesline.toast.freeCardLimit': '비회원 사용자는 최대 12개의 카드만 추가할 수 있어요',
   'clothesline.compose.direction': '시간 재는 방식',
   'clothesline.compose.duration': '시간(1–720분, 다음에 자동 적용)',
   'clothesline.compose.minutesUnit': '분',
@@ -1133,6 +1145,10 @@ const ko: Record<LocaleKey, string> = {
   'clothesline.compose.styleCan': '캔',
   'clothesline.compose.styleBoard': '칠판',
   'clothesline.compose.styleMarquee': '전광판',
+  'clothesline.compose.styleTomato': '토마토',
+  'clothesline.compose.stylePocket': '포켓 워치',
+  'clothesline.compose.styleHourglass': '모래시계',
+  'clothesline.compose.styleMoon': '문 페이즈',
   'clothesline.compose.remindCheck': '종료 시 시스템 알림',
   'clothesline.compose.bodyLabel': '본문',
   'clothesline.compose.bodyPlaceholder': '뭔가 적고 Ctrl+Enter로 걸기',
@@ -1382,6 +1398,8 @@ const ko: Record<LocaleKey, string> = {
   'archive.kind.timer': '뽀모도로',
   'archive.kind.shot': '스크린샷',
   'archive.filter.all': '전체',
+  'archive.catAll': '모든 카테고리',
+  'archive.catNone': '미분류',
   'archive.dirUp': '카운트업',
   'archive.dirDown': '카운트다운',
   'archive.timerSummary': '{n}분 측정 · {dir}',
@@ -1559,6 +1577,29 @@ const ko: Record<LocaleKey, string> = {
   'huangli.value.zhiXing': '{z} 집위',
   'huangli.date.ymd': '{y}년 {m}월 {d}일',
   'huangli.jieqi.cycle': '{name} {n}일째(다음 절기 "{next}"까지 {remain}일 남음)',
+  // —— 빠른 메모 입력창 ——
+  'quickNote.title': '새 빠른 메모',
+  'quickNote.closeAria': '닫기',
+  'quickNote.errEmpty': '내용을 입력한 후 저장하세요',
+  'quickNote.defaultTitle': '빠른 메모',
+  'quickNote.category': '카테고리',
+  'quickNote.catPlaceholder': '카테고리 이름',
+  'quickNote.catNew': '카테고리 추가',
+  'quickNote.titlePlaceholder': '제목 (선택)',
+  'quickNote.bodyPlaceholder': '아이디어를 기록하세요…',
+  'quickNote.hang': '빨래줄에 고정',
+  'quickNote.archive': '보관함에 저장 (Enter)',
+  'quickNote.bold': '굵게',
+  'quickNote.italic': '기울임',
+  'quickNote.underline': '밑줄',
+  'quickNote.strike': '취소선',
+  'quickNote.color': '글자 색',
+  'quickNote.catFull': '카테고리는 최대 8개입니다',
+  'quickNote.saveEdit': '수정 저장',
+  'quickNote.editTitle': '메모 편집',
+  'quickNote.catDelete': '카테고리 삭제',
+  'archive.edit': '편집',
+
 }
 
 export default ko

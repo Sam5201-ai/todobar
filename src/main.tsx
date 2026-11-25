@@ -254,6 +254,24 @@ void (async () => {
     return
   }
 
+  // 全局速记（随手记）录入窗:label = quick-note(Rust 动态建窗,见 src-tauri/src/quick_note.rs)。
+  // - 必须打 data-runtime='tauri',复用 index.css 透明背景规则(否则白底)。
+  // - 跳过 hydrateIdentity:录入窗只读本地账号态 + 晾衣绳数据,不依赖主窗同步。
+  if (label === 'quick-note') {
+    document.documentElement.dataset.runtime = 'tauri'
+    const { default: QuickNoteWindow } = await import('./quickNote/QuickNoteWindow')
+    createRoot(document.getElementById('root')!).render(
+      <I18nProvider>
+        <StrictMode>
+          <ErrorBoundary label="随手记录入窗">
+            <QuickNoteWindow />
+          </ErrorBoundary>
+        </StrictMode>
+      </I18nProvider>,
+    )
+    return
+  }
+
   // 归档截图预览覆盖窗:label = archive-preview(Rust 按绳窗同款参数动态建窗,
   // 见 src-tauri/src/lib.rs archive_preview_show)。透明整屏遮罩 + 居中大图,
   // 视觉与晾衣绳预览完全一致;主窗零改动 ⇒ 工具窗完全静止。

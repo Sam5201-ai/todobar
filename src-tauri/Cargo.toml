@@ -1,6 +1,6 @@
 [package]
 name = "todobar"
-version = "0.4.84"
+version = "0.4.85"
 description = "Right-edge todo sidebar for macOS and Windows"
 authors = ["Leonxlnx"]
 license = "Apache-2.0"
@@ -45,6 +45,7 @@ tauri-plugin-opener = "2"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_HiDpi",

@@ -55,6 +55,7 @@ const zhTW: Record<LocaleKey, string> = {
   'feature.restoreCloud': '回復雲端資料',
   'feature.note': '便利貼',
   'feature.clipboard': '剪貼簿',
+  'feature.quickNote': '隨手記',
 
   // —— 裝置(account.ts / AccountSetting.tsx) ——
   'device.thisDevice': '此裝置',
@@ -90,6 +91,8 @@ const zhTW: Record<LocaleKey, string> = {
   'tool.clothesline.tip': '晾衣繩 · 桌面待辦卡片',
   'tool.archive.tip': '封存 · 便利貼/隨手記/番茄',
   'tool.sync.tip': '立即同步到雲端',
+  'tool.quickNote': '隨手記',
+  'tool.quickNote.tip': '新建隨手記',
 
   'topbar.more': '更多工具',
   'topbar.moreCount': '更多工具 ({count})',
@@ -133,6 +136,8 @@ const zhTW: Record<LocaleKey, string> = {
   'toast.shortcut.clipboardUpdated': '剪貼簿快速鍵已更新',
   'toast.shortcut.archiveFail': '封存快速鍵註冊失敗',
   'toast.shortcut.archiveUpdated': '封存快速鍵已更新',
+  'toast.shortcut.quickNoteFail': '隨手記快捷鍵註冊失敗',
+  'toast.shortcut.quickNoteUpdated': '隨手記快捷鍵已更新',
 
   'dock.primary': '主螢幕',
   'dock.secondary': '副螢幕',
@@ -253,6 +258,8 @@ const zhTW: Record<LocaleKey, string> = {
   'shortcut.newNote': '新增便利貼',
   'shortcut.openClipboard': '開啟剪貼簿',
   'shortcut.openArchive': '開啟封存',
+  'shortcut.dupArchive': '與「開啟歸檔」快捷鍵重複',
+  'shortcut.quickNote': '新建隨手記',
   'shortcut.hint': '按兩下編輯框即可修改',
   'shortcut.hintGlobal': '按兩下編輯框即可修改;與下方截圖 / 貼圖同屬全域快速鍵,請勿設定成相同組合',
 
@@ -511,6 +518,8 @@ const zhTW: Record<LocaleKey, string> = {
 
   // —— 日期 / 時間彈層(SheetDatePicker / SheetDateTimePicker / BirthdaySheet) ——
   'datePick.placeholder': '選擇日期',
+  'date.pickTitle': '選擇日期',
+  'date.pickYear': '年',
   'datePick.hour': '時',
   'datePick.minute': '分',
   'datePick.month': '月',
@@ -1121,6 +1130,9 @@ const zhTW: Record<LocaleKey, string> = {
   'clothesline.compose.textPlaceholder': '例如：靈感、待辦…',
   'clothesline.compose.errTaskName': '任務名稱必填，請填寫後再掛上',
   'clothesline.compose.errTitle': '標題必填，請填寫後再掛上',
+  'clothesline.compose.errRetry': '掛上失敗，請重試',
+  'clothesline.compose.vipStyleLocked': '會員專屬樣式，請升級會員後再重試',
+  'clothesline.toast.freeCardLimit': '非會員用戶僅支持最多添加12個卡片',
   'clothesline.compose.direction': '計時方式',
   'clothesline.compose.duration': '時長（1–720 分鐘，下次自動帶出）',
   'clothesline.compose.minutesUnit': '分鐘',
@@ -1133,6 +1145,10 @@ const zhTW: Record<LocaleKey, string> = {
   'clothesline.compose.styleCan': '罐頭',
   'clothesline.compose.styleBoard': '黑板',
   'clothesline.compose.styleMarquee': '燈牌',
+  'clothesline.compose.styleTomato': '番茄',
+  'clothesline.compose.stylePocket': '口袋懷錶',
+  'clothesline.compose.styleHourglass': '沙漏',
+  'clothesline.compose.styleMoon': '月相',
   'clothesline.compose.remindCheck': '結束時彈出系統提醒',
   'clothesline.compose.bodyLabel': '內文',
   'clothesline.compose.bodyPlaceholder': '寫點什麼，Ctrl+Enter 掛上去',
@@ -1382,6 +1398,8 @@ const zhTW: Record<LocaleKey, string> = {
   'archive.kind.timer': '番茄計時',
   'archive.kind.shot': '截圖',
   'archive.filter.all': '全部',
+  'archive.catAll': '所有分類',
+  'archive.catNone': '未分類',
   'archive.dirUp': '正計時',
   'archive.dirDown': '倒計時',
   'archive.timerSummary': '已計時 {n} 分鐘 · {dir}',
@@ -1559,6 +1577,29 @@ const zhTW: Record<LocaleKey, string> = {
   'huangli.value.zhiXing': '{z}執位',
   'huangli.date.ymd': '{y}年{m}月{d}日',
   'huangli.jieqi.cycle': '{name} 第{n}天(距下一個節氣「{next}」,還有{remain}天)',
+  // —— 全局速記（隨手記）錄入窗 ——
+  'quickNote.title': '新建隨手記',
+  'quickNote.closeAria': '關閉',
+  'quickNote.errEmpty': '寫點什麼再儲存吧',
+  'quickNote.defaultTitle': '隨手記',
+  'quickNote.category': '分類',
+  'quickNote.catPlaceholder': '分類名',
+  'quickNote.catNew': '新增分類',
+  'quickNote.titlePlaceholder': '標題（可留空）',
+  'quickNote.bodyPlaceholder': '記錄你的靈感、想法……',
+  'quickNote.hang': '掛起晾衣繩',
+  'quickNote.archive': '儲存歸檔（Enter）',
+  'quickNote.bold': '粗體',
+  'quickNote.italic': '傾斜',
+  'quickNote.underline': '底線',
+  'quickNote.strike': '刪除線',
+  'quickNote.color': '字體顏色',
+  'quickNote.catFull': '分類最多 8 個，無法繼續新增',
+  'quickNote.saveEdit': '儲存修改',
+  'quickNote.editTitle': '編輯隨手記',
+  'quickNote.catDelete': '刪除分類',
+  'archive.edit': '編輯',
+
 }
 
 export default zhTW

@@ -64,6 +64,27 @@
   color: var(--surface);
 }
 
+/* ★2026-11-22 随手记分类子筛选行 + 归档条目分类标签。 */
+.arch-filters-sub {
+  margin: -6px 0 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.arch-cat-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(61, 123, 232, 0.12);
+  color: #3d7be8;
+  font-size: 10.5px;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ——— 总数胶囊（brand 色底，右对齐） ——— */
 .arch-total {
   padding: 1px 9px;
@@ -93,18 +114,11 @@
   display: none;
 }
 
-/* 2px 竖轴（padding 区内） */
-.arch-timeline::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 10px;
-  bottom: 10px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--line);
-}
-
+/* ★竖轴改由每个条目自己画一段（原 .arch-timeline::before 用 absolute+top/bottom 绑的是
+   「滚动容器可视高度」而非内容高度 → 线长固定、超出单屏后底部节点只剩圆圈没有线）。
+   每条线从本节点中心向下延伸到条目底部，相邻条目首尾相接形成连续轴；
+   高度随条目数量/内容自然伸缩，滚动时随内容一起移动。中心对齐节点 x=9（盒坐标）：
+   item 起点盒 x=26，轴 x=8..10 → item 内 left=-18px，宽 2px。 */
 .arch-item {
   position: relative;
   display: flex;
@@ -113,6 +127,27 @@
   padding: 11px 2px;
   border-radius: 8px;
 }
+
+/* 竖线段：覆盖本条目整段高度(top:0→bottom:0)，相邻条目首尾相接成连续轴。 */
+.arch-item::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+/* 首条：节点中心(top 23px)以上不画线，避免顶部线头。 */
+.arch-item:first-child::before { top: 23px; }
+
+/* 末条：节点中心以下不画线，避免尾部拖长。 */
+.arch-item:last-child::before { bottom: auto; height: 23px; }
+
+/* 只有一个节点：没有相邻段，整条线都不要，只留圆圈。 */
+.arch-item:only-child::before { display: none; }
 
 .arch-item:hover {
   background: var(--surface-muted);
@@ -180,14 +215,19 @@
   white-space: nowrap;
 }
 
+/* 收起态摘要：★2026-11-24 改为最多 5 行预览（换行符生效，超出 5 行截断）。
+   -webkit-box + line-clamp 按渲染行数截断，块级富文本需先拍平为行内结构。 */
 .arch-item-summary {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-word;
   margin-top: 1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* 可点击条目（便利签/随手记）：点击展开完整内容详情 */
@@ -207,6 +247,11 @@
   white-space: pre-wrap;
   word-break: break-word;
   cursor: pointer;
+}
+
+/* ★2026-11-24 富文本详情：换行由 HTML 结构（div/br）承载，不能用 pre-wrap */
+.arch-item-detail.is-rich {
+  white-space: normal;
 }
 
 /* 便利签详情：事项逐行（序号 + 勾选状态 + 文本），完成划线（与便签视觉一致） */

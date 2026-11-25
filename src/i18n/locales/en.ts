@@ -55,6 +55,7 @@ const en: Record<LocaleKey, string> = {
   'feature.restoreCloud': 'Restore from cloud',
   'feature.note': 'Sticky note',
   'feature.clipboard': 'Clipboard',
+  'feature.quickNote': 'Quick note',
 
   // —— Devices(account.ts / AccountSetting.tsx) ——
   'device.thisDevice': 'This device',
@@ -90,6 +91,8 @@ const en: Record<LocaleKey, string> = {
   'tool.clothesline.tip': 'Clothesline · desktop task cards',
   'tool.archive.tip': 'Archive · notes / memos / pomodoro',
   'tool.sync.tip': 'Sync to cloud now',
+  'tool.quickNote': 'Quick note',
+  'tool.quickNote.tip': 'New quick note',
 
   'topbar.more': 'More tools',
   'topbar.moreCount': 'More tools ({count})',
@@ -133,6 +136,8 @@ const en: Record<LocaleKey, string> = {
   'toast.shortcut.clipboardUpdated': 'Clipboard shortcut updated',
   'toast.shortcut.archiveFail': 'Failed to register the archive shortcut',
   'toast.shortcut.archiveUpdated': 'Archive shortcut updated',
+  'toast.shortcut.quickNoteFail': 'Failed to register quick note shortcut',
+  'toast.shortcut.quickNoteUpdated': 'Quick note shortcut updated',
 
   'dock.primary': 'Primary',
   'dock.secondary': 'Secondary',
@@ -253,6 +258,8 @@ const en: Record<LocaleKey, string> = {
   'shortcut.newNote': 'New sticky note',
   'shortcut.openClipboard': 'Open clipboard',
   'shortcut.openArchive': 'Open archive',
+  'shortcut.dupArchive': 'Conflicts with the Open archive shortcut',
+  'shortcut.quickNote': 'New quick note',
   'shortcut.hint': 'Double-click the box to edit',
   'shortcut.hintGlobal': 'Double-click the box to edit; these are global shortcuts shared with Screenshot / Pin below, do not use the same combination',
 
@@ -506,6 +513,8 @@ const en: Record<LocaleKey, string> = {
   'recur.listSep': ', ',
 
   'datePick.placeholder': 'Pick a date',
+  'date.pickTitle': 'Pick a date',
+  'date.pickYear': 'Year',
   'datePick.hour': 'Hour',
   'datePick.minute': 'Minute',
   'datePick.month': 'Month',
@@ -1107,6 +1116,9 @@ const en: Record<LocaleKey, string> = {
   'clothesline.compose.textPlaceholder': 'e.g. Ideas, to-dos…',
   'clothesline.compose.errTaskName': 'Task name is required — fill it in before hanging',
   'clothesline.compose.errTitle': 'Title is required — fill it in before hanging',
+  'clothesline.compose.errRetry': 'Failed to hang the card — please try again',
+  'clothesline.compose.vipStyleLocked': 'Member-only style — upgrade to use it',
+  'clothesline.toast.freeCardLimit': 'Free accounts can hang up to 12 cards',
   'clothesline.compose.direction': 'Timer mode',
   'clothesline.compose.duration': 'Duration (1–720 min, remembered next time)',
   'clothesline.compose.minutesUnit': 'min',
@@ -1119,6 +1131,10 @@ const en: Record<LocaleKey, string> = {
   'clothesline.compose.styleCan': 'Can',
   'clothesline.compose.styleBoard': 'Chalkboard',
   'clothesline.compose.styleMarquee': 'Marquee',
+  'clothesline.compose.styleTomato': 'Tomato',
+  'clothesline.compose.stylePocket': 'Pocket watch II',
+  'clothesline.compose.styleHourglass': 'Hourglass',
+  'clothesline.compose.styleMoon': 'Moon phase',
   'clothesline.compose.remindCheck': 'System reminder when time is up',
   'clothesline.compose.bodyLabel': 'Body',
   'clothesline.compose.bodyPlaceholder': 'Write something, Ctrl+Enter to hang it',
@@ -1368,6 +1384,8 @@ const en: Record<LocaleKey, string> = {
   'archive.kind.timer': 'Pomodoro',
   'archive.kind.shot': 'Screenshot',
   'archive.filter.all': 'All',
+  'archive.catAll': 'All categories',
+  'archive.catNone': 'Uncategorized',
   'archive.dirUp': 'Count-up',
   'archive.dirDown': 'Count-down',
   'archive.timerSummary': 'Timed {n} min · {dir}',
@@ -1545,6 +1563,29 @@ const en: Record<LocaleKey, string> = {
   'huangli.value.zhiXing': '{z} position',
   'huangli.date.ymd': '{y}-{m}-{d}',
   'huangli.jieqi.cycle': '{name} · day {n} (next: {next}, in {remain} days)',
+  // —— Quick note composer ——
+  'quickNote.title': 'New quick note',
+  'quickNote.closeAria': 'Close',
+  'quickNote.errEmpty': 'Write something before saving',
+  'quickNote.defaultTitle': 'Quick note',
+  'quickNote.category': 'Category',
+  'quickNote.catPlaceholder': 'Category name',
+  'quickNote.catNew': 'New category',
+  'quickNote.titlePlaceholder': 'Title (optional)',
+  'quickNote.bodyPlaceholder': 'Capture your ideas...',
+  'quickNote.hang': 'Pin to clothesline',
+  'quickNote.archive': 'Save to archive (Enter)',
+  'quickNote.bold': 'Bold',
+  'quickNote.italic': 'Italic',
+  'quickNote.underline': 'Underline',
+  'quickNote.strike': 'Strikethrough',
+  'quickNote.color': 'Text color',
+  'quickNote.catFull': 'Up to 8 categories; cannot add more',
+  'quickNote.saveEdit': 'Save changes',
+  'quickNote.editTitle': 'Edit quick note',
+  'quickNote.catDelete': 'Delete category',
+  'archive.edit': 'Edit',
+
 }
 
 export default en

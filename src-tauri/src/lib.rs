@@ -19,6 +19,7 @@ mod clipboard;
 mod ocr;
 mod clothesline;
 mod capabilities;
+mod quick_note;
 
 /// **所有窗口**共用的 WebView2 启动参数。
 ///
@@ -1350,6 +1351,8 @@ fn archive_preview_show(
 }
 
 /// 组件挂载时拉取待显示的 cardId（首建路径：建窗→挂载→主动拉取，无事件竞态）。
+/// ★2026-11-23：改为 take-once（读后清空）。原 clone 常驻不清 → WebView 重载时
+/// 隐藏窗重新挂载会读到残留 cardId → onLoad → reveal → 「没操作却自己弹出预览」。
 #[tauri::command]
 fn archive_preview_current(app: tauri::AppHandle) -> Option<String> {
     if app.try_state::<ArchivePreviewState>().is_none() {
@@ -1359,7 +1362,7 @@ fn archive_preview_current(app: tauri::AppHandle) -> Option<String> {
         .0
         .lock()
         .unwrap()
-        .clone()
+        .take()
 }
 
 /// 图片解码完成（img onLoad）后由前端调用：此刻 webview 已完成含图片的绘制，
@@ -1374,10 +1377,15 @@ fn archive_preview_reveal(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// 隐藏预览覆盖窗（常驻复用，下次打开零创建延迟）。不存在时为 no-op。
+/// ★2026-11-23：同时清空残留 cardId（复用路径写入后前端走事件通道、未 take），
+/// 杜绝隐藏态 WebView 重载时读到残留值自动 reveal。
 #[tauri::command]
 fn archive_preview_hide(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window(ARCHIVE_PREVIEW_LABEL) {
         let _ = w.hide();
+    }
+    if let Some(st) = app.try_state::<ArchivePreviewState>() {
+        *st.0.lock().unwrap() = None;
     }
     Ok(())
 }
@@ -1926,6 +1934,9 @@ pub fn run() {
         .manage(notes::NotePoolState::default())
         .manage(clipboard::ClipboardState::default())
         .manage(clothesline::ClotheslineState::default())
+        .manage(quick_note::QuickNoteShortcutState::default())
+        .manage(quick_note::QuickNoteShowIntent::default())
+        .manage(quick_note::QuickNotePendingEdit::default())
         // 窗口生命周期日志 + 主窗口关闭拦截(改为隐藏,托盘应用标准做法):
         // 之前截图流程若误触发主窗口关闭,进程随最后一个窗口销毁直接退出,
         // 表现为「应用整个消失」。现在主窗口 close 一律拦截成 hide 并留日志。
@@ -2021,6 +2032,14 @@ pub fn run() {
             notes::notes_set_pinned,
             notes::register_note_shortcut,
             notes::register_archive_shortcut,
+            quick_note::quick_note_open,
+            quick_note::quick_note_hide,
+            quick_note::quick_note_resize,
+            quick_note::quick_note_take_show_intent,
+            quick_note::quick_note_open_for_edit,
+            quick_note::quick_note_take_pending_edit,
+            quick_note::register_quick_note_shortcut,
+            clothesline::clothesline_add_archived_card,
             clipboard::clipboard_list,
             clipboard::clipboard_delete,
             clipboard::clipboard_clear,

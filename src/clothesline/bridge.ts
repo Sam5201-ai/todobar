@@ -56,6 +56,10 @@ export type ClArchiveCard = {
 }
 /** 绳窗 ＋ 菜单「归档」→ 主窗唤起并打开归档页。 */
 export const CL_OPEN_ARCHIVE = 'clothesline-open-archive'
+/** ★2026-11-22 归档飞入：绳窗/速记窗动画落地后广播，主窗顶栏归档角标 +1 并脉冲。
+ *  payload 仅作来源标注，主窗不依赖它计数（会话内每次落地即 +1）。 */
+export const CL_ARCHIVE_LANDED = 'clothesline-archive-landed'
+export type ClArchiveLanded = { source: 'rope' | 'quick-note' }
 
 /** ★批14 主窗 → 绳窗：操作结果 toast（绳上便利签「加入待办」等）。
  *  写方在主窗（单一写方红线），但用户不会一直开着工具窗——结果提示必须弹回
@@ -197,6 +201,8 @@ export interface ClotheslineCard {
   deleted_at: number | null
   /** 归档时间戳（ms）。有值 = 已归档：不在绳上，但保留供归档页查看/恢复。 */
   archived_at?: number | null
+  /** 随手记分类（自由文本；null=未分类）。 */
+  category?: string | null
 }
 
 /** 与 clothesline.rs::SessionState 对应。 */
@@ -247,6 +253,8 @@ export interface CardPatch {
   title_italic?: boolean | null
   body_bold?: boolean | null
   body_italic?: boolean | null
+  /** 随手记分类：缺省=不改 / null=清空 / 值=设置。 */
+  category?: string | null
 }
 
 /** 新卡由前端生成稳定 id（Webview 支持 randomUUID），Rust 负责 order / 时间戳 / 配额。 */
@@ -286,6 +294,7 @@ export function clMakeCard(kind: CardKind, patch: Partial<ClotheslineCard> = {})
     updated_at: now,
     deleted_at: null,
     archived_at: null,
+    category: patch.category ?? null,
   }
 }
 
@@ -357,6 +366,10 @@ export const clReorderCards = (orderedIds: string[]) =>
 /** 新增卡片。autoDropOldest 只给「截图自动飞入」用：满额时撕下最旧非置顶卡。 */
 export const clAddCard = (card: ClotheslineCard, member: boolean, autoDropOldest = false) =>
   invoke<ClotheslineCard>('clothesline_add_card', { card, member, autoDropOldest })
+
+/** 直接创建已归档随手记卡（不占挂绳配额；全局速记「保存归档」用）。 */
+export const clAddArchivedCard = (card: ClotheslineCard) =>
+  invoke<ClotheslineCard>('clothesline_add_archived_card', { card })
 
 /** 增量改卡片内容 / 置顶 / 计时；order 只归 clReorderCards 管。 */
 export const clUpdateCard = (id: string, patch: CardPatch) =>

@@ -1308,6 +1308,9 @@ pub struct ClotheslineCard {
     /// 零迁移：旧 cards.json 反序列化时自动为 None。
     #[serde(default)]
     pub archived_at: Option<i64>,
+    /// 随手记分类（自由文本）。零迁移：旧 cards.json 缺该字段自动为 None。
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 fn default_timer_direction() -> String { "countdown".into() }
@@ -1744,6 +1747,9 @@ pub struct CardPatch {
     pub body_bold: Option<Option<bool>>,
     #[serde(default, deserialize_with = "de_double_option")]
     pub body_italic: Option<Option<bool>>,
+    /// 随手记分类（缺失=不改 / null=清空 / 值=设置）。
+    #[serde(default, deserialize_with = "de_double_option")]
+    pub category: Option<Option<String>>,
 }
 
 /// 新增卡片：order 永远追加到尾部（不动已有卡的槽位）。
@@ -1762,30 +1768,15 @@ pub fn clothesline_add_card(
     let _guard = state.cards_write_lock.lock().unwrap();
     let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
     let mut all = read_all_cards(&base)?;
+    // ★2026-11-23 用户定案：总卡数配额**保留**（免费 12 / 会员 24，用户认可合理）；
+    //   仅移除「同时运行计时最多 3 张」约束——用户在 7 张卡时创建番茄钟被它误伤
+    //   （当时报的错误正是这条，而非总卡数配额），明确反对。
     let limit = card_limit(member);
     // 归档卡不占绳上配额（与软删除同口径：不在绳上就不算挂着的）。
     let active_count = all
         .iter()
         .filter(|c| c.deleted_at.is_none() && c.archived_at.is_none())
         .count();
-
-    // 计时卡额外约束：同时运行（有未来结束时间且未触发）最多 3 张，
-    // 与总额度独立；超出的计时仍可创建为「已结束」草稿，避免误吞用户操作。
-    if card.kind == CardKind::Timer {
-        let running = all
-            .iter()
-            .filter(|c| {
-                c.deleted_at.is_none()
-                    && c.archived_at.is_none()
-                    && c.kind == CardKind::Timer
-                    && c.end_at.map(|t| t > now_ms()).unwrap_or(false)
-                    && c.fired_at.is_none()
-            })
-            .count();
-        if running >= 3 && card.end_at.map(|t| t > now_ms()).unwrap_or(false) {
-            return Err("同时运行的计时最多 3 张，先停掉一张".into());
-        }
-    }
 
     let mut dropped: Option<String> = None;
     if active_count >= limit {
@@ -1834,8 +1825,42 @@ pub fn clothesline_add_card(
         crate::append_app_log(&format!("[clothesline] 满额自动撕下最旧非置顶卡 {id}"));
         let _ = app.emit("clothesline-card-dropped", &id);
     }
-    crate::append_app_log(&format!("[clothesline] 新增卡片 {}/{}", fresh.kind_to_log(), limit));
+    crate::append_app_log(&format!("[clothesline] 新增卡片 {}", fresh.kind_to_log()));
     Ok(fresh)
+}
+
+/// 直接创建一张「已归档」随手记卡（全局速记的「保存归档」用）。
+/// 归档卡不在绳上，**不占挂绳配额**（与 confirmTakedown 归档同口径），跳过 active_count 检查。
+#[tauri::command]
+pub fn clothesline_add_archived_card(
+    app: tauri::AppHandle,
+    mut card: ClotheslineCard,
+) -> Result<ClotheslineCard, String> {
+    let Some(state) = app.try_state::<ClotheslineState>() else {
+        return Err("晾衣绳状态未初始化".into());
+    };
+    let _guard = state.cards_write_lock.lock().unwrap();
+    let base = base_dir().ok_or_else(|| "无法定位用户目录".to_string())?;
+    let mut all = read_all_cards(&base)?;
+    all.retain(|c| c.id != card.id);
+    let max_order = all
+        .iter()
+        .filter(|c| c.deleted_at.is_none())
+        .map(|c| c.order)
+        .max()
+        .unwrap_or(-1024);
+    let ts = now_ms();
+    card.order = max_order + 1024;
+    card.created_at = ts;
+    card.updated_at = ts;
+    card.deleted_at = None;
+    card.archived_at = Some(ts);
+    all.push(card.clone());
+    atomic_write_json(&cards_path(&base), Some(&cards_bak_path(&base)), &all)?;
+    // 归档卡不进 active_snapshot，广播 kept 以便归档页（如有）刷新计数。
+    let _ = app.emit("clothesline-cards-changed", &active_snapshot(&all));
+    crate::append_app_log("[clothesline] 新增已归档随手记卡（不占绳位）");
+    Ok(card)
 }
 
 impl ClotheslineCard {
@@ -1882,6 +1907,7 @@ pub fn clothesline_update_card(
     if let Some(v) = patch.title_italic { c.title_italic = v; }
     if let Some(v) = patch.body_bold { c.body_bold = v; }
     if let Some(v) = patch.body_italic { c.body_italic = v; }
+    if let Some(v) = patch.category { c.category = v; }
     if let Some(v) = patch.timer_total_ms { c.timer_total_ms = Some(v); }
     if let Some(v) = patch.created_at { c.created_at = v; } // ★重置：正计时从 0 重计。
     c.updated_at = now_ms();
@@ -2368,6 +2394,8 @@ mod tests {
             created_at: 1000,
             updated_at: 1000,
             deleted_at: if deleted { Some(2000) } else { None },
+            archived_at: None,
+            category: None,
         }
     }
 

@@ -1,0 +1,231 @@
+/* 全局速记（随手记）独立录入窗。窗口本身透明，卡片是不透明纸面居中。 */
+.qn-root {
+  width: 460px;
+  /* ★2026-11-24 height 改 auto + min-height 保底：正文拉伸时卡片随内容生长，
+     窗口高度由前端 ResizeObserver 跟随 setSize（钳制上限，见 QuickNoteWindow）。 */
+  min-height: 360px;
+  box-sizing: border-box;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: #fdfcf8;
+  border: 1px solid #e4dfd2;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  color: #2c2c2a;
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  transform-origin: center center;
+}
+
+/* 唤起入场（用户选定方案：大幅度缩放 · 无回弹）：
+   卡片整体 scale(0.6→1)，0.34s ease-out 匀速收尾；不回弹、不旋转、不带透视、不叠加内容分层。
+   红线：只动 transform —— 窗口背景透明且 setAlwaysOnTop(true)，alpha 动画会触发合成层重建抖动，
+   故全程不碰 opacity。playEnter 在每次 show 之后先移除再下一帧加回 is-entering 保证连续唤起也能重播。
+   ★本段必须放在 .is-flying 之前：同优先级时后置的飞出动画会覆盖入场动画。 */
+.qn-root.is-entering {
+  animation: qn-enter 0.34s ease-out both;
+}
+
+@keyframes qn-enter {
+  from { transform: scale(0.6); }
+  to { transform: scale(1); }
+}
+
+/* 保存归档时同窗飞出：缩小 + 飞向工具窗所在侧（左/右）的窗口边缘。
+   ★2026-11-22 对齐确认过的预览：终点按 dockSide 注入 --fly-x，时长 0.46s，
+   scale 收到 0.02 代替原来的 0.12。速记窗是独立小窗，CSS 无法跨窗飞入主窗，
+   故只能飞到自身窗口边缘（红线内物理极限），到达反馈交给主窗角标脉冲。
+   速记窗不是透明置顶窗，但为与绳卡观感一致、避免 alpha 合成层问题，同样不碰 opacity。 */
+.qn-root.is-flying {
+  animation: qn-fly-out 0.46s cubic-bezier(0.4, 0, 0.7, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes qn-fly-out {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(var(--fly-x, 460px), 0) scale(0.02); }
+}
+
+.qn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qn-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c2c2a;
+}
+
+.qn-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: #8a8578;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.qn-close:hover { color: #2c2c2a; background: #efece2; transform: rotate(90deg); }
+
+.qn-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd7c8;
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: #2c2c2a;
+  background: #fff;
+  outline: none;
+}
+.qn-input:focus { border-color: #7aa7d9; }
+
+.qn-textarea {
+  /* ★2026-11-24 拉伸生效的关键：绝不能 flex:1（flex-basis 0% + grow/shrink 会
+     无视并回弹 resize 写入的高度）；改为固定默认高 + flex:none，用户拉伸的
+     inline height 才是唯一真源。min/max 限制合理区间，超出窗口部分被视口裁剪。 */
+  flex: none;
+  height: 160px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd7c8;
+  border-radius: 8px;
+  padding: 10px 11px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #2c2c2a;
+  background: #fff;
+  outline: none;
+  /* ★2026-11-25 纯文本多行（innerText 的 \n）在编辑态也按行显示，与卡片
+     white-space:pre-wrap 的展示一致（两窗同一份样式，行为一致）。 */
+  white-space: pre-wrap;
+  /* ★2026-11-24 支持纵向自由拉伸（min/max 限制合理区间，窗口高度跟随、不无限拉高） */
+  resize: vertical;
+  min-height: 120px;
+  max-height: 340px;
+  /* ★2026-11-24 contentEditable 编辑器需要滚动（内容超高时） */
+  overflow-y: auto;
+  font-family: inherit;
+}
+.qn-textarea:focus { border-color: #7aa7d9; }
+
+/* ★2026-11-24 富文本工具行（execCommand 按钮）+ 编辑器占位
+   （contentEditable 没有 ::placeholder，用 :empty + data-placeholder） */
+.qn-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qn-toolbar .qn-fmt {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #e4dfd2;
+  border-radius: 6px;
+  background: #fff;
+  color: #5f5e5a;
+  cursor: pointer;
+  font: 600 12.5px/1 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+.qn-toolbar .qn-fmt:hover {
+  border-color: #7aa7d9;
+  color: #185fa5;
+}
+.qn-toolbar .qn-color {
+  width: 26px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid #e4dfd2;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+.qn-textarea:empty::before {
+  content: attr(data-placeholder);
+  color: #b9b29f;
+  pointer-events: none;
+}
+/* 空白区域按住拖动窗口（data-tauri-drag-region 在根节点） */
+.qn-head {
+  cursor: move;
+}
+
+.qn-cats { display: flex; flex-direction: column; gap: 6px; }
+.qn-cats-label { font-size: 12px; color: #8a8578; }
+.qn-cats-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.qn-chip {
+  border: 1px solid #d9d3c4;
+  background: #fff;
+  color: #5f5e5a;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.qn-chip.is-active { background: #185fa5; border-color: #185fa5; color: #fff; }
+.qn-chip-add { border-style: dashed; color: #8a8578; }
+
+/* ★2026-11-25 问题2：分类可删除 —— 悬停 chip 时右侧出现 × */
+.qn-chip-x {
+  display: none;
+  margin-left: 5px;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.75;
+}
+.qn-chip:hover .qn-chip-x { display: inline; }
+.qn-chip-x:hover { opacity: 1; }
+
+.qn-cat-input {
+  width: 88px;
+  border: 1px solid #7aa7d9;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.qn-err { font-size: 12px; color: #a32d2d; }
+
+.qn-actions { display: flex; gap: 10px; }
+
+.qn-btn {
+  flex: 1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.qn-btn-hang { background: #185fa5; color: #fff; border-color: #185fa5; }
+.qn-btn-hang:hover { background: #14508c; }
+.qn-btn-archive { background: #fff; color: #2c2c2a; border-color: #d9d3c4; }
+.qn-btn-archive:hover { background: #f4f1e8; }
+
+/* 常驻微交互：静止状态也有细腻反馈（只动 transform / 颜色 / 阴影，不碰窗口 alpha）。 */
+.qn-chip, .qn-btn, .qn-close {
+  transition: transform .14s ease, background-color .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.qn-chip:hover { transform: translateY(-1px); border-color: #b9b2a2; }
+.qn-chip:active { transform: translateY(0) scale(.97); }
+.qn-btn:hover { transform: translateY(-1px); }
+.qn-btn:active { transform: translateY(0) scale(.98); box-shadow: none; }
+.qn-btn-hang:hover { box-shadow: 0 5px 14px rgba(24, 95, 165, .22); }
+.qn-btn-archive:hover { box-shadow: 0 5px 14px rgba(0, 0, 0, .1); }
+.qn-input:focus, .qn-textarea:focus { box-shadow: 0 0 0 3px rgba(122, 167, 217, .16); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qn-root.is-entering,
+  .qn-root.is-entering * { animation: none !important; }
+  .qn-chip, .qn-btn, .qn-close { transition: none !important; }
+}

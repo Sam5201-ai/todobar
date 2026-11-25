@@ -3025,6 +3025,130 @@ kbd {
   white-space: nowrap;
 }
 
+/* ——— ★2026-11-24 周/月待办「点击筛选栏」唤起的底部日期选择弹窗 ——— */
+.range-nav-label.is-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.range-nav-label.is-clickable:hover {
+  background: var(--surface-muted);
+}
+
+.range-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -4px;
+}
+
+.range-sheet-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.range-sheet-close:hover {
+  color: var(--ink);
+}
+
+.rdp-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rdp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0 6px;
+}
+
+.rdp-nav-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rs-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.rs-chip:hover {
+  border-color: var(--ink);
+}
+
+.rs-chip.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.rdp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.rdp-wd {
+  padding: 2px 0;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.rdp-day {
+  padding: 6px 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.rdp-day:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.rdp-day.is-out {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.rdp-day.is-today {
+  color: #219e67;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #219e67;
+}
+
+.rdp-day:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
 .range-today-link {
   align-self: flex-start;
   margin: 0 2px 6px;
@@ -6707,6 +6831,58 @@ body.is-row-dragging * {
 @keyframes account-pop-left {
   from { transform: translate(-8px, 8px) scale(0.97); opacity: 0; }
   to { transform: none; opacity: 1; }
+}
+
+/* ★2026-11-22 归档飞入反馈：顶栏归档角标（会话内落地次数）+ 到达脉冲。
+ * 与确认过的预览一致：卡片缩小飞入 → 归档数角标弹一下脉冲。
+ * 主窗非透明置顶窗，transform/opacity 动画无合成层顾虑。 */
+.icon-cluster button:has(.arch-land-badge) { position: relative; }
+.icon-cluster button .arch-land-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #185fa5;
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  border: 1.5px solid var(--bg, #fff);
+  pointer-events: none;
+  animation: arch-land-pulse 0.38s ease-out;
+}
+.workspace.theme-dark .icon-cluster button .arch-land-badge { border-color: var(--bg, #1e1e1e); }
+/* 「⋯ 更多」菜单里的归档项：角标跟在名称后，同样脉冲。 */
+.topbar-menu .tm-item .arch-land-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #185fa5;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  margin-left: 4px;
+  animation: arch-land-pulse 0.38s ease-out;
+}
+@keyframes arch-land-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .icon-cluster button .arch-land-badge,
+  .topbar-menu .tm-item .arch-land-badge { animation: none; }
 }
 
 

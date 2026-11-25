@@ -1416,6 +1416,120 @@ body, body:focus, body:focus-visible,
 .cl-tm-foot { font: 9.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); white-space: nowrap; }
 .cl-root[data-theme='dark'] .cl-tm-btns button { background: #3a3038; border-color: #57444d; color: #f0b49c; }
 
+/* —— ★2026-11-23 异形计时卡（tomato 番茄 / pocket 口袋怀表 / hourglass 沙漏 / moon 月相）——
+   与 preview/timer-shape-final-reference.html 定稿逐笔一致。要点：
+   · 卡本体 = 异形 SVG：:has 剥离 .cl-card 的矩形纸底/边框/内边距/固定高度，
+     SVG 自撑尺寸（宽 168px、高按各形比例，沙漏最高 212px 允许垂得更低）；
+   · 绳窗铁律：内容层零 CSS animation/transition —— 进度弧/沙面全是内联几何，
+     流沙虚线静态，摆动仍只挂外层 .cl-card-sway；
+   · 操作钮 = 悬停浮现深色玻璃胶囊（❚❚/▶ ↺ +5′），键盘聚焦同样浮现。 */
+.cl-card:has(.cl-face.cl-shape) {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  padding: 0;
+  overflow: visible;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+.cl-face.cl-shape {
+  position: relative;
+  display: block;
+  width: 168px;
+  padding: 0;
+}
+.cl-shape-svg { display: block; width: 168px; height: auto; }
+/* 暂停态：整卡降饱和 + 压暗（mockup 规则：暂停 = 降饱和 + 动效停止，本就零动效） */
+.cl-shape.is-paused .cl-shape-svg { filter: saturate(.55) brightness(.85); }
+/* 进度弧 / 底轨：颜色随形 */
+.cl-shape-arc,
+.cl-shape-track { fill: none; }
+.is-tomato .cl-shape-track { stroke: #ffd9cd; }
+.is-tomato .cl-shape-arc { stroke: #e23c2e; }
+.is-pocket .cl-shape-track { stroke: rgba(140, 110, 50, .14); }
+.is-pocket .cl-shape-arc { stroke: #cf5b2e; }
+.is-moon .cl-shape-track { stroke: rgba(242, 199, 102, .18); }
+.is-moon .cl-shape-arc { stroke: #f2c766; }
+/* 沙漏流沙虚线 */
+.is-hourglass .cl-shape-stream { stroke: #f0c96c; stroke-width: 3; }
+/* 形内文字：时间（带小时切小字号）/ 状态行 / 标题 */
+.cl-shape-time { font: 800 25px/1 var(--cl-font); letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.cl-shape-time.is-long { font-size: 19px; }
+.cl-shape-sub { font: 600 12px/1 var(--cl-font); }
+.cl-shape-title { font: 600 12px/1 var(--cl-font); }
+.is-tomato .cl-shape-time { fill: #33190f; }
+.is-tomato .cl-shape-sub { fill: #b04a3a; }
+.is-tomato .cl-shape-pill { fill: #ffffff; opacity: .93; }
+.is-tomato .cl-shape-title { fill: #7a3526; }
+.is-pocket .cl-shape-time { fill: #3e3110; font-size: 24px; }
+.is-pocket .cl-shape-sub { fill: #a2612e; }
+.is-pocket .cl-shape-pill { fill: #f7efdb; stroke: #e3cf9e; }
+.is-pocket .cl-shape-title { fill: #7a5c20; }
+.is-hourglass .cl-shape-time { fill: #fff6df; font-size: 20px; }
+.is-hourglass .cl-shape-title { fill: #ffe4b3; }
+.is-moon .cl-shape-time { fill: #f2d488; font-size: 26px; }
+.is-moon .cl-shape-sub { fill: #9fb0d8; }
+.is-moon .cl-shape-pill { fill: rgba(255, 255, 255, .08); stroke: rgba(255, 255, 255, .18); }
+.is-moon .cl-shape-title { fill: #dce4f5; }
+/* 完成态：番茄整果转金；全部出右上对勾徽标 */
+.is-tomato .cl-shape-gold { opacity: 0; }
+.is-tomato.is-done .cl-shape-gold { opacity: 1; }
+.cl-shape-badge { opacity: 0; }
+.cl-shape.is-done .cl-shape-badge { opacity: 1; }
+/* 悬停浮现操作钮：★2026-11-23 反馈2 改为悬浮在卡片正下方（不遮挡卡底）；
+   无 transition（绳窗铁律：不引入插值动画）。胶囊是 .cl-face 的子元素，
+   悬停胶囊时 :hover 仍命中 .cl-face，移动过程不会中途消失。 */
+.cl-shape-btns {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-top: 0; /* ★2026-11-23 反馈：紧贴卡下缘，不留缝隙 —— 有缝隙则指针跨缝时脱离 :hover，浮窗闪没 */
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(24, 28, 36, .62);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.cl-face.cl-shape:hover .cl-shape-btns,
+.cl-face.cl-shape:focus-within .cl-shape-btns { opacity: 1; pointer-events: auto; }
+.cl-shape-btns button {
+  position: relative;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+  font: 700 11px/1 var(--cl-font);
+  cursor: pointer;
+}
+.cl-shape-btns button:hover { background: rgba(255, 255, 255, .34); }
+/* 按钮提示气泡（★反馈3）：悬停按钮时在其上方浮出 data-tip 文案 */
+.cl-shape-btns button::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: rgba(24, 28, 36, .92);
+  color: #fff;
+  font: 600 11px/1.5 var(--cl-font);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.cl-shape-btns button:hover::after { opacity: 1; }
+
 /* —— ★2026-11-15 一键录音卡（用户选定「方案六 · 墨黑胶囊」）：墨黑卡身 + 白色
       细体数字 + 红色 REC 胶囊，iOS 语音备忘录质感，纸色卡群里辨识度最高。
       声波条/胶囊全部是纯静态色块（绳窗铁律：卡片内容层绝不引入 CSS animation
@@ -1987,6 +2101,16 @@ body, body:focus, body:focus-visible,
   pointer-events: auto;
   text-align: left;
 }
+/* 新建/编辑随手记弹窗入场：与全局速记窗统一为「方案二 大幅度缩放·无回弹」。
+   scale(0.6→1)、0.34s ease-out 匀速收尾，不回弹/旋转/透视。
+   ★弹窗靠 transform:translate(-50%,-50%) 居中，keyframes 必须带上同一位移，否则动画期间会跳位。
+   条件渲染每次打开重新挂载 → CSS 动画自然重播，无需 JS 触发。只动 transform 不碰 alpha（透明置顶窗红线）。
+   guide / confirm 等其它 .cl-modal 不加此 class，保持原状。 */
+.cl-modal.cl-modal-anim { animation: cl-modal-pop 0.34s ease-out both; }
+@keyframes cl-modal-pop {
+  from { transform: translate(-50%, -50%) scale(0.6); }
+  to { transform: translate(-50%, -50%) scale(1); }
+}
 .cl-modal-title { font: 700 13px/1.4 var(--cl-font); color: var(--cl-ink); }
 .cl-modal-row { display: flex; flex-direction: column; gap: 4px; }
 .cl-modal-label { font: 600 10.5px/1.3 var(--cl-font); color: var(--cl-paper-muted); }
@@ -2005,6 +2129,23 @@ body, body:focus, body:focus-visible,
 .cl-modal-input:focus, .cl-modal-textarea:focus { border-color: var(--cl-accent); }
 /* 必填校验错误提示（2026-11-15 反馈4） */
 .cl-modal-err { font: 600 10.5px/1.4 var(--cl-font); color: #b3403a; }
+/* ★2026-11-24 问题3：随手记弹窗内复用全局速记 qn 系样式（.qn-in-modal 标记）的适配：
+   弹窗高度有限（80vh 滚动），正文框固定高、禁用手动拉伸（速记窗的 resize 由独立
+   窗口高度跟随机制配套，弹窗内没有这套机制）；高度收紧以容纳卡样式/颜色行。 */
+.cl-modal .qn-in-modal {
+  height: 150px;
+  min-height: 110px;
+  max-height: 260px;
+  resize: none;
+}
+/* ★2026-11-25 问题1：qn 编辑器 font-family:inherit 在绳窗弹窗内会继承 .cl-modal 的
+   字体（与全局速记窗 .qn-root 的 Segoe UI 不同），同一份富文本两窗渲染字体不一致
+   —— 显式钉成与 .qn-root 相同的字体族，保证「编辑时格式一致」。 */
+.cl-modal .qn-input,
+.cl-modal .qn-textarea {
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+}
+.cl-modal .qn-cats { gap: 4px; }
 .cl-modal-swatches { display: flex; gap: 7px; flex-wrap: wrap; }
 .cl-modal-swatch {
   width: 22px;
@@ -2036,6 +2177,22 @@ body, body:focus, body:focus-visible,
   color: #4c3d22;
 }
 .cl-modal-seg { display: flex; gap: 6px; }
+/* ★2026-11-23 会员样式角标：绝对定位于选项按钮右上角。 */
+.cl-modal-seg button { position: relative; }
+.cl-vip-tag {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f2c14e, #d99a2b);
+  color: #fff;
+  font: 700 8.5px/1.5 var(--cl-font);
+  font-style: normal;
+  letter-spacing: 0.4px;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(120, 80, 0, 0.35);
+}
 /* ★2026-11-17 需求1：番茄卡样式 7 选 1，一行放不下 → 允许换行、按钮自适应收窄。 */
 .cl-modal-seg.is-7 { flex-wrap: wrap; }
 .cl-modal-seg.is-7 button { flex: 1 1 auto; padding: 5px 8px; white-space: nowrap; }
@@ -2052,6 +2209,32 @@ body, body:focus, body:focus-visible,
 .cl-modal-seg button.is-active {
   background: color-mix(in srgb, var(--cl-accent) 16%, var(--cl-paper));
   border-color: var(--cl-accent);
+}
+/* ★2026-11-23 随手记分类 chip（新建/编辑弹窗，与全局速记窗同一份分类表）。 */
+.cl-cat-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cl-cat-chip {
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cl-paper) 92%, #ffffff 8%);
+  color: var(--cl-ink);
+  font: 500 11px/1.4 var(--cl-font);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.cl-cat-chip.is-active {
+  background: color-mix(in srgb, var(--cl-accent) 20%, var(--cl-paper));
+  border-color: var(--cl-accent);
+}
+.cl-cat-chip.is-add { border-style: dashed; color: var(--cl-paper-muted); }
+.cl-cat-input {
+  width: 92px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: 500 11px/1.4 var(--cl-font);
+  color: var(--cl-ink);
+  background: var(--cl-paper);
+  outline: none;
 }
 .cl-modal-check {
   display: flex;
@@ -2115,6 +2298,48 @@ body, body:focus, body:focus-visible,
 }
 .cl-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cl-root[data-theme='dark'] .cl-photo { background: #2b2e37; }
+/* ★2026-11-23 需求2：图片卡比例自适应 ——
+   ① img 弃用 cover 裁切：width:100% + height:auto 保持原始宽高比；
+      max-height 236px 兜底极端长图（超出部分 object-fit:contain 居中留白，
+      由 .cl-photo 底色承接），min-height 56px 兜底极端扁图；
+   ② 卡身高度随内容自适应（height:auto），无标题/正文时 caption/meta 不渲染、
+      卡片紧贴图片不留空白；图片四周白边 = .cl-face 内边距（不铺满卡身）；
+   ③ 只影响图片类三卡（image/shot/pin），其他卡仍固定 168×186。 */
+.cl-card-image,
+.cl-card-shot,
+.cl-card-pin {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  /* ★2026-11-23 反馈排查定案：边距大头是 .cl-card 卡身基础 padding 10px（L814），
+     此前一直只调 .cl-face（调错了层 —— face 基础无 padding，等于在卡身 10px 上
+     再叠加）。现在卡身 3px + .cl-photo 1px 描边 ≈ 4px 视觉边距，图片随之放大。 */
+  padding: 3px;
+}
+.cl-card-image .cl-photo,
+.cl-card-shot .cl-photo,
+.cl-card-pin .cl-photo {
+  height: auto;
+  min-height: 56px;
+}
+.cl-card-image .cl-photo img,
+.cl-card-shot .cl-photo img,
+.cl-card-pin .cl-photo img {
+  height: 100%;
+  max-height: none;
+  /* ★2026-11-23 反馈排查：之前的"大边距"根源是 contain 的 letterbox ——
+     比例不完全吻合钳制框的图会在框内居中留白（露出 .cl-photo 底色，
+     视觉上像一圈边距，怎么缩 padding 都无效）。改 cover：图片放大铺满
+     钳制框、轻微裁边，卡片内只保留真实 3px 内边距，不缩小卡片尺寸。 */
+  object-fit: cover;
+}
+/* .cl-face 归零内边距（边距统一由卡身 .cl-card 承担，避免双层叠加） */
+.cl-card-image .cl-face,
+.cl-card-shot .cl-face,
+.cl-card-pin .cl-face {
+  padding: 0;
+  gap: 2px;
+}
 .cl-photo-empty {
   width: 100%;
   height: 116px;
@@ -2157,6 +2382,21 @@ body, body:focus, body:focus-visible,
   text-align: right;
   border-bottom: 1px dashed rgba(140, 123, 88, 0.4);
   padding-bottom: 2px;
+}
+/* ★2026-11-22 随手记分类小标签：跟在落款日期后，超长截断。 */
+.cl-letter-cat {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(61, 123, 232, 0.14);
+  color: #3d7be8;
+  max-width: 54px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  letter-spacing: 0;
 }
 .cl-letter-sign {
   font: italic calc(9px * var(--cl-card-fs, 1))/1.4 'Kaiti SC', 'STKaiti', serif;
@@ -2486,7 +2726,9 @@ body, body:focus, body:focus-visible,
   font: 11.5px/1.4 var(--cl-font);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   pointer-events: none;
-  z-index: 25;
+  /* ★2026-11-23 需求：toast 必须盖过新建弹窗（.cl-modal z-index 60）——
+     此前 25 < 60，满额提示被弹窗压住「完全看不见」。 */
+  z-index: 70;
 }
 /* toast 本体带一个不透明胶囊底，让「已取下」文案在任何桌面上都可读。
    （本体仍是 pointer-events:none，只有按钮可点，见上方 .cl-toast.cl-toast-action。） */
@@ -2582,6 +2824,21 @@ body, body:focus, body:focus-visible,
 .cl-root.is-expanding .cl-card-sway { animation: cl-card-drop-in 0.46s cubic-bezier(.2, .85, .3, 1) both; }
 .cl-root.is-expanding .cl-toolbar { animation: cl-bar-drop 0.4s ease-out both; }
 .cl-root.is-collapsing .cl-card-sway { animation: cl-card-pull-up 0.26s ease-in both; }
+
+/* ★2026-11-22 归档飞出：卡片缩小 + 飞向工具窗所在屏幕边缘后归档（对齐确认过的预览）。
+ * --fly-x/--fly-y 由点击时按 dockSide 现算注入（ClotheslineView 归档分支），
+ * 旧版写死 180px/-150px：工具窗靠左时方向相反、距离太短，观感与预览不符。
+ * 只动 transform（合成器属性），不碰 opacity/box-shadow —— 透明置顶窗的
+ * alpha 动画会重建合成层引发抖动（项目红线，见上方注释）；
+ * 预览里 opacity→0 的淡出改用 scale→0.02 收尾，观感等价且不破红线。 */
+@keyframes cl-card-archive-fly {
+  0%   { transform: translateY(calc(-6px + var(--cl-hang, 0px))) rotate(var(--cl-rot, 0deg)) scale(1); }
+  100% { transform: translate(var(--fly-x, 180px), calc(var(--fly-y, -150px) + var(--cl-hang, 0px))) rotate(0deg) scale(0.02); }
+}
+.cl-card-sway.is-archive-fly {
+  animation: cl-card-archive-fly 0.46s cubic-bezier(.4, 0, .7, 1) both !important;
+  pointer-events: none;
+}
 @media (prefers-reduced-motion: reduce) {
   /* 非清风态照旧尊重系统偏好。 */
   .cl-root:not(.has-wind) * { animation: none !important; }
