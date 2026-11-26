@@ -1575,6 +1575,7 @@ const en: Record<LocaleKey, string> = {
   'quickNote.bodyPlaceholder': 'Capture your ideas...',
   'quickNote.hang': 'Pin to clothesline',
   'quickNote.archive': 'Save to archive (Enter)',
+  'quickNote.archivePlain': 'Save to archive',
   'quickNote.bold': 'Bold',
   'quickNote.italic': 'Italic',
   'quickNote.underline': 'Underline',

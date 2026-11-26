@@ -16,6 +16,15 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ★2026-11-26 中文斜体修复：上面 :root 全局禁用了 font-synthesis，导致无真斜体
+   字面的中文字体（微软雅黑等）在 font-style: italic 下不合成倾斜 —— 斜体只对
+   字母/数字（Segoe UI 自带斜体）生效。对斜体内容局部放行 style 合成。 */
+i, em,
+[style*="font-style: italic"],
+[style*="font-style:italic"] {
+  font-synthesis-style: auto;
+}
+
 * {
   box-sizing: border-box;
 }

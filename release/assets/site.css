@@ -11,6 +11,7 @@
   --border: rgba(15, 23, 42, .09);
   --shadow: 0 18px 44px -20px rgba(15, 23, 42, .22);
   --radius: 16px;
+  --nav-bg: rgba(255, 255, 255, .82);
 }
 [data-theme="dark"] {
   --bg: #060a14;
@@ -21,6 +22,7 @@
   --faint: #6b7a93;
   --border: rgba(255, 255, 255, .08);
   --shadow: 0 18px 44px -20px rgba(0, 0, 0, .6);
+  --nav-bg: rgba(6, 10, 20, .82);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -53,6 +55,42 @@ a:hover { text-decoration: underline; }
   font-weight: 700; font-size: 14px;
 }
 .tcta:hover { background: var(--primary-dark); text-decoration: none; }
+
+/* ===== 首页同款顶栏（terms / privacy / changelog） =====
+   逐参数对齐 index.html 内联的 .nav：容器 1180px 居中、space-between 无 gap、
+   .nav-links 不加 margin-left，确保各元素水平位置与首页完全一致。
+   用 sticky 避免 fixed 遮挡正文（首页靠 hero 的 padding 补偿）。 */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--nav-bg); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+/* 覆盖子站 .wrap 的 960px 窄版，改用首页的 1180px 容器 */
+.nav .wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--text); }
+.nav .brand:hover { text-decoration: none; }
+.nav .brand img { width: 36px; height: 36px; border-radius: 11px; box-shadow: 0 4px 14px rgba(29,126,240,.35); }
+.nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.nav-links a { color: var(--muted); transition: color .2s; }
+.nav-links a:hover { color: var(--primary); text-decoration: none; }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 17px; line-height: 1;
+  transition: background .2s;
+}
+.theme-btn:hover { background: rgba(148,163,184,.15); }
+.nav-right .btn-primary {
+  display: inline-flex; align-items: center;
+  background: linear-gradient(135deg, #2e8df6, var(--primary) 55%, var(--primary-dark));
+  color: #fff; font-weight: 700; border: none; border-radius: 14px;
+  padding: 11px 22px; font-size: 14px;
+  box-shadow: 0 10px 26px -8px rgba(29,126,240,.55);
+  transition: transform .18s, box-shadow .18s;
+}
+.nav-right .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 32px -8px rgba(29,126,240,.6); text-decoration: none; }
+@media (max-width: 860px) { .nav-links { display: none; } }
 
 /* ===== 页头 ===== */
 .head { padding: 56px 0 22px; }

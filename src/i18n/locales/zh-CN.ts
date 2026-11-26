@@ -1618,6 +1618,7 @@ const zhCN = {
   'quickNote.bodyPlaceholder': '记录你的灵感、想法……',
   'quickNote.hang': '挂到晾衣绳',
   'quickNote.archive': '保存归档（Enter）',
+  'quickNote.archivePlain': '保存归档',
   'quickNote.bold': '加粗',
   'quickNote.italic': '倾斜',
   'quickNote.underline': '下划线',

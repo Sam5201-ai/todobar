@@ -1,0 +1,315 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - link "Tacco 图标 Tacco" [ref=f1e4] [cursor=pointer]:
+        - /url: "#top"
+        - img "Tacco 图标" [ref=f1e5]
+        - generic [ref=f1e6]: Tacco
+      - navigation "主导航" [ref=f1e7]:
+        - link "功能亮点" [ref=f1e8] [cursor=pointer]:
+          - /url: "#features"
+        - link "安装指南" [ref=f1e9] [cursor=pointer]:
+          - /url: "#install"
+        - link "常见问题" [ref=f1e10] [cursor=pointer]:
+          - /url: "#faq"
+        - link "服务条款" [ref=f1e11] [cursor=pointer]:
+          - /url: ./terms.html
+        - link "隐私协议" [ref=f1e12] [cursor=pointer]:
+          - /url: ./privacy.html
+      - generic [ref=f1e13]:
+        - button "切换语言" [ref=f1e15] [cursor=pointer]:
+          - generic [ref=f1e19]: 简体中文
+        - button "切换深浅色" [ref=f1e22] [cursor=pointer]: 🌙
+        - link "免费下载" [ref=f1e23] [cursor=pointer]:
+          - /url: "#install"
+  - generic [ref=f1e25]:
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: v0.4.84 · Windows / macOS 已发布
+      - heading "Tacco · Windows 贴边待办栏 待办事项， 就该贴在屏幕边缘。" [level=1] [ref=f1e30]:
+        - generic [ref=f1e31]: Tacco · Windows 贴边待办栏
+        - text: 待办事项，就该贴在屏幕边缘。
+      - paragraph [ref=f1e32]: Tacco 是一条藏在屏幕右缘的极简待办栏：平时只占一条细边，几乎不占任何桌面空间， 鼠标一划即出、用完自动收回。而且它不止是待办——9 大功能一件不落，记录、提醒、换算、截图，全都有了。
+      - link "下载 Windows 安装包" [ref=f1e34] [cursor=pointer]:
+        - /url: /download/Tacco-setup.exe?v=0.4.84&d=fp-64t0elrd
+      - paragraph [ref=f1e38]: Windows 10 / 11 · 64 位 · 约 40 MB · 免费下载 · 无需管理员权限
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: 不是这台电脑？
+        - generic [ref=f1e41] [cursor=pointer]: Windows 版 ·当前
+        - generic [ref=f1e42] [cursor=pointer]: macOS · Apple 芯片 ·
+        - generic [ref=f1e43] [cursor=pointer]: macOS · Intel
+    - generic [ref=f1e46]:
+      - generic [ref=f1e47]: Tacco
+      - img "Tacco 待办栏贴边展开演示" [ref=f1e53]
+      - generic [ref=f1e54]:
+        - generic [ref=f1e55]:
+          - generic [ref=f1e56]: ⊞
+          - generic [ref=f1e57]: 🔍
+          - generic [ref=f1e58]: 📁
+          - generic [ref=f1e59]: 🌐
+        - generic [ref=f1e60]: 16:402026/10/26
+  - generic [ref=f1e64]:
+    - generic [ref=f1e65]:
+      - generic [ref=f1e66]: Features
+      - heading "Tacco 的 9 大功能" [level=2] [ref=f1e67]
+      - generic [ref=f1e68]:
+        - button "待办事项" [ref=f1e69] [cursor=pointer]
+        - button "生日纪念日" [ref=f1e76] [cursor=pointer]
+        - button "晾衣绳" [ref=f1e82] [cursor=pointer]
+        - button "计算器" [ref=f1e88] [cursor=pointer]
+        - button "万年历" [ref=f1e93] [cursor=pointer]
+        - button "牛马计薪器" [ref=f1e98] [cursor=pointer]
+        - button "截图贴图" [ref=f1e104] [cursor=pointer]
+        - button "便利签" [ref=f1e110] [cursor=pointer]
+        - button "剪贴板" [ref=f1e116] [cursor=pointer]
+      - paragraph [ref=f1e122]: 每一页都是一个真实功能：左边看它能帮你做什么，右边看它长什么样。
+    - generic [ref=f1e123]:
+      - button "上一个功能" [ref=f1e124] [cursor=pointer]: ‹
+      - button "下一个功能" [ref=f1e125] [cursor=pointer]: ›
+      - generic [ref=f1e126]:
+        - article [ref=f1e127]:
+          - generic [ref=f1e128]:
+            - generic [ref=f1e129]:
+              - generic [ref=f1e130]:
+                - generic [ref=f1e131]: 01 / 09
+                - generic [ref=f1e134]: 待办事项
+              - heading "贴在屏幕边缘的待办清单" [level=3] [ref=f1e135]
+              - paragraph [ref=f1e136]: 一划即出，用完自动收回，抬眼就能看见今天该做什么
+              - paragraph [ref=f1e137]: Tacco 的核心是一条贴在屏幕右缘的极简待办栏：平时只收成一条细边、不挡任何窗口，鼠标一划即出。按日 / 周 / 月三种视图安排事项，重要的事永远在视线里。
+              - list [ref=f1e138]:
+                - listitem [ref=f1e139]: ✓ 日 / 周 / 月三视图，置顶、子任务自由组合
+                - listitem [ref=f1e140]: ✓ 重复事项一键跳过法定节假日（数据自动更新）
+                - listitem [ref=f1e141]: ✓ 提醒精确到分钟，弹窗 + 声音，再忙也不错过
+                - listitem [ref=f1e142]: ✓ 勾选即完成，今日进度条一目了然
+              - paragraph [ref=f1e143]: 适合场景：写周报前扫一眼本周待办；把「回消息」从脑子里挪到屏幕边上。
+            - generic [ref=f1e144]:
+              - img "待办事项首页截图" [ref=f1e146]
+              - generic [ref=f1e147]: ⏰ 到点提醒弹窗
+              - generic [ref=f1e150]: 今日进度条
+        - article [ref=f1e153]:
+          - generic [ref=f1e154]:
+            - generic [ref=f1e155]:
+              - generic [ref=f1e156]:
+                - generic [ref=f1e157]: 02 / 09
+                - generic [ref=f1e160]: 生日 / 纪念日
+              - heading "重要的人，一天都不会忘" [level=3] [ref=f1e161]
+              - paragraph [ref=f1e162]: 公历农历都能记，提前提醒，倒计时高亮
+              - paragraph [ref=f1e163]: 把家人朋友的生日、恋爱纪念日、还款日统统记进「记节日」。列表按时间倒计时排序，谁的日子快到了一眼看到，提前准备礼物不慌张。
+              - list [ref=f1e164]:
+                - listitem [ref=f1e165]: ✓ 公历 / 农历双历记录，农历生日自动算
+                - listitem [ref=f1e166]: ✓ 提前 N 天开始提醒，当天只提醒一次不打扰
+                - listitem [ref=f1e167]: ✓ 「还有 X 天」倒计时高亮，最近的日子置顶
+                - listitem [ref=f1e168]: ✓ 与待办栏同屏显示，不用来回切换应用
+              - paragraph [ref=f1e169]: 适合场景：爸妈生日、结婚纪念日、信用卡还款日……一个都不错过。
+            - generic [ref=f1e170]:
+              - img "生日与纪念日记录截图" [ref=f1e172]
+              - generic [ref=f1e173]: 🎂 倒计时高亮
+              - generic [ref=f1e176]: 农历 / 公历切换
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 03 / 09
+                - generic: 晾衣绳
+              - heading "重要的事，夹在眼前" [level=3]
+              - paragraph: 桌面顶上一根绳，便签、截图、计时器随手挂上去
+              - paragraph: 屏幕顶部横着一条木质晾衣绳，把便利签、灵感随笔、截图、倒计时、番茄钟、万年历像晾衣服一样夹在上面：抬眼就看到，做完取下来。卡片可拖动排序、可置顶显示，把桌面变成一面任务展示墙。
+              - list:
+                - listitem: ✓ 一根绳挂多种卡片：便签、截图、倒计时、番茄钟、万年历
+                - listitem: ✓ 截图或复制的内容，可一键挂上晾衣绳
+                - listitem: ✓ 卡片自由拖动排序，做完一件取下一件
+                - listitem: ✓ 支持置顶显示，常驻桌面抬眼可见
+              - paragraph: 适合场景：把今天最重要的几件事挂在屏幕顶上，配着卡片与照片，既是效率也是心情。
+            - generic:
+              - generic:
+                - img "Tacco 晾衣绳：屏幕顶部的木绳夹着便签、灵感随笔、截图、倒计时、万年历与番茄钟卡片"
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 04 / 09
+                - generic: 计算器
+              - heading "顺手一按，什么都能算" [level=3]
+              - paragraph: 四则运算、日期差、汇率换算，一页全搞定
+              - paragraph: 不用再另开系统计算器、也不用去搜索引擎查汇率：待办栏内置计算器，键盘敲几下出结果，算完一键复制，不中断手头的工作。
+              - list:
+                - listitem: ✓ 基础四则运算，支持键盘连续输入
+                - listitem: ✓ 日期差 / 工作日 / 年龄计算
+                - listitem: ✓ 长度、重量、温度等单位换算
+                - listitem: ✓ 多币种实时汇率换算（联网自动更新）
+              - paragraph: 适合场景：算年假还剩几天、倒推项目工期、海外购物折算人民币。
+            - generic:
+              - generic:
+                - img "内置计算器截图"
+              - generic: 💱 实时汇率
+              - generic: 键盘直达
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 05 / 09
+                - generic: 万年历
+              - heading "农历、节气、宜忌，一查便知" [level=3]
+              - paragraph: 法定节假日休/班标记清晰，安排假期不踩坑
+              - paragraph: 内置万年历：月历视图完整显示农历与节气，法定节假日用「休 / 班」角标标得清清楚楚；点开任意一天还能看宜忌详情。2027 年放假安排公布后数据自动更新，不用升级软件。
+              - list:
+                - listitem: ✓ 农历、节气、传统节日完整显示
+                - listitem: ✓ 法定节假日「休 / 班」角标，调休不搞混
+                - listitem: ✓ 每日宜忌详情，选日子有依据
+                - listitem: ✓ 「回到今天」一键返回，任意年月快速跳转
+              - paragraph: 适合场景：安排小长假出行、查农历生日、看黄历挑好日子。
+            - generic:
+              - generic:
+                - img "万年历截图"
+              - generic: 🗓 休/班角标
+              - generic: 每日宜忌
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 06 / 09
+                - generic: 牛马计薪器
+              - heading "每一秒搬砖，都看得见钱" [level=3]
+              - paragraph: 今日已赚实时滚动，下班倒计时精确到秒
+              - paragraph: 填好月薪和上下班时间，「今日已赚」就会随时间实时增长，下班、发薪倒计时精确到秒；还有 8 种「今日状态」按时段自动切换——疯狂搬砖、等饭中、带薪发呆、冲刺下班……打工也有仪式感。
+              - list:
+                - listitem: ✓ 今日已赚 / 日薪 / 时薪实时更新
+                - listitem: ✓ 下班 + 发薪双倒计时，精确到秒
+                - listitem: ✓ 8 种今日状态按时段自动轮换，可手动切换
+                - listitem: ✓ 专属桌面组件：奶牛萌卡 / 小马宽屏 / 暖阳三栏三套风格，可拖动记忆位置
+              - paragraph: 适合场景：工作再苦，看着「已赚」数字往上跳，也能笑出声。
+            - generic:
+              - generic:
+                - img "牛马计薪器截图"
+              - generic: 💰 今日已赚实时滚动
+              - generic: 🖥 桌面组件
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 07 / 09
+                - generic: 截图 / 贴图
+              - heading "截完就贴，钉在桌面上" [level=3]
+              - paragraph: 参考图钉在屏幕一角，写文档对资料不再来回切窗口
+              - paragraph: 快捷键一键截图，窗口 / 自选区域随心截；截完可以直接标注，也能把图「贴」在桌面任意位置常驻显示——边看资料边写东西，效率直接翻倍。
+              - list:
+                - listitem: ✓ 窗口 / 区域截图，选区可拖动微调
+                - listitem: ✓ 标注工具栏：箭头、画笔、矩形、文字、马赛克等
+                - listitem: ✓ 一键贴图钉在桌面：滚轮缩放、透明度可调
+                - listitem: ✓ 鼠标穿透模式：贴图不挡下面的操作
+              - paragraph: 适合场景：把需求截图贴在旁边照着做；贴一张参考图临摹、抄录表格。
+            - generic:
+              - generic:
+                - img "Tacco 截图：圈选区域后带标注工具条，可直接贴图或保存"
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 08 / 09
+                - generic: 便利签
+              - heading "灵感随手贴，关机也不丢" [level=3]
+              - paragraph: Alt+N 一键贴一张便签到桌面，重启自动贴回原位
+              - paragraph: 想到什么先贴一张便签：临时账号、待办灵感、购物清单……支持换色、调透明度、钉住置顶、自由拖动摆放。关机重启后，未删除的便签会按上次的原位置自动贴回桌面。
+              - list:
+                - listitem: ✓ 快捷键一键新建（默认 Alt+N），最多同屏 12 张
+                - listitem: ✓ 6 色换肤 + 透明度滑条自定义
+                - listitem: ✓ 勾选划线、一键「转待办」进今日清单
+                - listitem: ✓ 重启自动恢复原位，多显示器也能回到原屏
+              - paragraph: 适合场景：开会时速记要点、贴一张「今日必做」在眼前、给同事留言截屏。
+            - generic:
+              - generic:
+                - img "Tacco 便利签：桌面上并排贴着的黄色与绿色便签"
+        - article:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 09 / 09
+                - generic: 剪贴板
+              - heading "复制过的，都帮你留着" [level=3]
+              - paragraph: 历史自动记录，键盘选条目，一次带走十几段内容
+              - paragraph: Tacco 会自动记录你复制过的文字与图片，浮窗随时唤出：搜索、预览、按数字键快选回贴。整理资料时复制十几段内容不用来回切换，密码等敏感内容会自动跳过不记录。
+              - list:
+                - listitem: ✓ 复制历史自动记录，浮窗快捷键随时唤出
+                - listitem: ✓ ↑↓ 选择 · Enter 复制 · 数字键 1-9 快选
+                - listitem: ✓ 关键词搜索，秒找三天前复制的内容
+                - listitem: ✓ 密码管理器内容自动识别跳过，隐私不落盘
+              - paragraph: 适合场景：汇总资料、批量填写表单、找回刚才不小心覆盖掉的那段文字。
+            - generic:
+              - generic:
+                - img "Tacco 剪贴板历史：搜索框、多条复制记录与快捷回贴编号"
+  - generic [ref=f1e182]:
+    - img "Tacco 图标" [ref=f1e183]
+    - heading "下载 Tacco Windows 安装包并安装到电脑" [level=2] [ref=f1e184]
+    - paragraph [ref=f1e185]: Windows 10 / 11 · 64 位 · 约 40 MB · v0.4.84 · 免费下载
+    - link "下载 Tacco-setup.exe" [ref=f1e187] [cursor=pointer]:
+      - /url: /download/Tacco-setup.exe?v=0.4.84&d=fp-64t0elrd
+    - generic [ref=f1e191]:
+      - generic [ref=f1e192]: 其它平台：
+      - generic [ref=f1e193] [cursor=pointer]: Windows 版 ·当前
+      - generic [ref=f1e194] [cursor=pointer]: macOS · Apple 芯片 ·
+      - generic [ref=f1e195] [cursor=pointer]: macOS · Intel
+    - generic [ref=f1e196]:
+      - generic [ref=f1e197]:
+        - generic [ref=f1e198]: "1"
+        - heading "下载安装包" [level=3] [ref=f1e199]
+        - paragraph [ref=f1e200]: 点击上方按钮下载 Tacco-setup.exe，浏览器下载完成后可直接运行。
+      - generic [ref=f1e201]:
+        - generic [ref=f1e202]: "2"
+        - heading "双击运行" [level=3] [ref=f1e203]
+        - paragraph [ref=f1e204]: 按安装向导点击「下一步」，默认安装到当前用户目录，无需管理员权限。
+      - generic [ref=f1e205]:
+        - generic [ref=f1e206]: "3"
+        - heading "开始使用" [level=3] [ref=f1e207]
+        - paragraph [ref=f1e208]: 从开始菜单或桌面启动 Tacco，它会安静地贴在屏幕右缘，一划即出。
+    - generic [ref=f1e209]:
+      - generic [ref=f1e210]: ⚠️
+      - generic [ref=f1e211]: 安装提示：安装包暂未购买付费代码签名，首次运行若出现「Windows 已保护你的电脑」，点击 「更多信息」→「仍要运行」即可正常安装。这是所有未签名软件的正常提示，不代表文件有问题。
+  - generic [ref=f1e213]:
+    - heading "常见问题：免费吗、支持哪些系统、数据会不会丢" [level=2] [ref=f1e214]
+    - generic [ref=f1e215]:
+      - group [ref=f1e216]:
+        - generic "Tacco 是免费的吗？ ▾" [ref=f1e217] [cursor=pointer]:
+          - generic [ref=f1e218]: Tacco 是免费的吗？
+          - generic [ref=f1e219]: ▾
+        - paragraph [ref=f1e220]: Tacco 免费下载、免费安装，9 大功能开箱即用。云同步、跨设备数据互通等联网能力可在应用内按需开启。
+      - group [ref=f1e221]:
+        - generic "我的数据存在哪里？安全吗？ ▾" [ref=f1e222] [cursor=pointer]:
+          - generic [ref=f1e223]: 我的数据存在哪里？安全吗？
+          - generic [ref=f1e224]: ▾
+      - group [ref=f1e225]:
+        - generic "支持哪些系统？ ▾" [ref=f1e226] [cursor=pointer]:
+          - generic [ref=f1e227]: 支持哪些系统？
+          - generic [ref=f1e228]: ▾
+      - group [ref=f1e229]:
+        - generic "Mac 版支持哪些功能？ ▾" [ref=f1e230] [cursor=pointer]:
+          - generic [ref=f1e231]: Mac 版支持哪些功能？
+          - generic [ref=f1e232]: ▾
+      - group [ref=f1e233]:
+        - generic "会常驻后台拖慢电脑吗？ ▾" [ref=f1e234] [cursor=pointer]:
+          - generic [ref=f1e235]: 会常驻后台拖慢电脑吗？
+          - generic [ref=f1e236]: ▾
+  - contentinfo [ref=f1e237]:
+    - generic [ref=f1e238]:
+      - link "Tacco Tacco" [ref=f1e239] [cursor=pointer]:
+        - /url: "#top"
+        - img "Tacco" [ref=f1e240]
+        - generic [ref=f1e241]: Tacco
+      - paragraph [ref=f1e242]: 本地优先的桌面效率工具 · 让重要的事，贴在看得见的地方
+      - paragraph [ref=f1e243]:
+        - link "功能详解" [ref=f1e244] [cursor=pointer]:
+          - /url: ./features.html
+        - text: ·
+        - link "横向对比" [ref=f1e245] [cursor=pointer]:
+          - /url: ./compare.html
+        - text: ·
+        - link "常见问题" [ref=f1e246] [cursor=pointer]:
+          - /url: ./faq.html
+        - text: ·
+        - link "更新日志" [ref=f1e247] [cursor=pointer]:
+          - /url: ./changelog.html
+        - text: ·
+        - link "服务条款" [ref=f1e248] [cursor=pointer]:
+          - /url: ./terms.html
+        - text: ·
+        - link "隐私协议" [ref=f1e249] [cursor=pointer]:
+          - /url: ./privacy.html
+      - paragraph [ref=f1e250]: © 2026 Tacco. All rights reserved.

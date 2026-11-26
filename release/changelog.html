@@ -12,7 +12,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sync.tuanzhang.site/changelog.html" />
   <link rel="icon" type="image/png" href="./favicon.png" />
-  <link rel="stylesheet" href="./assets/site.css" />
+  <link rel="stylesheet" href="./assets/site.css?v=20261126b" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -27,21 +27,28 @@
   }
   </script>
   <script src="./assets/i18n/common.js"></script>
+  <script src="./assets/i18n/index.js"></script>
   <script src="./assets/i18n/changelog.js"></script>
   <script src="./assets/site-i18n.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="wrap">
-      <a class="tbrand" href="./index.html"><img src="./assets/logo.webp?v=0.4.82" alt="Tacco 图标" /><span>Tacco</span></a>
-      <nav class="tnav" aria-label="子站导航">
-        <a href="./index.html" data-i18n="common.nav.home">首页</a>
-        <a href="./features.html" data-i18n="common.nav.features">功能</a>
-        <a href="./compare.html" data-i18n="common.nav.compare">对比</a>
-        <a href="./faq.html" data-i18n="common.nav.faq">常见问题</a>
-        <a href="./changelog.html" class="active" data-i18n="common.nav.changelog">更新日志</a>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a href="./index.html" class="brand">
+        <img src="./assets/logo.webp?v=0.4.84" alt="Tacco 图标" data-i18n-alt="index.brand.imgAlt" />
+        <span>Tacco</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="./index.html#features" data-i18n="index.nav.features">功能亮点</a>
+        <a href="./index.html#install" data-i18n="index.nav.install">安装指南</a>
+        <a href="./index.html#faq" data-i18n="index.nav.faq">常见问题</a>
+        <a href="./terms.html" data-i18n="index.nav.terms">服务条款</a>
+        <a href="./privacy.html" data-i18n="index.nav.privacy">隐私协议</a>
       </nav>
-      <a class="tcta" href="./index.html#install" data-i18n="common.tcta">免费下载</a>
+      <div class="nav-right">
+        <button class="theme-btn" id="themeToggle" aria-label="切换深浅色">🌙</button>
+        <a href="./index.html#install" class="btn-primary" data-i18n="common.tcta">免费下载</a>
+      </div>
     </div>
   </header>
 
@@ -158,8 +165,31 @@
         <a href="./compare.html" data-i18n="common.nav.compare">对比</a>
         <a href="./faq.html" data-i18n="common.nav.faq">常见问题</a>
         <a href="./changelog.html" data-i18n="common.nav.changelog">更新日志</a>
+        <a href="./terms.html" data-i18n="common.nav.terms">服务条款</a>
+        <a href="./privacy.html" data-i18n="common.nav.privacy">隐私协议</a>
       </nav>
     </div>
   </footer>
+
+  <!-- 深浅色切换：与首页共用 localStorage 键 -->
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var saved = localStorage.getItem('todobar-site-theme');
+      var dark = saved ? saved === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      root.dataset.theme = dark ? 'dark' : 'light';
+      var btn = document.getElementById('themeToggle');
+      function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀️' : '🌙'; }
+      if (btn) {
+        paint();
+        btn.addEventListener('click', function () {
+          var d = root.dataset.theme === 'dark' ? 'light' : 'dark';
+          root.dataset.theme = d;
+          localStorage.setItem('todobar-site-theme', d);
+          paint();
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

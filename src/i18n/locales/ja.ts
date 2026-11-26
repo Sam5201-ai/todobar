@@ -1589,6 +1589,7 @@ const ja: Record<LocaleKey, string> = {
   'quickNote.bodyPlaceholder': 'アイデアを記録…',
   'quickNote.hang': '洗濯物に留める',
   'quickNote.archive': 'アーカイブに保存（Enter）',
+  'quickNote.archivePlain': 'アーカイブに保存',
   'quickNote.bold': '太字',
   'quickNote.italic': '斜体',
   'quickNote.underline': '下線',

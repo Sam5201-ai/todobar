@@ -61,6 +61,8 @@ const FILES = [
   ['features.html', 'features.html', 'pages'],
   ['compare.html', 'compare.html', 'pages'],
   ['changelog.html', 'changelog.html', 'pages'],
+  ['terms.html', 'terms.html', 'pages'],
+  ['privacy.html', 'privacy.html', 'pages'],
   ['version.json', 'version.json', 'pages'],
   ['holidays.json', 'holidays.json', 'pages'],
   ['robots.txt', 'robots.txt', 'pages'],
@@ -76,7 +78,7 @@ const FILES = [
   ['wallpaper.jpg', 'wallpaper.jpg', 'assets'],
   ['admin/index.html', 'admin/index.html', 'pages'],
   ['assets/site.css', 'assets/site.css', 'assets'],
-  // 下载站多语言:运行时引擎 + 字典(6 个)
+  // 下载站多语言:运行时引擎 + 字典(8 个)
   ['assets/site-i18n.js', 'assets/site-i18n.js', 'assets'],
   ['assets/i18n/common.js', 'assets/i18n/common.js', 'assets'],
   ['assets/i18n/index.js', 'assets/i18n/index.js', 'assets'],
@@ -84,6 +86,8 @@ const FILES = [
   ['assets/i18n/faq.js', 'assets/i18n/faq.js', 'assets'],
   ['assets/i18n/compare.js', 'assets/i18n/compare.js', 'assets'],
   ['assets/i18n/changelog.js', 'assets/i18n/changelog.js', 'assets'],
+  ['assets/i18n/terms.js', 'assets/i18n/terms.js', 'assets'],
+  ['assets/i18n/privacy.js', 'assets/i18n/privacy.js', 'assets'],
   ['assets/logo.webp', 'assets/logo.webp', 'assets'],
   ['assets/panel-crop.webp', 'assets/panel-crop.webp', 'assets'],
   ['assets/wallpaper.webp', 'assets/wallpaper.webp', 'assets'],

@@ -12,6 +12,8 @@
     'common.nav.compare': '对比',
     'common.nav.faq': '常见问题',
     'common.nav.changelog': '更新日志',
+    'common.nav.terms': '服务条款',
+    'common.nav.privacy': '隐私协议',
     'common.tcta': '免费下载',
     'common.lang.aria': '切换语言'
   });
@@ -22,6 +24,8 @@
     'common.nav.compare': '對比',
     'common.nav.faq': '常見問題',
     'common.nav.changelog': '更新日誌',
+    'common.nav.terms': '服務條款',
+    'common.nav.privacy': '隱私權政策',
     'common.tcta': '免費下載',
     'common.lang.aria': '切換語言'
   });
@@ -32,6 +36,8 @@
     'common.nav.compare': 'Compare',
     'common.nav.faq': 'FAQ',
     'common.nav.changelog': 'Changelog',
+    'common.nav.terms': 'Terms',
+    'common.nav.privacy': 'Privacy',
     'common.tcta': 'Free Download',
     'common.lang.aria': 'Switch language'
   });
@@ -42,6 +48,8 @@
     'common.nav.compare': '比較',
     'common.nav.faq': 'よくある質問',
     'common.nav.changelog': '更新履歴',
+    'common.nav.terms': '利用規約',
+    'common.nav.privacy': 'プライバシー',
     'common.tcta': '無料ダウンロード',
     'common.lang.aria': '言語を切り替える'
   });
@@ -52,6 +60,8 @@
     'common.nav.compare': '비교',
     'common.nav.faq': '자주 묻는 질문',
     'common.nav.changelog': '업데이트 로그',
+    'common.nav.terms': '서비스 약관',
+    'common.nav.privacy': '개인정보 처리방침',
     'common.tcta': '무료 다운로드',
     'common.lang.aria': '언어 변경'
   });

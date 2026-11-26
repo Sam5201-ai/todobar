@@ -1589,6 +1589,7 @@ const zhTW: Record<LocaleKey, string> = {
   'quickNote.bodyPlaceholder': '記錄你的靈感、想法……',
   'quickNote.hang': '掛起晾衣繩',
   'quickNote.archive': '儲存歸檔（Enter）',
+  'quickNote.archivePlain': '儲存歸檔',
   'quickNote.bold': '粗體',
   'quickNote.italic': '傾斜',
   'quickNote.underline': '底線',

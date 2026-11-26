@@ -275,8 +275,24 @@ function QuickNoteApp() {
   const syncText = useCallback(() => setText(editorRef.current?.innerText ?? ''), [])
   const fmt = useCallback(
     (cmd: string, value?: string) => {
-      editorRef.current?.focus()
-      document.execCommand(cmd, false, value)
+      // ★2026-11-26 修复「倾斜（及任意格式）没生效」：focus() 有把既有圈选折叠回
+      // 光标的可能，execCommand 落在塌掉的光标上 = 看不到任何变化。统一改为
+      // 保存选区 → focus → 恢复选区 → 执行命令（与晾衣绳弹窗/取色器修复同款）。
+      const ed = editorRef.current
+      const sel = window.getSelection()
+      let saved: Range | null = null
+      if (ed && sel && sel.rangeCount > 0 && ed.contains(sel.anchorNode)) saved = sel.getRangeAt(0).cloneRange()
+      ed?.focus()
+      if (saved && sel) {
+        sel.removeAllRanges()
+        sel.addRange(saved)
+      }
+      const ok = document.execCommand(cmd, false, value)
+      if (!ok) {
+        void invoke('app_log', {
+          message: `[quickNote] execCommand(${cmd}) 返回 false（选区/焦点异常）`,
+        }).catch(() => undefined)
+      }
       syncText()
     },
     [syncText],

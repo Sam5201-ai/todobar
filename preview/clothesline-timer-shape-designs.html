@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>晾衣绳 · 番茄计时异形卡设计稿（3 版）</title>
+<style>
+  /* ===== 页面骨架：模拟晾衣绳所在桌面氛围 ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    font-family: Inter, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, #2c3a55 0%, transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, #1d3b34 0%, transparent 55%),
+      linear-gradient(160deg, #1a2233 0%, #12161f 55%, #171319 100%);
+    color: #e8eaf0;
+    padding: 48px 40px 80px;
+  }
+  .page-head { max-width: 1180px; margin: 0 auto 8px; }
+  .page-head h1 { font-size: 26px; font-weight: 800; letter-spacing: 0.5px; }
+  .page-head p { margin-top: 10px; font-size: 13.5px; line-height: 1.8; color: #9aa3b5; }
+  .page-head b { color: #e8b04b; }
+
+  .board { max-width: 1180px; margin: 26px auto 0; display: grid; gap: 34px; }
+
+  /* 每版设计一块：绳 + 卡 + 设计说明 */
+  .design {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    padding: 26px 30px 24px;
+    display: grid;
+    grid-template-columns: 1fr 330px;
+    gap: 24px;
+    align-items: center;
+  }
+  .design h2 { font-size: 18px; font-weight: 800; color: #fff; grid-column: 1 / -1; }
+  .design h2 .tag {
+    display: inline-block; vertical-align: 2px; margin-left: 10px;
+    padding: 2px 10px; border-radius: 999px;
+    background: #e8b04b; color: #26210f; font-size: 11px; font-weight: 700;
+  }
+  .stage {
+    position: relative;
+    min-height: 300px;
+    border-radius: 14px;
+    background:
+      radial-gradient(600px 240px at 50% 0%, rgba(255,255,255,0.05), transparent 70%),
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.14));
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 26px;
+  }
+  /* 舞台里的绳（示意真实绳窗） */
+  .rope {
+    position: absolute; top: 34px; left: 0; right: 0; height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, #b08a52 0%, #d9b878 20%, #a8824c 45%, #e2c185 70%, #ad8752 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  .notes { font-size: 12.5px; line-height: 1.9; color: #a9b1c2; }
+  .notes h3 { font-size: 13px; color: #e8eaf0; margin: 0 0 6px; font-weight: 700; }
+  .notes ul { list-style: none; }
+  .notes li { padding-left: 16px; position: relative; margin-bottom: 4px; }
+  .notes li::before { content: '·'; position: absolute; left: 4px; color: #e8b04b; font-weight: 700; }
+  .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 2px 10px; border-radius: 999px; font-size: 11px;
+    border: 1px solid rgba(255,255,255,0.16); color: #c6cddc;
+  }
+
+  /* ===== 通用挂绳卡结构：夹子 + 异形主体 ===== */
+  .hang { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .clip {
+    width: 14px; height: 26px; border-radius: 4px 4px 7px 7px;
+    background: linear-gradient(180deg, #e9d9b8, #c8ab77);
+    border: 1px solid rgba(0,0,0,0.25);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    position: relative; z-index: 2;
+  }
+  .clip::after {
+    content: ''; position: absolute; left: 3px; right: 3px; top: 7px; height: 2px;
+    background: rgba(0,0,0,0.18); border-radius: 1px;
+  }
+  .hang .sway { transform-origin: 50% 0; animation: sway 4.2s ease-in-out infinite; }
+  @keyframes sway {
+    0%, 100% { transform: rotate(0.9deg); }
+    50% { transform: rotate(-0.9deg); }
+  }
+  .meta-line { margin-top: 10px; font-size: 11px; color: #8f97a9; text-align: center; }
+
+  /* ——— 信息排版通用：标题 + 大时间 + 方向徽标 + 操作钮 ——— */
+  .t-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
+    color: #ffffff; opacity: 0.92; text-align: center; line-height: 1.3;
+    max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .t-time {
+    font-variant-numeric: tabular-nums; font-weight: 800; line-height: 1;
+    letter-spacing: 0.5px;
+  }
+  .t-dir {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  }
+  .t-dir.down { background: rgba(229, 72, 77, 0.16); color: #ff8f93; }
+  .t-dir.up   { background: rgba(61, 123, 232, 0.16); color: #8fb7ff; }
+  .t-btns { display: flex; gap: 6px; margin-top: 2px; }
+  .t-btn {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.16); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; cursor: pointer;
+  }
+  .t-btn:hover { background: rgba(255,255,255,0.3); }
+
+  /* ===== 方案 A：番茄 —— 整只番茄为卡，瓜瓤扇形被「啃掉」表示流逝 ===== */
+  .tomato { width: 172px; height: 186px; margin-top: 16px; position: relative; }
+  .tomato .body { position: absolute; inset: 14px 0 0; }
+  .tomato .leaf {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 74px; height: 34px; z-index: 2;
+  }
+  /* 果面 */
+  .tomato .skin {
+    position: absolute; inset: 0; border-radius: 50% 50% 46% 46% / 58% 58% 44% 44%;
+    background:
+      radial-gradient(120% 110% at 30% 22%, #ff9d7e 0%, #f0503c 38%, #cf2f24 78%, #a41f18 100%);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.45), inset 0 -8px 18px rgba(90, 10, 6, 0.35);
+    overflow: hidden;
+  }
+  /* 流逝部分：偏心扇形「啃痕」，颜色比果面深一档 */
+  .tomato .eaten {
+    position: absolute; inset: 0;
+    background: conic-gradient(from 210deg, rgba(60, 8, 5, 0.55) 0deg calc(var(--p) * 360deg), transparent 0);
+    border-radius: inherit;
+  }
+  .tomato .glare {
+    position: absolute; left: 18%; top: 12%; width: 34%; height: 22%;
+    background: radial-gradient(closest-side, rgba(255,255,255,0.55), transparent 70%);
+    border-radius: 50%; transform: rotate(-18deg);
+  }
+  .tomato .inner {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px; z-index: 2;
+  }
+  .tomato .t-time { font-size: 26px; color: #fff; text-shadow: 0 2px 6px rgba(120, 20, 10, 0.55); }
+  .tomato .t-dir { background: rgba(0, 0, 0, 0.28); color: #ffd9d4; }
+  .tomato .t-btns { margin-top: 6px; }
+  .tomato .t-btn { background: rgba(0, 0, 0, 0.24); border-color: rgba(255,255,255,0.4); }
+  .tomato .t-title { text-shadow: 0 1px 3px rgba(120, 20, 10, 0.5); }
+
+  /* ===== 方案 B：蛋形厨房定时器 —— 旋钮刻度盘，指针即进度 ===== */
+  .eggtimer { width: 150px; height: 196px; margin-top: 14px; position: relative; }
+  .eggtimer .egg {
+    position: absolute; inset: 6px 0 34px;
+    border-radius: 50% 50% 46% 46% / 62% 62% 40% 40%;
+    background:
+      radial-gradient(115% 105% at 32% 24%, #fffdf4 0%, #f3ead2 42%, #e2d3ae 80%, #c9b687 100%);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 -6px 14px rgba(140, 115, 65, 0.25);
+  }
+  .eggtimer .dial {
+    position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%);
+    width: 104px; height: 104px; border-radius: 50%;
+    background: radial-gradient(closest-side, #fffef9 62%, #f0e6cb 100%);
+    border: 3px solid #a8894f;
+    box-shadow: inset 0 2px 8px rgba(120, 95, 45, 0.28);
+  }
+  .eggtimer .ticks { position: absolute; inset: 0; }
+  .eggtimer .needle {
+    position: absolute; left: 50%; top: 50%;
+    width: 3px; height: 44px; border-radius: 2px;
+    background: linear-gradient(180deg, #e5484d, #b53236);
+    transform-origin: 50% 100%;
+    transform: translate(-50%, -100%) rotate(var(--deg));
+    transition: transform 0.2s ease;
+  }
+  .eggtimer .needle::after {
+    content: ''; position: absolute; left: 50%; bottom: -6px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #3a3f4a; transform: translateX(-50%);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .eggtimer .inner {
+    position: absolute; inset: 6px 0 34px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    gap: 4px; padding-bottom: 8px;
+  }
+  .eggtimer .t-title { color: #5d4a22; }
+  .eggtimer .t-time { font-size: 21px; color: #3e3110; }
+  .eggtimer .t-dir.down { background: rgba(229,72,77,0.12); color: #c23a3e; }
+  .eggtimer .t-dir.up { background: rgba(61,123,232,0.12); color: #33619f; }
+  .eggtimer .base {
+    position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+    width: 92px; height: 18px; border-radius: 6px 6px 10px 10px;
+    background: linear-gradient(180deg, #c9b687, #a8894f);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  }
+  .eggtimer .t-btns { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); margin: 0; }
+  .eggtimer .t-btn { background: rgba(255,255,255,0.14); }
+
+  /* ===== 方案 C：沙漏 —— 沙面=进度，木框吊牌 ===== */
+  .hourglass { width: 158px; height: 208px; margin-top: 12px; position: relative; }
+  .hourglass .glass { position: absolute; inset: 4px 0 46px; }
+  .hourglass .frame-top, .hourglass .frame-bottom {
+    position: absolute; left: 2px; right: 2px; height: 14px; border-radius: 7px;
+    background: linear-gradient(180deg, #b98d54, #8d6437);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+  }
+  .hourglass .frame-top { top: 0; }
+  .hourglass .frame-bottom { bottom: 38px; }
+  .hourglass .plaque {
+    position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+    min-width: 128px; padding: 5px 12px 6px; border-radius: 8px;
+    background: linear-gradient(180deg, #a8813e, #8a6428);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .hourglass .t-time { font-size: 19px; color: #fff8e8; }
+  .hourglass .t-title { color: #ffe9bd; max-width: 118px; }
+  .hourglass .t-btns { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); margin: 0; }
+  .hourglass .t-btn { background: rgba(255,255,255,0.14); }
+  /* 沙体：SVG bulb 形，上下沙量由 --p 控制 */
+  .hourglass svg.sand-top, .hourglass svg.sand-bottom { position: absolute; inset: 0; }
+  .hourglass .sand-line { animation: sandflow 1.6s linear infinite; }
+  @keyframes sandflow {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 0.35; }
+  }
+
+  /* 状态条（每版下方三个小态） */
+  .states {
+    grid-column: 1 / -1;
+    display: flex; gap: 18px; justify-content: center; align-items: flex-end;
+    padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.12); margin-top: 6px;
+    padding-bottom: 4px;
+  }
+  .state { text-align: center; }
+  .state .lbl { margin-top: 8px; font-size: 10.5px; color: #7f879b; }
+
+  /* 暂停态通用 */
+  .is-paused .skin, .is-paused .egg, .is-paused .glass-cover { filter: saturate(0.55) brightness(0.82); }
+  /* 结束态通用 */
+  .is-done .skin { background: radial-gradient(120% 110% at 30% 22%, #ffd27a 0%, #f0a63c 40%, #cf7f22 80%, #a35c17 100%); }
+  .is-done .badge-done {
+    position: absolute; right: -4px; top: -6px; z-index: 3;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #2bb673; color: #fff; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    transform: rotate(12deg);
+  }
+  .foot { max-width: 1180px; margin: 34px auto 0; font-size: 12px; color: #7f879b; line-height: 1.8; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>晾衣绳 · 番茄计时异形卡设计稿（3 版）</h1>
+  <p>要求：不采用矩形卡片，用与「计时」语义相关的<b>不规则图形</b>作为卡片本体；三版均挂在绳上、带木夹与轻摆动，保留现卡全部信息（标题 / 正·倒计时 / 大时间 / 操作钮）。点击预览确认后我再改代码。</p>
+</div>
+
+<div class="board">
+
+  <!-- ============ 方案 A：番茄 ============ -->
+  <section class="design">
+    <h2>方案 A · 番茄 <span class="tag">瓜瓤被啃掉 = 时间流逝</span></h2>
+    <div class="stage">
+      <div class="rope"></div>
+      <div class="hang">
+        <div class="sway">
+          <div class="clip"></div>
+          <div class="tomato">
+            <svg class="leaf" viewBox="0 0 74 34">
+              <path d="M37 8 C 30 0, 18 2, 14 12 C 24 10, 30 12, 37 16 C 44 12, 50 10, 60 12 C 56 2, 44 0, 37 8 Z" fill="#3f9e4d"/>
+              <path d="M37 16 L 33 32 L 41 32 Z" fill="#2f7d3b"/>
+              <circle cx="37" cy="10" r="4.5" fill="#5cb864"/>
+            </svg>
+            <div class="skin">
+              <div class="eaten" style="--p: 0.62"></div>
+              <div class="glare"></div>
+            </div>
+            <div class="inner">
+              <div class="t-title">写周报</div>
+              <div class="t-time">14:36</div>
+              <span class="t-dir down">倒计时</span>
+              <div class="t-btns">
+                <span class="t-btn">❚❚</span>
+                <span class="t-btn">↺</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="meta-line">运行中 · 62% 已流逝（深色啃痕扇形）</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>「番茄工作法」最直白的隐喻：整只番茄就是卡片，红果身 + 绿叶蒂。</li>
+        <li>进度 = 果面上的<b style="color:#ff9d7e">偏心啃痕扇形</b>：流逝越多，被啃掉的暗色区域越大，一眼看出还剩多少「番茄」。</li>
+        <li>圆果身信息密度受限，标题超长会省略；时间字号 26px 与现矩形卡接近。</li>
+        <li>结束态：果实转<b style="color:#ffd27a">金色熟透</b> + 右上对勾徽标；暂停态：整体降饱和。</li>
+      </ul>
+      <div class="chips">
+        <span class="chip">趣味性 ★★★</span>
+        <span class="chip">信息可读性 ★★</span>
+        <span class="chip">面积利用率 中</span>
+        <span class="chip">实现：CSS 圆形 + conic-gradient</span>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state">
+        <div class="hang"><div class="tomato"><div class="skin"><div class="eaten" style="--p:0.3"></div><div class="glare"></div></div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">18:02</div><span class="t-dir down">倒计时</span></div></div></div>
+        <div class="lbl">运行中 30%</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="tomato is-paused"><div class="skin"><div class="eaten" style="--p:0.55"></div><div class="glare"></div></div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">13:30</div><span class="t-dir down">已暂停</span></div></div></div>
+        <div class="lbl">暂停（降饱和）</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="tomato is-done"><div class="badge-done">✓</div><div class="skin"><div class="glare"></div></div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">00:00</div><span class="t-dir down">已完成</span></div></div></div>
+        <div class="lbl">结束（熟透金）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 方案 B：蛋形厨房定时器 ============ -->
+  <section class="design">
+    <h2>方案 B · 蛋形厨房定时器 <span class="tag">旋钮指针 = 进度</span></h2>
+    <div class="stage">
+      <div class="rope"></div>
+      <div class="hang">
+        <div class="sway">
+          <div class="clip"></div>
+          <div class="eggtimer" style="--deg: 130deg">
+            <div class="egg">
+              <div class="dial">
+                <svg class="ticks" viewBox="0 0 104 104">
+                  <g stroke="#b9a267" stroke-width="2" stroke-linecap="round">
+                    <line x1="52" y1="7" x2="52" y2="13"/><line x1="52" y1="91" x2="52" y2="97"/>
+                    <line x1="7" y1="52" x2="13" y2="52"/><line x1="91" y1="52" x2="97" y2="52"/>
+                    <line x1="19" y1="19" x2="23.5" y2="23.5"/><line x1="80.5" y1="80.5" x2="85" y2="85"/>
+                    <line x1="85" y1="19" x2="80.5" y2="23.5"/><line x1="23.5" y1="80.5" x2="19" y2="85"/>
+                  </g>
+                </svg>
+                <div class="needle" style="--deg: 130deg"></div>
+              </div>
+            </div>
+            <div class="inner">
+              <div class="t-title">背单词</div>
+              <div class="t-time">25:00</div>
+              <span class="t-dir down">倒计时</span>
+            </div>
+            <div class="base"></div>
+            <div class="t-btns">
+              <span class="t-btn">❚❚</span>
+              <span class="t-btn">↺</span>
+            </div>
+          </div>
+        </div>
+        <div class="meta-line">运行中 · 指针转至 130°（金属红针 + 黄铜底座）</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>复刻<b style="color:#f3ead2">复古厨房拧钮计时器</b>：奶白蛋形机身 + 黄铜底座，与「晾衣绳·家居手作」气质最搭。</li>
+        <li>进度 = 表盘<b style="color:#e5484d">金属红针</b>的旋转角度（0°→360° 随进度扫过刻度），操作感最强。</li>
+        <li>浅色机身自带高对比：时间文字用深棕，可读性是三版里最好的。</li>
+        <li>结束态：指针回弹到 12 点 + 机身轻微摇摆 + 完成徽标；暂停态：指针停住、机身降饱和。</li>
+      </ul>
+      <div class="chips">
+        <span class="chip">趣味性 ★★</span>
+        <span class="chip">信息可读性 ★★★</span>
+        <span class="chip">面积利用率 高</span>
+        <span class="chip">实现：CSS 旋钮 + SVG 刻度</span>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state">
+        <div class="hang"><div class="eggtimer" style="--deg: 40deg"><div class="egg"><div class="dial"><div class="needle" style="--deg: 40deg"></div></div></div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">18:02</div><span class="t-dir down">倒计时</span></div><div class="base"></div></div></div>
+        <div class="lbl">运行中 40°</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="eggtimer is-paused" style="--deg: 180deg"><div class="egg"><div class="dial"><div class="needle" style="--deg: 180deg"></div></div></div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">09:10</div><span class="t-dir down">已暂停</span></div><div class="base"></div></div></div>
+        <div class="lbl">暂停（针停 + 降饱和）</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="eggtimer is-done" style="--deg: 360deg"><div class="egg"><div class="dial"><div class="needle" style="--deg: 360deg"></div></div></div><div class="badge-done" style="right:-2px;top:-2px;position:absolute">✓</div><div class="inner"><div class="t-title">晨间复盘</div><div class="t-time">00:00</div><span class="t-dir down">已完成</span></div><div class="base"></div></div></div>
+        <div class="lbl">结束（针回 12 点）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 方案 C：沙漏 ============ -->
+  <section class="design">
+    <h2>方案 C · 沙漏 <span class="tag">沙面高度 = 进度</span></h2>
+    <div class="stage">
+      <div class="rope"></div>
+      <div class="hang">
+        <div class="sway">
+          <div class="clip"></div>
+          <div class="hourglass" style="--p: 0.62">
+            <svg class="glass" viewBox="0 0 158 118">
+              <defs>
+                <clipPath id="bulbTop"><path d="M12 8 H146 C146 44 108 52 86 59 C86 59 86 59 86 59 C64 52 12 44 12 8 Z"/></clipPath>
+                <clipPath id="bulbBot"><path d="M86 59 C108 66 146 74 146 110 H12 C12 74 64 66 86 59 Z"/></clipPath>
+                <linearGradient id="sandG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#f2cf7e"/><stop offset="1" stop-color="#d9a640"/>
+                </linearGradient>
+              </defs>
+              <!-- 玻璃腔体底色 -->
+              <path d="M12 8 H146 C146 44 108 52 86 59 C64 52 12 44 12 8 Z" fill="rgba(226,236,255,0.10)" stroke="rgba(220,232,255,0.35)" stroke-width="2"/>
+              <path d="M86 59 C108 66 146 74 146 110 H12 C12 74 64 66 86 59 Z" fill="rgba(226,236,255,0.10)" stroke="rgba(220,232,255,0.35)" stroke-width="2"/>
+              <!-- 上腔沙：高度随进度下降 -->
+              <g clip-path="url(#bulbTop)">
+                <rect x="12" y="8" width="134" height="102" fill="#e9edf7" opacity="0"/>
+                <rect x="12" y="8" width="134" height="0" fill="url(#sandG)"/>
+                <rect x="12" y="35" width="134" height="73" fill="#3a2f22" opacity="0.30"/>
+              </g>
+              <!-- 下腔沙：高度随进度上升 -->
+              <g clip-path="url(#bulbBot)">
+                <rect x="12" y="25" width="134" height="85" fill="url(#sandG)"/>
+                <rect x="12" y="25" width="134" height="85" fill="#3a2f22" opacity="0"/>
+              </g>
+              <!-- 中流沙线 -->
+              <line class="sand-line" x1="86" y1="55" x2="86" y2="66" stroke="#f2cf7e" stroke-width="3" stroke-dasharray="3 3"/>
+            </svg>
+            <div class="frame-top"></div>
+            <div class="frame-bottom"></div>
+            <div class="plaque">
+              <div class="t-title">深度阅读</div>
+              <div class="t-time">09:28</div>
+            </div>
+            <div class="t-btns">
+              <span class="t-btn">❚❚</span>
+              <span class="t-btn">↺</span>
+            </div>
+          </div>
+        </div>
+        <div class="meta-line">运行中 · 上腔剩 38% / 下腔积 62%，木牌显示时间</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>沙漏 = 「时间在流走」的直觉隐喻：木框 + 透明玻璃腔，<b style="color:#f2cf7e">金沙</b>随进度从上往下漏。</li>
+        <li>时间与标题放<b style="color:#a8813e">木吊牌</b>上（玻璃腔内不适合排文字），操作钮挂吊牌下方。</li>
+        <li>倒计时：上沙减少；正计时：下沙增多，语义自动成立；漏完 = 完成态。</li>
+        <li>结束态：沙全部落底 + 金框发亮 + 完成徽标；暂停态：流沙线停闪、整体降饱和。</li>
+      </ul>
+      <div class="chips">
+        <span class="chip">趣味性 ★★★</span>
+        <span class="chip">信息可读性 ★★</span>
+        <span class="chip">面积利用率 中</span>
+        <span class="chip">实现：SVG clipPath + 双沙面</span>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state">
+        <div class="hang"><div class="hourglass" style="--p:0.3"><div class="glass"></div><div class="frame-top"></div><div class="frame-bottom"></div><div class="plaque"><div class="t-title">晨间复盘</div><div class="t-time">18:02</div></div></div></div>
+        <div class="lbl">运行中 30%</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="hourglass is-paused" style="--p:0.55"><div class="glass"></div><div class="frame-top"></div><div class="frame-bottom"></div><div class="plaque"><div class="t-title">晨间复盘</div><div class="t-time">09:10</div></div></div></div>
+        <div class="lbl">暂停（流沙停）</div>
+      </div>
+      <div class="state">
+        <div class="hang"><div class="hourglass is-done" style="--p:1"><div class="badge-done" style="right:-2px;top:-2px;position:absolute">✓</div><div class="glass"></div><div class="frame-top"></div><div class="frame-bottom"></div><div class="plaque"><div class="t-title">晨间复盘</div><div class="t-time">00:00</div></div></div></div>
+        <div class="lbl">结束（沙全落底）</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">
+  三版均：木夹挂绳 · 4.2s 轻摆动 · 保留标题/时间/方向/操作钮 · 运行 / 暂停 / 结束三态齐备。<br>
+  请告知选哪一版（或「A 的形状 + B 的配色」这类组合），我确认后再动代码。
+</div>
+
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>计时异形卡定稿参考（A 番茄 / B 怀表 / C 沙漏 / F 月相）—— 实现须与此文件逐笔一致</title>
+<style>
+  /* 定稿参考页：每版一个 <svg class="art">，data-x 属性标注动态绑定点。
+     实现要求：
+     1) 形状/渐变/构图逐笔复用本文件 SVG；
+     2) 动态绑定点：.arc 进度弧(stroke-dasharray=C, dashoffset=C*(1-rem))、
+        .t-time 时间文本、.sand-top/.sand-bot 沙面高度、.gold 完成金罩、.badge 完成徽标；
+     3) 状态：running/paused(降饱和 saturate(.55) brightness(.85)+动效停)/done(元素耗尽+badge+gold)；
+     4) 操作钮：悬停浮现深色玻璃胶囊（❚❚ 暂停 / ↺ 重置），位于卡底居中。 */
+  body { background:#20242e; display:flex; flex-wrap:wrap; gap:40px; padding:40px; }
+  figure { text-align:center; }
+  figcaption { color:#9aa3b5; font:12px/1.8 Inter,'Microsoft YaHei',sans-serif; margin-top:8px; }
+  .rope { width:240px; height:3px; border-radius:2px; margin:0 auto;
+    background:linear-gradient(90deg,#a8824c,#dcb87b 30%,#a8824c 60%,#dcb87b 100%); }
+  .clip { width:13px; height:24px; border-radius:3px 3px 6px 6px; margin:-1px auto 0;
+    background:linear-gradient(180deg,#efe0c0,#c9ac77); border:1px solid rgba(0,0,0,.28); }
+  .sway { transform-origin:50% 0; animation:sway 4.6s ease-in-out infinite; }
+  @keyframes sway { 0%,100%{transform:rotate(.8deg)} 50%{transform:rotate(-.8deg)} }
+  @keyframes flow { to { stroke-dashoffset:-14; } }
+  .stream { animation:flow 1.2s linear infinite; }
+</style>
+</head>
+<body>
+
+<!-- ============ A · 番茄：白瓷表盘 + 红弧=剩余；完成转金(.gold)；C=289 ============ -->
+<figure>
+<div class="rope"></div><div class="clip"></div><div class="sway">
+<svg width="218" height="252" viewBox="0 0 218 252">
+  <defs>
+    <radialGradient id="tBody" cx="35%" cy="26%" r="85%">
+      <stop offset="0" stop-color="#ff8a70"/><stop offset=".45" stop-color="#e84433"/><stop offset=".85" stop-color="#c22c1e"/><stop offset="1" stop-color="#9e2015"/>
+    </radialGradient>
+    <radialGradient id="tGold" cx="35%" cy="26%" r="85%">
+      <stop offset="0" stop-color="#ffdf8a"/><stop offset=".5" stop-color="#eda43c"/><stop offset="1" stop-color="#b06f1c"/>
+    </radialGradient>
+    <clipPath id="tClip"><path d="M109 34 C68 30 30 64 30 120 C30 174 66 208 109 208 C152 208 188 174 188 120 C188 64 150 30 109 34 Z"/></clipPath>
+  </defs>
+  <path d="M109 34 C68 30 30 64 30 120 C30 174 66 208 109 208 C152 208 188 174 188 120 C188 64 150 30 109 34 Z" fill="url(#tBody)"/>
+  <g clip-path="url(#tClip)"><rect class="gold" x="30" y="30" width="158" height="180" fill="url(#tGold)" opacity="0"/></g>
+  <ellipse cx="78" cy="72" rx="30" ry="15" fill="#ffffff" opacity=".32" transform="rotate(-16 78 72)"/>
+  <path d="M109 34 C104 26 100 20 104 12" stroke="#3e8a4c" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <g fill="#3f9e4d">
+    <path d="M109 36 C96 28 80 30 72 42 C86 42 100 44 109 48 Z"/>
+    <path d="M109 36 C122 28 138 30 146 42 C132 42 118 44 109 48 Z"/>
+    <path d="M109 36 C102 24 88 18 76 24 C88 30 102 36 109 42 Z" fill="#2e7d32"/>
+    <path d="M109 36 C116 24 130 18 142 24 C130 30 116 36 109 42 Z" fill="#2e7d32"/>
+  </g>
+  <circle cx="109" cy="128" r="54" fill="#fff9f5"/>
+  <circle cx="109" cy="128" r="46" fill="none" stroke="#ffd9cd" stroke-width="8"/>
+  <circle class="arc" cx="109" cy="128" r="46" fill="none" stroke="#e23c2e" stroke-width="8" stroke-linecap="round"
+    stroke-dasharray="289" stroke-dashoffset="179" transform="rotate(-90 109 128)"/>
+  <text class="t-time" x="109" y="127" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="800" font-size="25" fill="#33190f">14:36</text>
+  <text x="109" y="152" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#b04a3a">倒计时</text>
+  <rect x="55" y="188" width="108" height="22" rx="11" fill="#ffffff" opacity=".93"/>
+  <text x="109" y="203" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#7a3526">写周报</text>
+  <g class="badge" transform="rotate(12 186 34)" opacity="0">
+    <circle cx="186" cy="34" r="14" fill="#2bb673"/>
+    <path d="M180 34 L184.5 38.5 L192.5 29.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
+</div>
+<figcaption>A 番茄 · 表盘弧=剩余 · 完成整果转金</figcaption>
+</figure>
+
+<!-- ============ B · 怀表：黄铜表壳 + 表盘外弧=剩余；C=421 ============ -->
+<figure>
+<div class="rope"></div><div class="clip"></div><div class="sway">
+<svg width="206" height="248" viewBox="0 0 206 248">
+  <defs>
+    <linearGradient id="wCase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6dc9c"/><stop offset=".5" stop-color="#dcae52"/><stop offset="1" stop-color="#a97b2b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="103" cy="24" r="12" fill="none" stroke="url(#wCase)" stroke-width="6"/>
+  <rect x="94" y="34" width="18" height="14" rx="5" fill="url(#wCase)"/>
+  <circle cx="103" cy="134" r="88" fill="url(#wCase)"/>
+  <circle cx="103" cy="134" r="76" fill="#fffdf4"/>
+  <circle cx="103" cy="134" r="67" fill="none" stroke="rgba(140,110,50,.14)" stroke-width="10"/>
+  <circle class="arc" cx="103" cy="134" r="67" fill="none" stroke="#cf5b2e" stroke-width="10" stroke-linecap="round"
+    stroke-dasharray="421" stroke-dashoffset="261" transform="rotate(-90 103 134)"/>
+  <g stroke="#c4b083" stroke-width="2" stroke-linecap="round">
+    <line x1="103" y1="72" x2="103" y2="80"/><line x1="103" y1="188" x2="103" y2="196"/>
+    <line x1="41" y1="134" x2="49" y2="134"/><line x1="157" y1="134" x2="165" y2="134"/>
+    <line x1="59.5" y1="90.5" x2="65" y2="96"/><line x1="141" y1="172" x2="146.5" y2="177.5"/>
+    <line x1="146.5" y1="90.5" x2="141" y2="96"/><line x1="65" y1="172" x2="59.5" y2="177.5"/>
+  </g>
+  <text class="t-time" x="103" y="136" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="800" font-size="24" fill="#3e3110">14:36</text>
+  <text x="103" y="158" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#a2612e">倒计时</text>
+  <rect x="55" y="176" width="96" height="20" rx="10" fill="#f7efdb" stroke="#e3cf9e"/>
+  <text x="103" y="190" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#7a5c20">背单词</text>
+  <g class="badge" transform="rotate(12 179 46)" opacity="0">
+    <circle cx="179" cy="46" r="14" fill="#2bb673"/>
+    <path d="M173 46 L177.5 50.5 L185.5 41.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
+</div>
+<figcaption>B 怀表 · 表盘外弧=剩余 · 吊环挂夹下</figcaption>
+</figure>
+
+<!-- ============ C · 沙漏：上腔沙=剩余、下腔=流逝；木吊牌放时间/标题 ============ -->
+<figure>
+<div class="rope"></div><div class="clip"></div><div class="sway">
+<svg width="190" height="240" viewBox="0 0 190 240">
+  <defs>
+    <linearGradient id="hWood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c99a5f"/><stop offset="1" stop-color="#8d6437"/>
+    </linearGradient>
+    <linearGradient id="hSand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2cf7e"/><stop offset="1" stop-color="#d9a640"/>
+    </linearGradient>
+    <clipPath id="hTop"><path d="M42 22 H148 C148 52 116 62 95 68 C74 62 42 52 42 22 Z"/></clipPath>
+    <clipPath id="hBot"><path d="M95 71 C116 77 148 87 148 118 L148 158 L42 158 L42 118 C42 87 74 77 95 71 Z"/></clipPath>
+  </defs>
+  <path d="M42 22 H148 C148 52 116 62 95 68 C74 62 42 52 42 22 Z" fill="rgba(210,224,248,.10)" stroke="rgba(190,205,235,.45)" stroke-width="2"/>
+  <path d="M95 71 C116 77 148 87 148 118 L148 158 L42 158 L42 118 C42 87 74 77 95 71 Z" fill="rgba(210,224,248,.10)" stroke="rgba(190,205,235,.45)" stroke-width="2"/>
+  <g clip-path="url(#hTop)"><rect class="sand-top" x="42" y="49.3" width="106" height="19.4" fill="url(#hSand)"/></g>
+  <line class="stream" x1="95" y1="68" x2="95" y2="112" stroke="#f0c96c" stroke-width="3" stroke-dasharray="4 4"/>
+  <g clip-path="url(#hBot)"><rect class="sand-bot" x="42" y="96.6" width="106" height="61.4" fill="url(#hSand)"/></g>
+  <rect x="34" y="8" width="122" height="14" rx="7" fill="url(#hWood)"/>
+  <rect x="34" y="158" width="122" height="14" rx="7" fill="url(#hWood)"/>
+  <line x1="95" y1="172" x2="95" y2="182" stroke="#8d6437" stroke-width="2"/>
+  <rect x="42" y="182" width="106" height="52" rx="10" fill="url(#hWood)"/>
+  <text x="95" y="200" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#ffe4b3">深度阅读</text>
+  <text class="t-time" x="95" y="224" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="800" font-size="20" fill="#fff6df">14:36</text>
+  <g class="badge" transform="rotate(12 160 16)" opacity="0">
+    <circle cx="160" cy="16" r="13" fill="#2bb673"/>
+    <path d="M154.5 16 L158.5 20 L166 12.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
+</div>
+<figcaption>C 沙漏 · 上沙=剩余(高51/y24起) 下沙=流逝(高87/y158底) · 流沙线呼吸</figcaption>
+</figure>
+
+<!-- ============ F · 月相：深夜盘 + 金弧=剩余；C=465 ============ -->
+<figure>
+<div class="rope"></div><div class="clip"></div><div class="sway">
+<svg width="178" height="206" viewBox="0 0 210 246">
+  <defs>
+    <radialGradient id="fN" cx="38%" cy="30%" r="85%">
+      <stop offset="0" stop-color="#3c4a78"/><stop offset=".7" stop-color="#242d4c"/><stop offset="1" stop-color="#161c30"/>
+    </radialGradient>
+  </defs>
+  <line x1="105" y1="0" x2="105" y2="24" stroke="#c9ac77" stroke-width="2"/>
+  <circle cx="105" cy="118" r="82" fill="url(#fN)" stroke="rgba(140,160,220,.3)"/>
+  <circle cx="85" cy="94" r="54" fill="#f2c766" opacity=".10"/>
+  <g fill="#cdd7f5">
+    <circle cx="58" cy="76" r="1.6" opacity=".8"/><circle cx="152" cy="82" r="2" opacity=".9"/>
+    <circle cx="72" cy="162" r="1.5" opacity=".7"/><circle cx="146" cy="152" r="1.4" opacity=".7"/>
+  </g>
+  <path d="M148 74 L148 90 M140 82 L156 82" stroke="#e8d9a0" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>
+  <circle cx="105" cy="118" r="74" fill="none" stroke="rgba(242,199,102,.18)" stroke-width="8"/>
+  <circle class="arc" cx="105" cy="118" r="74" fill="none" stroke="#f2c766" stroke-width="8" stroke-linecap="round"
+    stroke-dasharray="465" stroke-dashoffset="288.3" transform="rotate(-90 105 118)"/>
+  <text class="t-time" x="105" y="114" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="800" font-size="26" fill="#f2d488">14:36</text>
+  <text x="105" y="140" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#9fb0d8">倒计时</text>
+  <rect x="60" y="156" width="90" height="22" rx="11" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)"/>
+  <text x="105" y="171" text-anchor="middle" font-family="Inter,'Segoe UI',sans-serif" font-weight="600" font-size="12" fill="#dce4f5">深夜专注</text>
+  <g class="badge" transform="rotate(12 176 44)" opacity="0">
+    <circle cx="176" cy="44" r="14" fill="#2bb673"/>
+    <path d="M170 44 L174.5 48.5 L182.5 39.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
+</div>
+<figcaption>F 月相 · 金弧=剩余 · 星空夜色</figcaption>
+</figure>
+
+</body>
+</html>

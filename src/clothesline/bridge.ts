@@ -300,8 +300,14 @@ export function clMakeCard(kind: CardKind, patch: Partial<ClotheslineCard> = {})
 
 export const clGetSettings = () => invoke<ClotheslineSettings>('clothesline_get_settings')
 
-export const clSetEnabled = (enabled: boolean) =>
-  invoke<void>('clothesline_set_enabled', { enabled })
+/** ★2026-11-25 诊断：「按任意键晾衣绳自动关闭」的真正事件源是 set_enabled(false)
+ *  销毁重建（弹窗浮层路径的诊断计数为 0）。落 JS 调用栈，复现时直接锁定调用方。 */
+export const clSetEnabled = (enabled: boolean) => {
+  void invoke('app_log', {
+    message: `[clothesline] setEnabled(${enabled}) 调用栈: ${(new Error().stack || '').replace(/\s+/g, ' ').slice(0, 600)}`,
+  }).catch(() => undefined)
+  return invoke<void>('clothesline_set_enabled', { enabled })
+}
 
 export const clUpdateSettings = (patch: Partial<ClotheslineSettings>) =>
   invoke<ClotheslineSettings>('clothesline_update_settings', { patch })

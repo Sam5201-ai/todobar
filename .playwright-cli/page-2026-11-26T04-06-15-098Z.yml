@@ -1,0 +1,76 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Tacco 图标 Tacco" [ref=e4] [cursor=pointer]:
+        - /url: ./index.html
+        - img "Tacco 图标" [ref=e5]
+        - generic [ref=e6]: Tacco
+      - navigation "主导航" [ref=e7]:
+        - link "功能亮点" [ref=e8] [cursor=pointer]:
+          - /url: ./index.html#features
+        - link "安装指南" [ref=e9] [cursor=pointer]:
+          - /url: ./index.html#install
+        - link "常见问题" [ref=e10] [cursor=pointer]:
+          - /url: ./index.html#faq
+        - link "服务条款" [ref=e11] [cursor=pointer]:
+          - /url: ./terms.html
+        - link "隐私协议" [ref=e12] [cursor=pointer]:
+          - /url: ./privacy.html
+      - generic [ref=e13]:
+        - button "切换语言" [ref=e15] [cursor=pointer]:
+          - generic [ref=e19]: 简体中文
+        - button "切换深浅色" [ref=e22]: 🌙
+        - link "免费下载" [ref=e23] [cursor=pointer]:
+          - /url: ./index.html#install
+  - main [ref=e24]:
+    - generic [ref=e25]:
+      - generic [ref=e26]: 隐私协议
+      - heading "Tacco 隐私协议" [level=1] [ref=e27]
+      - paragraph [ref=e28]: Tacco 采用本地优先的设计。本协议说明哪些数据留在本机、哪些在你开启同步后上传，以及我们如何处理匿名使用统计。
+      - paragraph [ref=e29]:
+        - link "首页" [ref=e30] [cursor=pointer]:
+          - /url: ./index.html
+        - text: › 隐私协议
+    - generic [ref=e31]:
+      - group [ref=e32]:
+        - generic "一、我们如何处理你的数据 －" [ref=e33] [cursor=pointer]
+        - generic [ref=e34]: 本隐私协议由广州吉俐商贸有限公司（以下简称「我们」）制定。Tacco 遵循本地优先原则：未经你主动开启账号云同步，你的待办、生日纪念日、便利签、剪贴板历史、截图与录音等内容仅保存在本机，我们无法读取。你开启云同步后，相应内容才会上传，用于在你登录的设备之间同步。
+      - group [ref=e35]:
+        - generic "二、账号信息 ＋" [ref=e36] [cursor=pointer]
+      - group [ref=e37]:
+        - generic "三、云同步内容 ＋" [ref=e38] [cursor=pointer]
+      - group [ref=e39]:
+        - generic "四、匿名使用统计 ＋" [ref=e40] [cursor=pointer]
+      - group [ref=e41]:
+        - generic "五、第三方服务 ＋" [ref=e42] [cursor=pointer]
+      - group [ref=e43]:
+        - generic "六、Cookie 与本地存储 ＋" [ref=e44] [cursor=pointer]
+      - group [ref=e45]:
+        - generic "七、数据保留与删除 ＋" [ref=e46] [cursor=pointer]
+      - group [ref=e47]:
+        - generic "八、敏感内容的处理建议 ＋" [ref=e48] [cursor=pointer]
+      - group [ref=e49]:
+        - generic "九、未成年人 ＋" [ref=e50] [cursor=pointer]
+      - group [ref=e51]:
+        - generic "十、协议更新与联系 ＋" [ref=e52] [cursor=pointer]
+    - generic [ref=e53]:
+      - heading "还想了解更多？" [level=2] [ref=e54]
+      - paragraph [ref=e55]: 关于收费、系统支持与数据安全的其他常见问题，可参阅常见问题页。
+      - link "查看常见问题" [ref=e56] [cursor=pointer]:
+        - /url: ./faq.html
+  - contentinfo [ref=e57]:
+    - generic [ref=e58]:
+      - generic [ref=e59]: © 2026 广州吉俐商贸有限公司 · Tacco 贴在屏幕边缘的桌面效率工具
+      - navigation [ref=e60]:
+        - link "首页" [ref=e61] [cursor=pointer]:
+          - /url: ./index.html
+        - link "功能" [ref=e62] [cursor=pointer]:
+          - /url: ./features.html
+        - link "常见问题" [ref=e63] [cursor=pointer]:
+          - /url: ./faq.html
+        - link "更新日志" [ref=e64] [cursor=pointer]:
+          - /url: ./changelog.html
+        - link "服务条款" [ref=e65] [cursor=pointer]:
+          - /url: ./terms.html
+        - link "隐私协议" [ref=e66] [cursor=pointer]:
+          - /url: ./privacy.html

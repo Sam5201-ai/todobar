@@ -1,0 +1,76 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Tacco 图标 Tacco" [ref=e4] [cursor=pointer]:
+        - /url: ./index.html
+        - img "Tacco 图标" [ref=e5]
+        - generic [ref=e6]: Tacco
+      - navigation "主导航" [ref=e7]:
+        - link "功能亮点" [ref=e8] [cursor=pointer]:
+          - /url: ./index.html#features
+        - link "安装指南" [ref=e9] [cursor=pointer]:
+          - /url: ./index.html#install
+        - link "常见问题" [ref=e10] [cursor=pointer]:
+          - /url: ./index.html#faq
+        - link "服务条款" [ref=e11] [cursor=pointer]:
+          - /url: ./terms.html
+        - link "隐私协议" [ref=e12] [cursor=pointer]:
+          - /url: ./privacy.html
+      - generic [ref=e13]:
+        - button "切换语言" [ref=e15] [cursor=pointer]:
+          - generic [ref=e19]: 简体中文
+        - button "切换深浅色" [ref=e22]: 🌙
+        - link "免费下载" [ref=e23] [cursor=pointer]:
+          - /url: ./index.html#install
+  - main [ref=e24]:
+    - generic [ref=e25]:
+      - generic [ref=e26]: 服务条款
+      - heading "Tacco 服务条款" [level=1] [ref=e27]
+      - paragraph [ref=e28]: 请使用 Tacco 前仔细阅读以下条款。下载、安装或使用本软件，即表示你已阅读并同意本条款。
+      - paragraph [ref=e29]:
+        - link "首页" [ref=e30] [cursor=pointer]:
+          - /url: ./index.html
+        - text: › 服务条款
+    - generic [ref=e31]:
+      - group [ref=e32]:
+        - generic "一、条款的适用与接受 －" [ref=e33] [cursor=pointer]
+        - generic [ref=e34]: 本条款由广州吉俐商贸有限公司（以下简称「我们」）制定，适用于 Tacco 桌面软件及本下载站提供的相关服务。你下载、安装、登录或使用 Tacco，即表示同意遵守本条款；如不同意，请停止使用。若你代表某个组织使用本软件，应确保你有权代表该组织接受本条款。
+      - group [ref=e35]:
+        - generic "二、服务内容 ＋" [ref=e36] [cursor=pointer]
+      - group [ref=e37]:
+        - generic "三、免费服务与会员服务 ＋" [ref=e38] [cursor=pointer]
+      - group [ref=e39]:
+        - generic "四、账号与云同步 ＋" [ref=e40] [cursor=pointer]
+      - group [ref=e41]:
+        - generic "五、使用规范 ＋" [ref=e42] [cursor=pointer]
+      - group [ref=e43]:
+        - generic "六、知识产权 ＋" [ref=e44] [cursor=pointer]
+      - group [ref=e45]:
+        - generic "七、第三方服务 ＋" [ref=e46] [cursor=pointer]
+      - group [ref=e47]:
+        - generic "八、免责声明 ＋" [ref=e48] [cursor=pointer]
+      - group [ref=e49]:
+        - generic "九、条款更新 ＋" [ref=e50] [cursor=pointer]
+      - group [ref=e51]:
+        - generic "十、联系我们 ＋" [ref=e52] [cursor=pointer]
+    - generic [ref=e53]:
+      - heading "准备好试试了吗？" [level=2] [ref=e54]
+      - paragraph [ref=e55]: Tacco 免费下载，覆盖安装即可使用，你的数据会保留。
+      - link "下载 Tacco（Windows）" [ref=e56] [cursor=pointer]:
+        - /url: ./index.html#install
+  - contentinfo [ref=e57]:
+    - generic [ref=e58]:
+      - generic [ref=e59]: © 2026 广州吉俐商贸有限公司 · Tacco 贴在屏幕边缘的桌面效率工具
+      - navigation [ref=e60]:
+        - link "首页" [ref=e61] [cursor=pointer]:
+          - /url: ./index.html
+        - link "功能" [ref=e62] [cursor=pointer]:
+          - /url: ./features.html
+        - link "常见问题" [ref=e63] [cursor=pointer]:
+          - /url: ./faq.html
+        - link "更新日志" [ref=e64] [cursor=pointer]:
+          - /url: ./changelog.html
+        - link "服务条款" [ref=e65] [cursor=pointer]:
+          - /url: ./terms.html
+        - link "隐私协议" [ref=e66] [cursor=pointer]:
+          - /url: ./privacy.html

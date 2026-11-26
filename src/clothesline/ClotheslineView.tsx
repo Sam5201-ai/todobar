@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { Copy, ListTodo, X } from 'lucide-react'
 import { emit, listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
 import {
   clGetRestoreState,
@@ -27,6 +28,7 @@ import {
   clSetAlwaysOnTop,
   clReorderCards,
   clAddCard,
+  clAddArchivedCard,
   clUpdateCard,
   clRemoveCard,
   clRestoreCard,
@@ -110,6 +112,11 @@ export class ClotheslineErrorBoundary extends Component<
     } catch {
       /* noop */
     }
+    // ★2026-11-26 诊断：渲染崩溃同步落 app.log（原先只写 localStorage / console，
+    // 「整条晾衣绳消失」疑似渲染崩溃时在日志里无迹可寻）。
+    void invoke('app_log', {
+      message: `[clothesline] 渲染崩溃(边界兜底): ${error.message} | ${(error.stack || '').replace(/\s+/g, ' ').slice(0, 500)}`,
+    }).catch(() => undefined)
     lsLog(`render crashed (kept transparent): ${error.message}`)
   }
   render() {
@@ -237,7 +244,13 @@ const TIMER_STYLE_OPTS: { key: TimerStyleKey; label: Parameters<typeof t>[0]; vi
 /** ★2026-11-24 问题3/4：随手记弹窗（绳窗新建/编辑）复用全局速记窗的富文本工具行
  *  （B/I/U/S/字体颜色，execCommand）。与速记窗一致：onMouseDown preventDefault 保住
  *  编辑器选区，命令才能作用在已选中文字上。 */
-function QnToolbarRow({ onFmt }: { onFmt: (cmd: string, value?: string) => void }) {
+function QnToolbarRow({ onFmt, editorRef }: { onFmt: (cmd: string, value?: string) => void; editorRef: () => HTMLElement | null }) {
+  // ★2026-11-26 修复「点颜色选择器后圈选失效」：原生取色对话框会抢走窗口激活，
+  // 焦点回来后选区被折叠（弹窗焦点 effect 的 editor.focus() 也会折叠）——
+  // foreColor 作用在塌掉的光标上 = 无效果。对策：色块 mousedown 时同步保存选区
+  // Range（preventDefault 保住编辑器焦点，与 B/I/U/S 同款），onChange 先恢复
+  // 选区再执行命令。B/I/U/S 不经对话框、焦点不离开窗口，无需此保存。
+  const selRangeRef = useRef<Range | null>(null)
   return (
     <div className="qn-toolbar">
       <button type="button" className="qn-fmt" aria-label={t('quickNote.bold')} onMouseDown={(e) => e.preventDefault()} onClick={() => onFmt('bold')}>
@@ -257,7 +270,25 @@ function QnToolbarRow({ onFmt }: { onFmt: (cmd: string, value?: string) => void 
         className="qn-color"
         aria-label={t('quickNote.color')}
         defaultValue="#2c2c2a"
-        onChange={(e) => onFmt('foreColor', e.target.value)}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          const ed = editorRef()
+          const sel = window.getSelection()
+          selRangeRef.current = ed && sel && sel.rangeCount > 0 && ed.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null
+        }}
+        onChange={(e) => {
+          const ed = editorRef()
+          const sel = window.getSelection()
+          if (ed && sel) {
+            if (selRangeRef.current) {
+              sel.removeAllRanges()
+              sel.addRange(selRangeRef.current)
+              selRangeRef.current = null
+            }
+            if (document.activeElement !== ed) ed.focus()
+          }
+          onFmt('foreColor', e.target.value)
+        }}
       />
     </div>
   )
@@ -2287,9 +2318,16 @@ export function ClotheslineView() {
           !menuBoostRef.current
         ) {
           void toggleRef.current()
+        } else if (fullscreenModalRef.current) {
+          // ★2026-11-25 诊断：弹窗打开期间绝不该收到 auto-collapse —— 落日志定位
+          // 「Shift+Enter 整条晾衣绳关闭」的真正事件源（正常情况下此分支不可能走）。
+          void invoke('app_log', { message: '[clothesline] 异常 auto-collapse（弹窗打开期间收到）' }).catch(() => undefined)
         }
       })
       reg<unknown>(CL_DISMISS_OVERLAY, () => {
+        // ★2026-11-25 诊断：dismiss 只应由「鼠标左键按下边沿 + 光标在命中矩形外」触发；
+        // 落日志确认弹窗被关时走的是不是这条路径。
+        void invoke('app_log', { message: '[clothesline] cl-dismiss-overlay 触发（关闭全部浮层）' }).catch(() => undefined)
         setAddSheetOpen(false)
         // ★2026-11-15 需求5/6：随手记 / 番茄钟编辑弹窗无遮罩，点击弹窗外 = 取消；
         //   窗口矩形 / 命中矩形 / dismiss 开关由 composing 的 effect 清理函数还原。
@@ -3173,6 +3211,58 @@ export function ClotheslineView() {
   // hasRichMarkup → '@@RICH@@' + 净化 HTML 的存储格式（与全局速记完全一致）。
   const composeEditorRef = useRef<HTMLDivElement>(null)
   const editEditorRef = useRef<HTMLDivElement>(null)
+  // ★2026-11-25 问题1（Shift+Enter 仍关闭晾衣绳）：IME 组合态/Process 键(keyCode 229)
+  // 下，回车默认插入会绕过 keydown 的 preventDefault 直达浏览器默认路径 —— 修复前
+  // Enter/Shift+Enter 关闭晾衣绳的同一毒路径。beforeinput 兜底一律取消默认并改为
+  // 显式 execCommand('insertLineBreak')；此 ref 标记「自己触发的回声」防止递归。
+  const qnBrEchoRef = useRef(false)
+  const qnBrBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
+    const t = (e.nativeEvent as InputEvent | null)?.inputType
+    if (t !== 'insertParagraph' && t !== 'insertLineBreak') return
+    if (qnBrEchoRef.current) return // 自己 execCommand 派发的同步回声，放行
+    e.preventDefault()
+    qnBrEchoRef.current = true
+    document.execCommand('insertLineBreak')
+    qnBrEchoRef.current = false
+  }
+
+  // ★2026-11-25 问题1（按任意键整个晾衣绳被销毁，多次修复未中要害）：app.log 证实
+  // 真正事件源是 clothesline_set_enabled(false)（总开关关 → 1 秒后重建），弹窗浮层
+  // 路径（dismiss / auto-collapse）诊断计数为 0。机制：弹窗打开期间绳窗若没有键盘
+  // 焦点（如全局速记窗抢走焦点后关闭、或点击未激活窗体），按键会泄漏到主窗 ——
+  // 设置页刚用过的「总开关」Switch 还持有焦点，空格/回车（含 IME 确认空格）就会
+  // 把它切到「关」→ 整条晾衣绳连窗销毁；再按一次空格又切回「开」→ 日志里的
+  // off→on 1 秒循环。这也解释了 Enter「有时保存、有时关闭」（焦点在弹窗 vs 主窗）。
+  // 对策：弹窗打开时显式抢焦点；弹窗开着期间窗口重新获得焦点时把焦点交给弹窗正文。
+  useEffect(() => {
+    if (!composing && !editModal) return
+    const win = getCurrentWindow()
+    void invoke('app_log', {
+      message: `[clothesline] 弹窗焦点 effect: setFocus 已请求（modal=${composing ?? (editModal ? 'edit' : '?')}）`,
+    }).catch(() => undefined)
+    void win.setFocus().catch(() => undefined)
+    let un: (() => void) | undefined
+    void win
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) {
+          window.setTimeout(() => {
+            ;(composeEditorRef.current ?? editEditorRef.current)?.focus()
+          }, 60)
+        } else {
+          // ★2026-11-26 诊断：弹窗打开期间窗口失焦 = 按键将泄漏到其它窗（主窗设置页
+          // 的总开关 Switch 正持焦点时空格/回车会把它切到「关」→ 整窗销毁）。落日志。
+          void invoke('app_log', { message: '[clothesline] 弹窗打开期间窗口失焦（按键可能泄漏）' }).catch(() => undefined)
+        }
+      })
+      .then((fn) => {
+        un = fn
+      })
+      .catch(() => undefined)
+    return () => {
+      un?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composing, editModal?.id])
   // openComposer('text', init) 预填的原始正文（富文本卡含 @@RICH@@ 前缀），
   // 弹窗切到 text 分支后由 effect 一次性还原进编辑器。
   const composeEditorInitRef = useRef('')
@@ -3185,14 +3275,30 @@ export function ClotheslineView() {
     () => setComposeText(composeEditorRef.current?.innerText ?? ''),
     [],
   )
+  // ★2026-11-26 修复「倾斜等格式没生效」：与取色器同款 —— 先保存编辑器内选区，
+  // focus() 后恢复再执行 execCommand，杜绝选区被折叠导致命令落空。
+  const execFmt = (ed: HTMLElement | null, cmd: string, value?: string) => {
+    const sel = window.getSelection()
+    let saved: Range | null = null
+    if (ed && sel && sel.rangeCount > 0 && ed.contains(sel.anchorNode)) saved = sel.getRangeAt(0).cloneRange()
+    ed?.focus()
+    if (saved && sel) {
+      sel.removeAllRanges()
+      sel.addRange(saved)
+    }
+    const ok = document.execCommand(cmd, false, value)
+    if (!ok) {
+      void invoke('app_log', {
+        message: `[clothesline] execCommand(${cmd}) 返回 false（选区/焦点异常）`,
+      }).catch(() => undefined)
+    }
+  }
   const composeFmt = useCallback((cmd: string, value?: string) => {
-    composeEditorRef.current?.focus()
-    document.execCommand(cmd, false, value)
+    execFmt(composeEditorRef.current, cmd, value)
     setComposeText(composeEditorRef.current?.innerText ?? '')
   }, [])
   const editFmt = useCallback((cmd: string, value?: string) => {
-    editEditorRef.current?.focus()
-    document.execCommand(cmd, false, value)
+    execFmt(editEditorRef.current, cmd, value)
     setEditModal((m) => (m ? { ...m, text: editEditorRef.current?.innerText ?? '' } : m))
   }, [])
 
@@ -3286,6 +3392,49 @@ export function ClotheslineView() {
       setComposing(null)
     }
   }, [composing, composeEditId, composeMinutes, composeTitle, composeDirection, composeColor, composeStyle, composeTextStyle, composeFormat, composeRemind, composeText, composeCategory, addCard, clUpdateCard, flash, setCards, setNowTick, setComposing, setComposeText])
+
+  /** ★2026-11-25 问题2：compose text 弹窗新增「保存归档」——按钮与行为均对齐全局
+   *  速记窗的同名按钮：不占绳位配额，直接写入归档页（clAddArchivedCard，Rust 侧置
+   *  archived_at / order）。校验与载荷与挂绳（submitCompose）完全同构。 */
+  const submitArchiveCompose = useCallback(async () => {
+    const editor = composeEditorRef.current
+    const plain = (editor?.innerText ?? composeText).trim()
+    if (!composeTitle.trim()) {
+      setComposeErr(t('clothesline.compose.errTitle'))
+      return
+    }
+    setComposeErr('')
+    if (!plain) {
+      setComposing(null)
+      return
+    }
+    const rawHtml = editor?.innerHTML ?? ''
+    const body = hasRichMarkup(rawHtml) ? RICH_PREFIX + sanitizeRichHtml(rawHtml) : plain
+    try {
+      await clAddArchivedCard(clMakeCard('text', {
+        title: composeTitle.trim(),
+        text: body,
+        card_color: composeColor || null,
+        card_style: composeTextStyle,
+        category: composeCategory.trim() || null,
+        title_size: composeFormat.titleSize,
+        body_size: composeFormat.bodySize,
+        font_family: composeFormat.family || null,
+        title_bold: composeFormat.titleBold,
+        title_italic: composeFormat.titleItalic,
+        body_bold: composeFormat.bodyBold,
+        body_italic: composeFormat.bodyItalic,
+      }))
+      saveLastCategory(composeCategory.trim())
+      setComposeText('')
+      if (composeEditorRef.current) composeEditorRef.current.innerHTML = ''
+      setComposeTitle('')
+      setComposing(null)
+      flash(t('clothesline.toast.archived'))
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e))
+    }
+  }, [composeTitle, composeColor, composeTextStyle, composeFormat, composeText, composeCategory, flash, setComposeErr, setComposeText, setComposeTitle, setComposing])
 
   // ★2026-11-24：compose text 弹窗打开时，把 openComposer 暂存的 init 原文一次性
   // 还原进编辑器（富文本剥 @@RICH@@ 前缀 + 净化；纯文本 textContent；无 init 清空）。
@@ -4682,6 +4831,16 @@ export function ClotheslineView() {
           onWheel={(e) => e.stopPropagation()}
         >
           <span className="cl-modal-title">{composing === 'timer' ? (composeEditId ? t('clothesline.compose.editTimer') : t('clothesline.compose.addTimer')) : (composeEditId ? t('clothesline.compose.editText') : t('clothesline.compose.addText'))}</span>
+          {/* ★2026-11-25 问题2：右上角 × 关闭按钮（取消弹窗并还原绳窗矩形）。 */}
+          <button
+            type="button"
+            className="cl-modal-x"
+            aria-label={t('clothesline.guide.close')}
+            title={t('clothesline.guide.close')}
+            onClick={() => setComposing(null)}
+          >
+            <X size={13} strokeWidth={2.4} />
+          </button>
           {composing === 'text' ? (
             // ★2026-11-24 问题3：随手记标题输入与全局速记同款（qn-input，无行标签）。
             <input
@@ -4817,7 +4976,7 @@ export function ClotheslineView() {
             // ★2026-11-24 问题3：随手记正文 = 全局速记同款富文本编辑器（qn 工具行 +
             // contentEditable），弹窗样式与内容以全局速记的随手记弹窗为准。
             <>
-              <QnToolbarRow onFmt={composeFmt} />
+              <QnToolbarRow onFmt={composeFmt} editorRef={() => composeEditorRef.current} />
               <div
                 ref={composeEditorRef}
                 className="qn-textarea qn-in-modal"
@@ -4827,11 +4986,17 @@ export function ClotheslineView() {
                 aria-multiline
                 data-placeholder={t('clothesline.compose.bodyPlaceholder')}
                 onInput={syncComposeText}
+                onBeforeInput={qnBrBeforeInput}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setComposing(null)
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  // ★2026-11-25 问题1：与全局速记窗编辑器逐字对齐 —— 一律 preventDefault
+                  // 并显式处理（Enter=保存、Shift+Enter=换行、IME 组合中不触发）。旧实现
+                  // 普通 Enter/Shift+Enter 走浏览器默认 insertParagraph/insertLineBreak，
+                  // 在绳窗浮层体系下会异常触发整个晾衣绳关闭（速记窗因始终拦截而正常）。
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault()
-                    void submitCompose()
+                    if (e.shiftKey) document.execCommand('insertLineBreak')
+                    else void submitCompose()
                   }
                 }}
               />
@@ -4984,14 +5149,25 @@ export function ClotheslineView() {
           ) : null}
           {/* ★2026-11-24 问题3：qn 富文本工具行已取代字体格式段；按钮与全局速记弹窗
               同款（仅文案不同：保存 / 取消）。其余类型保持原按钮。 */}
+          {/* ★2026-11-25 问题2：按钮与全局速记-新建随手记弹窗完全一致（以其为准）——
+              新建 = [挂到晾衣绳][保存归档]（保存归档直接入归档页，不占绳位配额）；
+              编辑既有卡 = 单个[保存修改]。文案复用速记窗同一 i18n 键。 */}
           {composing === 'text' ? (
             <div className="qn-actions">
-              <button type="button" className="qn-btn qn-btn-hang" onClick={() => void submitCompose()}>
-                {composeEditId ? t('common.save') : t('clothesline.compose.submitAdd')}
-              </button>
-              <button type="button" className="qn-btn qn-btn-archive" onClick={() => setComposing(null)}>
-                {t('common.cancel')}
-              </button>
+              {composeEditId ? (
+                <button type="button" className="qn-btn qn-btn-hang" onClick={() => void submitCompose()}>
+                  {t('quickNote.saveEdit')}
+                </button>
+              ) : (
+                <>
+                  <button type="button" className="qn-btn qn-btn-hang" onClick={() => void submitCompose()}>
+                    {t('quickNote.hang')}
+                  </button>
+                  <button type="button" className="qn-btn qn-btn-archive" onClick={() => void submitArchiveCompose()}>
+                    {t('quickNote.archivePlain')}
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="cl-edit-actions">
@@ -5017,6 +5193,16 @@ export function ClotheslineView() {
           <div className="cl-modal-head">
             <span className="cl-modal-title">{t('clothesline.edit.title')}</span>
           </div>
+          {/* ★2026-11-25 问题2：右上角 × 关闭按钮（取消编辑并还原绳窗矩形）。 */}
+          <button
+            type="button"
+            className="cl-modal-x"
+            aria-label={t('clothesline.guide.close')}
+            title={t('clothesline.guide.close')}
+            onClick={() => setEditModal(null)}
+          >
+            <X size={13} strokeWidth={2.4} />
+          </button>
           {editModal.fmt ? (
             // ★2026-11-24 问题3/4：随手记编辑弹窗复用全局速记的 qn 系样式（标题输入 /
             // 富文本工具行 / 正文编辑器），正文格式与全局速记新建保存的完全一致。
@@ -5035,7 +5221,7 @@ export function ClotheslineView() {
                 }}
                 placeholder={t('clothesline.edit.titlePlaceholder')}
               />
-              <QnToolbarRow onFmt={editFmt} />
+              <QnToolbarRow onFmt={editFmt} editorRef={() => editEditorRef.current} />
               <div
                 ref={editEditorRef}
                 className="qn-textarea qn-in-modal"
@@ -5044,12 +5230,30 @@ export function ClotheslineView() {
                 role="textbox"
                 aria-multiline
                 data-placeholder={t('clothesline.edit.contentPlaceholder')}
-                onInput={(e) => setEditModal((m) => (m ? { ...m, text: e.currentTarget.innerText } : m))}
+                onInput={(e) => {
+                  // ★2026-11-26 根因修复：「按任意键整条晾衣绳消失」——React 18 会把
+                  // setState 更新函数推迟到事件派发结束后才执行，届时 e.currentTarget 已被
+                  // React 置 null → 读 innerText 崩溃 → 错误边界兜底渲染透明占位。
+                  // 必须在事件处理函数内同步读取，再把捕获值传入更新器。
+                  const text = e.currentTarget.innerText
+                  setEditModal((m) => (m ? { ...m, text } : m))
+                }}
+                onBeforeInput={qnBrBeforeInput}
                 onKeyDown={(e) => {
+                  // ★2026-11-26 诊断（临时）：按键级追踪 —— 定位「按任意键编辑弹窗连晾衣绳
+                  // 一起消失」。若日志停在某个按键后再无输出 = 渲染进程原生崩溃；若没有
+                  // 本日志 = 按键根本没到达编辑器（焦点泄漏）。
+                  void invoke('app_log', {
+                    message: `[clothesline] 编辑弹窗 keydown key=${e.key} shift=${e.shiftKey} composing=${e.nativeEvent.isComposing} hasFocus=${document.hasFocus()} active=${document.activeElement?.className ?? 'none'}`,
+                  }).catch(() => undefined)
                   if (e.key === 'Escape') setEditModal(null)
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  // ★2026-11-25 问题1：与全局速记窗编辑器逐字对齐（Enter=保存修改、
+                  // Shift+Enter=换行、IME 组合中不触发），修复按 Enter/Shift+Enter
+                  // 异常触发整个晾衣绳关闭。
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault()
-                    void commitEditModal()
+                    if (e.shiftKey) document.execCommand('insertLineBreak')
+                    else void commitEditModal()
                   }
                 }}
               />
@@ -5164,13 +5368,12 @@ export function ClotheslineView() {
           ) : null}
           {/* ★2026-11-24 问题3：字体格式段移除（qn 富文本工具行取代）；按钮与全局速记
               弹窗同款（仅文案不同：保存 / 取消）。非随手记卡保持原按钮。 */}
+          {/* ★2026-11-25 问题2：编辑弹窗按钮对齐全局速记编辑模式 —— 单个[保存修改]
+              （Esc / 点外关闭已承担取消语义）。非随手记卡保持原按钮。 */}
           {editModal.fmt ? (
             <div className="qn-actions">
               <button type="button" className="qn-btn qn-btn-hang" onClick={() => void commitEditModal()}>
-                {t('common.save')}
-              </button>
-              <button type="button" className="qn-btn qn-btn-archive" onClick={() => setEditModal(null)}>
-                {t('common.cancel')}
+                {t('quickNote.saveEdit')}
               </button>
             </div>
           ) : (

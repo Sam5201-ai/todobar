@@ -1589,6 +1589,7 @@ const ko: Record<LocaleKey, string> = {
   'quickNote.bodyPlaceholder': '아이디어를 기록하세요…',
   'quickNote.hang': '빨래줄에 고정',
   'quickNote.archive': '보관함에 저장 (Enter)',
+  'quickNote.archivePlain': '보관함에 저장',
   'quickNote.bold': '굵게',
   'quickNote.italic': '기울임',
   'quickNote.underline': '밑줄',
